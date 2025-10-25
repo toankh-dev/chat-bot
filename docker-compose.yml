@@ -1,0 +1,190 @@
+version: '3.8'
+
+services:
+  # LocalStack - AWS services mock
+  # NOTE: Nếu dùng LocalStack Desktop, comment section này và sử dụng Desktop app
+  # LocalStack Desktop sẽ chạy trên port 4566 tự động
+  localstack:
+    image: localstack/localstack-pro:latest  # Pro version cho auth key
+    container_name: chatbot-localstack
+    ports:
+      - "4566:4566"  # LocalStack gateway
+      - "4571:4571"  # LocalStack edge
+    environment:
+      - SERVICES=s3,dynamodb,secretsmanager,lambda,events
+      - DEBUG=1
+      - DATA_DIR=/tmp/localstack/data
+      - LAMBDA_EXECUTOR=docker
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      # LocalStack Pro configuration
+      - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN}  # Auth key từ .env
+      - LOCALSTACK_API_KEY=${LOCALSTACK_API_KEY}        # Same as AUTH_TOKEN
+    volumes:
+      - "./localstack-data:/tmp/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      - chatbot-network
+
+  # ChromaDB - Vector database
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: chatbot-chromadb
+    ports:
+      - "8001:8000"
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+    volumes:
+      - "./chromadb-data:/chroma/chroma"
+    networks:
+      - chatbot-network
+
+  # Embedding Service - Sentence Transformers
+  embedding-service:
+    build:
+      context: ./services/embedding
+      dockerfile: Dockerfile
+    container_name: chatbot-embedding
+    ports:
+      - "8002:8000"
+    environment:
+      - MODEL_NAME=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+      - DEVICE=cpu  # Change to 'cuda' if GPU available
+      - BATCH_SIZE=32
+    volumes:
+      - "./models-cache:/root/.cache/huggingface"
+    networks:
+      - chatbot-network
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
+          cpus: '2'
+          memory: 4G
+
+  # LLM Service - StableLM
+  llm-service:
+    build:
+      context: ./services/llm
+      dockerfile: Dockerfile
+    container_name: chatbot-llm
+    ports:
+      - "8003:8000"
+    environment:
+      - MODEL_NAME=stabilityai/japanese-stablelm-instruct-alpha-7b-v2
+      - DEVICE=cpu  # Change to 'cuda' if GPU available
+      - LOAD_IN_4BIT=true
+      - MAX_NEW_TOKENS=512
+      - TEMPERATURE=0.7
+    volumes:
+      - "./models-cache:/root/.cache/huggingface"
+    networks:
+      - chatbot-network
+    deploy:
+      resources:
+        limits:
+          cpus: '8'
+          memory: 16G
+        reservations:
+          cpus: '4'
+          memory: 8G
+    # Uncomment if using GPU
+    # runtime: nvidia
+    # environment:
+    #   - NVIDIA_VISIBLE_DEVICES=all
+
+  # PostgreSQL - Conversation history (optional)
+  postgres:
+    image: postgres:15-alpine
+    container_name: chatbot-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=chatbot
+      - POSTGRES_PASSWORD=chatbot123
+      - POSTGRES_DB=chatbot
+    volumes:
+      - "./postgres-data:/var/lib/postgresql/data"
+    networks:
+      - chatbot-network
+
+  # Redis - Caching (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: chatbot-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - "./redis-data:/data"
+    networks:
+      - chatbot-network
+
+  # Main Application - FastAPI
+  app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: chatbot-app
+    ports:
+      - "8000:8000"
+    environment:
+      # LocalStack
+      - LOCALSTACK_ENDPOINT=http://localstack:4566
+      - AWS_DEFAULT_REGION=ap-southeast-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+
+      # Services
+      - CHROMADB_HOST=chromadb
+      - CHROMADB_PORT=8000
+      - EMBEDDING_SERVICE_URL=http://embedding-service:8000
+      - LLM_SERVICE_URL=http://llm-service:8000
+
+      # Database
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=chatbot
+      - POSTGRES_USER=chatbot
+      - POSTGRES_PASSWORD=chatbot123
+
+      # Redis
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+
+      # External APIs (override in .env)
+      - GITLAB_TOKEN=${GITLAB_TOKEN}
+      - GITLAB_BASE_URL=${GITLAB_BASE_URL}
+      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
+      - BACKLOG_API_KEY=${BACKLOG_API_KEY}
+      - BACKLOG_SPACE_URL=${BACKLOG_SPACE_URL}
+
+      # App config
+      - DEBUG=true
+      - LOG_LEVEL=INFO
+    volumes:
+      - "./app:/app"
+      - "./lambda:/lambda"
+    depends_on:
+      - localstack
+      - chromadb
+      - embedding-service
+      - llm-service
+      - postgres
+      - redis
+    networks:
+      - chatbot-network
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+networks:
+  chatbot-network:
+    driver: bridge
+
+volumes:
+  localstack-data:
+  chromadb-data:
+  postgres-data:
+  redis-data:
+  models-cache:

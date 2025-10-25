@@ -2,7 +2,15 @@
   "permissions": {
     "allow": [
       "Bash(mkdir:*)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(dir \"c:\\Users\\toankh\\Documents\\chat-bot\" /s /b)",
+      "Bash(dir \"C:\\Users\\toankh\\Documents\\chat-bot\\lambda\")",
+      "Bash(dir \"C:\\Users\\toankh\\Documents\\chat-bot\")",
+      "Bash(for dir in chat_handler data_fetcher report_actions code_review_actions orchestrator_actions summarize_actions)",
+      "Bash(do echo \"=== $dir ===\")",
+      "Bash(dir \"C:\\Users\\toankh\\Documents\\chat-bot\\lambda$dir\")",
+      "Bash(done)",
+      "Bash(powershell -Command \"Get-ChildItem -Path ''C:\\Users\\toankh\\Documents\\chat-bot\\lambda'' -Recurse -File | Select-Object FullName\")"
     ],
     "deny": [],
     "ask": []
