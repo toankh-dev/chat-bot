@@ -6,7 +6,7 @@ import logging
 import os
 from datetime import datetime
 from typing import List, Dict, Any, Optional
-from sqlalchemy import create_engine, Column, String, DateTime, Text, Integer
+from sqlalchemy import create_engine, Column, String, DateTime, Text, Integer, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
@@ -221,7 +221,7 @@ class ConversationStore:
         """Check database health"""
         try:
             session = self.Session()
-            session.execute("SELECT 1")
+            session.execute(text("SELECT 1"))
             session.close()
             return True
         except Exception as e:

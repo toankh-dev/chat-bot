@@ -99,3 +99,6 @@ htmlcov/
 *.bak
 *.backup
 response.json
+
+DISCORD_INTEGRATION.md
+DISCORD_SETUP_GUIDE.md

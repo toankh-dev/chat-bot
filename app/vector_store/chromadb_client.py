@@ -48,12 +48,21 @@ class VectorStoreClient:
         try:
             self.logger.info(f"Connecting to ChromaDB at {self.host}:{self.port}")
 
-            # Create client
-            self.client = chromadb.HttpClient(
-                host=self.host,
-                port=self.port,
-                settings=Settings(anonymized_telemetry=False)
-            )
+            # Create client - use simple connection without tenant/database for compatibility
+            try:
+                # Try the simpler connection method first (works with most versions)
+                self.client = chromadb.HttpClient(
+                    host=self.host,
+                    port=self.port
+                )
+            except Exception as e:
+                self.logger.warning(f"First connection attempt failed: {e}. Trying with settings...")
+                # Fallback to explicit settings
+                self.client = chromadb.HttpClient(
+                    host=self.host,
+                    port=self.port,
+                    settings=Settings(anonymized_telemetry=False)
+                )
 
             # Get or create collection
             self.collection = self.client.get_or_create_collection(

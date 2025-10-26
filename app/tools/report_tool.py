@@ -1,5 +1,10 @@
 """
-Report Tool for creating Backlog tickets and posting to Slack
+Report Tool for creating issues/tickets and posting messages
+
+Supports:
+- Discord (recommended, free, easy)
+- Backlog (optional)
+- Slack (optional)
 """
 
 import json
@@ -14,24 +19,38 @@ logger = logging.getLogger(__name__)
 
 class ReportTool:
     """
-    Tool for report operations (Backlog tickets, Slack messages)
+    Tool for report operations (Discord messages/threads, Backlog tickets, Slack messages)
+
+    Automatically uses Discord if USE_DISCORD=true, otherwise falls back to Backlog/Slack
     """
 
     def __init__(self):
         """Initialize the report tool"""
         self.logger = logging.getLogger(__name__)
 
-        # LocalStack or real AWS
-        endpoint_url = os.getenv("LOCALSTACK_ENDPOINT")
-        self.secrets_client = boto3.client(
-            'secretsmanager',
-            endpoint_url=endpoint_url,
-            region_name=os.getenv("AWS_DEFAULT_REGION", "ap-southeast-1")
-        )
+        # Check which service to use
+        self.use_discord = os.getenv("USE_DISCORD", "false").lower() == "true"
+        self.use_slack = os.getenv("USE_SLACK", "false").lower() == "true"
+        self.use_backlog = os.getenv("USE_BACKLOG", "false").lower() == "true"
 
-        # Cache for secrets
-        self._backlog_secret = None
-        self._slack_secret = None
+        # Discord configuration
+        if self.use_discord:
+            self.discord_token = os.getenv("DISCORD_BOT_TOKEN")
+            self.discord_notification_channel = os.getenv("DISCORD_NOTIFICATION_CHANNEL")
+            self.discord_base_url = "https://discord.com/api/v10"
+
+        # LocalStack or real AWS (for Backlog/Slack secrets)
+        if self.use_slack or self.use_backlog:
+            endpoint_url = os.getenv("LOCALSTACK_ENDPOINT")
+            self.secrets_client = boto3.client(
+                'secretsmanager',
+                endpoint_url=endpoint_url,
+                region_name=os.getenv("AWS_DEFAULT_REGION", "ap-southeast-1")
+            )
+
+            # Cache for secrets
+            self._backlog_secret = None
+            self._slack_secret = None
 
     def _get_backlog_secret(self) -> Dict[str, str]:
         """Get Backlog API credentials from Secrets Manager"""
@@ -165,6 +184,114 @@ class ReportTool:
             self.logger.error(f"Error posting to Slack: {e}")
             return f"Error posting to Slack: {str(e)}"
 
+    def post_discord_message(self, params: Dict[str, Any]) -> str:
+        """
+        Post a message to Discord
+
+        Args:
+            params: Message parameters (channel_id, message)
+
+        Returns:
+            Result message
+        """
+
+        try:
+            channel_id = params.get('channel_id', self.discord_notification_channel)
+
+            if not channel_id:
+                return "Error: No Discord channel specified and DISCORD_NOTIFICATION_CHANNEL not configured"
+
+            self.logger.info(f"Posting to Discord channel: {channel_id}")
+
+            url = f"{self.discord_base_url}/channels/{channel_id}/messages"
+            headers = {
+                'Authorization': f'Bot {self.discord_token}',
+                'Content-Type': 'application/json'
+            }
+
+            data = {
+                'content': params.get('message')
+            }
+
+            response = requests.post(url, headers=headers, json=data, timeout=30)
+            response.raise_for_status()
+
+            message = response.json()
+            message_id = message.get('id')
+
+            return (
+                f"✅ Message posted to Discord\n"
+                f"Channel ID: {channel_id}\n"
+                f"Message ID: {message_id}"
+            )
+
+        except Exception as e:
+            self.logger.error(f"Error posting to Discord: {e}")
+            return f"Error posting to Discord: {str(e)}"
+
+    def create_discord_thread(self, params: Dict[str, Any]) -> str:
+        """
+        Create a thread in Discord
+
+        Args:
+            params: Thread parameters (channel_id, thread_name, message)
+
+        Returns:
+            Result message
+        """
+
+        try:
+            channel_id = params.get('channel_id', self.discord_notification_channel)
+            thread_name = params.get('thread_name', 'Discussion')
+            message = params.get('message', '')
+
+            if not channel_id:
+                return "Error: No Discord channel specified"
+
+            self.logger.info(f"Creating Discord thread: {thread_name}")
+
+            # First, post initial message
+            msg_url = f"{self.discord_base_url}/channels/{channel_id}/messages"
+            headers = {
+                'Authorization': f'Bot {self.discord_token}',
+                'Content-Type': 'application/json'
+            }
+
+            msg_response = requests.post(
+                msg_url,
+                headers=headers,
+                json={'content': message or f"Starting thread: {thread_name}"},
+                timeout=30
+            )
+            msg_response.raise_for_status()
+            message_data = msg_response.json()
+            message_id = message_data.get('id')
+
+            # Then create thread from message
+            thread_url = f"{self.discord_base_url}/channels/{channel_id}/messages/{message_id}/threads"
+            thread_response = requests.post(
+                thread_url,
+                headers=headers,
+                json={
+                    'name': thread_name,
+                    'auto_archive_duration': 1440  # 1 day
+                },
+                timeout=30
+            )
+            thread_response.raise_for_status()
+            thread = thread_response.json()
+            thread_id = thread.get('id')
+
+            return (
+                f"✅ Created Discord thread: {thread_name}\n"
+                f"Thread ID: {thread_id}\n"
+                f"Channel ID: {channel_id}"
+            )
+
+        except Exception as e:
+            self.logger.error(f"Error creating Discord thread: {e}")
+            return f"Error creating Discord thread: {str(e)}"
+
     def run(self, tool_input: str) -> str:
         """
         Run the tool
@@ -174,6 +301,15 @@ class ReportTool:
 
         Returns:
             Result message
+
+        Supported actions:
+            Discord:
+                - post_discord_message: Post message to Discord channel
+                - create_discord_thread: Create discussion thread
+            Backlog:
+                - create_backlog_ticket: Create Backlog ticket
+            Slack:
+                - post_slack_message: Post message to Slack
         """
 
         try:
@@ -184,19 +320,56 @@ class ReportTool:
 
             self.logger.info(f"Report tool action: {action}")
 
-            # Route to appropriate function
-            if action == 'create_backlog_ticket':
+            # Discord actions (prioritized if USE_DISCORD=true)
+            if action == 'post_discord_message' and self.use_discord:
+                return self.post_discord_message(parameters)
+
+            elif action == 'create_discord_thread' and self.use_discord:
+                return self.create_discord_thread(parameters)
+
+            # Backlog actions
+            elif action == 'create_backlog_ticket' and self.use_backlog:
                 return self.create_backlog_ticket(parameters)
 
-            elif action == 'update_backlog_ticket':
+            elif action == 'update_backlog_ticket' and self.use_backlog:
                 # TODO: Implement update functionality
                 return "Update Backlog ticket functionality not yet implemented"
 
-            elif action == 'post_slack_message':
+            # Slack actions
+            elif action == 'post_slack_message' and self.use_slack:
+                return self.post_slack_message(parameters)
+
+            # Auto-routing: if Discord is enabled, route generic actions to Discord
+            elif action == 'post_message' and self.use_discord:
+                return self.post_discord_message(parameters)
+
+            elif action == 'create_ticket' and self.use_discord:
+                # Map to Discord thread
+                parameters['thread_name'] = parameters.get('summary', 'New Issue')
+                parameters['message'] = parameters.get('description', '')
+                return self.create_discord_thread(parameters)
+
+            # Auto-routing: if Backlog is enabled
+            elif action == 'create_ticket' and self.use_backlog:
+                return self.create_backlog_ticket(parameters)
+
+            # Auto-routing: if Slack is enabled
+            elif action == 'post_message' and self.use_slack:
                 return self.post_slack_message(parameters)
 
             else:
-                return f"Unknown action: {action}"
+                available_services = []
+                if self.use_discord:
+                    available_services.append("Discord")
+                if self.use_backlog:
+                    available_services.append("Backlog")
+                if self.use_slack:
+                    available_services.append("Slack")
+
+                if not available_services:
+                    return "Error: No messaging service is configured. Please set USE_DISCORD=true or configure Backlog/Slack."
+
+                return f"Unknown action '{action}' or service not enabled. Available services: {', '.join(available_services)}"
 
         except json.JSONDecodeError as e:
             error = f"Invalid JSON input: {str(e)}"

@@ -1,7 +1,7 @@
 """
-Custom LLM module for LangChain integration
+LLM module for LangChain integration
 """
 
-from .custom_llm import CustomLLM
+from .groq_llm import GroqLLM
 
-__all__ = ["CustomLLM"]
+__all__ = ["GroqLLM"]

@@ -1,295 +1,418 @@
-# AWS Bedrock Multi-Agent Orchestrator Chatbot
+# 🤖 Multi-Agent Chatbot
 
-Hệ thống chatbot thông minh sử dụng kiến trúc Multi-Agent Orchestrator với AWS Bedrock Agents để phối hợp nhiều agent chuyên biệt.
+> **Hệ thống chatbot thông minh chạy hoàn toàn trên Local với HuggingFace Models**
 
-## 🏗️ Kiến Trúc
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Docker](https://img.shields.io/badge/docker-ready-brightgreen.svg)](https://www.docker.com/)
+
+---
+
+## 🎯 Tổng Quan
+
+Hệ thống Multi-Agent Chatbot sử dụng:
+- 🤗 **HuggingFace Models** (StableLM-7B, MiniLM) - Miễn phí, chạy local
+- 🦜 **LangChain** - Agent orchestration framework
+- ☁️ **LocalStack** - AWS services mock (S3, DynamoDB, Secrets Manager)
+- 🗄️ **ChromaDB** - Vector database
+- 🎮 **Discord** - Data source (thay thế GitLab/Slack/Backlog)
+
+### ⚡ Tính Năng Chính
+
+- ✅ **Multi-Agent Architecture**: Orchestrator phối hợp các agent chuyên biệt
+- ✅ **RAG (Retrieval-Augmented Generation)**: Truy xuất context từ vector database
+- ✅ **Conversation Memory**: Lưu trữ lịch sử chat trong DynamoDB
+- ✅ **Discord Integration**: Fetch và phân tích Discord messages
+- ✅ **Code Review**: Phân tích code snippets
+- ✅ **Report Generation**: Tạo báo cáo từ dữ liệu
+- ✅ **100% Local**: Không cần AWS, data không rời khỏi máy
+
+### 💰 Chi Phí
+
+| AWS Bedrock (Cloud) | Local Setup (Bản này) |
+|--------------------|-----------------------|
+| $350-1,400/tháng | **$0** ✅ |
+
+---
+
+## 🚀 Quick Start
+
+### Điều Kiện Tiên Quyết
+
+- Docker Desktop (4GB+ RAM allocated)
+- Python 3.11+
+- 16GB+ RAM (recommend 32GB)
+- 50GB+ disk space
+
+### 3 Bước Setup
+
+#### 1. Clone & Configure
+
+```bash
+# Clone repository
+git clone <your-repo-url>
+cd chat-bot
+
+# Copy environment template
+cp .env.example .env
+
+# Edit .env - Add Discord credentials (optional)
+USE_DISCORD=true
+DISCORD_BOT_TOKEN=your_bot_token
+DISCORD_CHANNEL_IDS=your_channel_ids
+```
+
+#### 2. Start Services
+
+```bash
+# Start all services (first time: download models ~15GB)
+docker-compose up -d
+
+# Wait for models to download (10-30 minutes)
+docker-compose logs -f llm-service
+
+# Setup LocalStack resources
+python scripts/setup_localstack.py
+```
+
+#### 3. Test Chatbot
+
+```bash
+# Health check
+curl http://localhost:8000/health
+
+# Send test message
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Hello!", "conversation_id": "test-1"}'
+```
+
+✅ **Done!** Chatbot đang chạy tại `http://localhost:8000`
+
+---
+
+## 📚 Documentation
+
+| Document | Description |
+|----------|-------------|
+| **[START_HERE.md](START_HERE.md)** | ⭐ Bắt đầu từ đây! Quick start guide |
+| **[LOCAL_SETUP_GUIDE.md](LOCAL_SETUP_GUIDE.md)** | Hướng dẫn setup chi tiết |
+| **[LOCAL_ARCHITECTURE.md](LOCAL_ARCHITECTURE.md)** | Kiến trúc hệ thống |
+| **[LOCALSTACK_DOCKER.md](LOCALSTACK_DOCKER.md)** | LocalStack Docker setup |
+| **[DISCORD_SETUP_GUIDE.md](DISCORD_SETUP_GUIDE.md)** | Setup Discord bot (5 phút) |
+| **[DISCORD_INTEGRATION.md](DISCORD_INTEGRATION.md)** | Discord integration code |
+
+> **Note**: Thư mục `docs/` chứa tài liệu AWS Bedrock (legacy) - Phiên bản cloud cũ, tốn phí
+
+---
+
+## 🏗️ Architecture
 
 ```
 User Request
     ↓
-API Gateway + Cognito
+FastAPI App (Port 8000)
     ↓
-Lambda: Chat Handler
-    ↓
-┌─────────────────────────────────────┐
-│  ORCHESTRATOR AGENT (Bedrock Agent) │
-│  - Phân tích câu hỏi                 │
-│  - Lập kế hoạch execution            │
-│  - Phối hợp các sub-agents          │
-└─────────────────────────────────────┘
-    ├──► Knowledge Base (GitLab/Slack/Backlog)
-    ├──► Report Agent (Tạo tickets, post Slack)
-    ├──► Summarize Agent (Phân tích Slack)
-    └──► Code Review Agent (Review GitLab code)
+┌─────────────────────────────────┐
+│  ORCHESTRATOR AGENT (LangChain) │
+│  - Phân tích câu hỏi            │
+│  - Lập kế hoạch execution       │
+│  - Phối hợp các tools           │
+└─────────────────────────────────┘
+    ├──► Vector Store (ChromaDB) - RAG retrieval
+    ├──► LLM Service (StableLM-7B) - Text generation
+    ├──► Embedding Service (MiniLM) - Text embeddings
+    ├──► Discord Tool - Fetch messages
+    ├──► Report Tool - Generate reports
+    └──► Code Review Tool - Analyze code
 ```
 
-## 📦 Cấu Trúc Project
+### Tech Stack
 
-```
-kass/
-├── docs/                              # Tài liệu chi tiết
-│   ├── README.md                      # Tổng quan
-│   ├── orchestrator-architecture.md   # Kiến trúc chi tiết
-│   ├── orchestrator-implementation.md # Hướng dẫn implementation
-│   ├── orchestrator-quickstart.md     # Hướng dẫn nhanh
-│   └── orchestrator-terraform.md      # Terraform IaC
-│
-├── lambda/                            # Lambda functions
-│   ├── data_fetcher/                  # Fetch data từ GitLab/Slack/Backlog
-│   │   ├── lambda_function.py
-│   │   └── requirements.txt
-│   │
-│   ├── orchestrator_actions/          # Action group cho Orchestrator
-│   │   ├── lambda_function.py         # Invoke sub-agents
-│   │   └── requirements.txt
-│   │
-│   ├── report_actions/                # Report Agent actions
-│   │   ├── lambda_function.py         # Backlog/Slack integration
-│   │   └── requirements.txt
-│   │
-│   ├── summarize_actions/             # Summarize Agent actions
-│   │   ├── lambda_function.py         # Slack analysis
-│   │   └── requirements.txt
-│   │
-│   ├── code_review_actions/           # Code Review Agent actions
-│   │   ├── lambda_function.py         # GitLab code review
-│   │   └── requirements.txt
-│   │
-│   └── chat_handler/                  # Entry point Lambda
-│       ├── lambda_function.py         # Invoke Orchestrator Agent
-│       └── requirements.txt
-│
-├── scripts/                           # Setup & deployment scripts
-│   ├── setup_secrets.py
-│   ├── setup_infrastructure.py
-│   ├── create_agents.py
-│   └── deploy_lambda.sh
-│
-└── tests/                             # Test suite
-    ├── test_data_fetcher.py
-    ├── test_multi_agent.py
-    └── integration_test.py
-```
-
-## 🚀 Quick Start
-
-### Bước 1: Chuẩn Bị
-
-```bash
-# Cài đặt AWS CLI
-aws configure
-
-# Verify
-aws sts get-caller-identity
-```
-
-### Bước 2: Tạo Secrets
-
-```bash
-# GitLab
-aws secretsmanager create-secret \
-  --name /chatbot/gitlab/api-token \
-  --secret-string '{"token":"YOUR_TOKEN","base_url":"https://gitlab.com/api/v4"}' \
-  --region ap-southeast-1
-
-# Slack
-aws secretsmanager create-secret \
-  --name /chatbot/slack/bot-token \
-  --secret-string '{"bot_token":"xoxb-YOUR-TOKEN","signing_secret":"YOUR_SECRET"}' \
-  --region ap-southeast-1
-
-# Backlog
-aws secretsmanager create-secret \
-  --name /chatbot/backlog/api-key \
-  --secret-string '{"api_key":"YOUR_KEY","space_url":"https://YOUR_SPACE.backlog.com"}' \
-  --region ap-southeast-1
-```
-
-### Bước 3: Deploy Knowledge Base
-
-```bash
-# Chạy script setup infrastructure
-cd scripts
-python setup_infrastructure.py
-
-# Deploy Knowledge Base (sử dụng Terraform hoặc script)
-# Xem chi tiết trong docs/orchestrator-quickstart.md
-```
-
-### Bước 4: Tạo Bedrock Agents
-
-```bash
-# Orchestrator Agent
-python create_agents.py --agent orchestrator
-
-# Specialized Agents
-python create_agents.py --agent report
-python create_agents.py --agent summarize
-python create_agents.py --agent code_review
-```
-
-### Bước 5: Deploy Lambda Functions
-
-```bash
-chmod +x deploy_lambda.sh
-./deploy_lambda.sh
-```
-
-### Bước 6: Test
-
-```bash
-# Test simple query
-python3 << 'EOF'
-import boto3
-bedrock = boto3.client('bedrock-agent-runtime', region_name='ap-southeast-1')
-
-response = bedrock.invoke_agent(
-    agentId='YOUR_ORCHESTRATOR_AGENT_ID',
-    agentAliasId='YOUR_ALIAS_ID',
-    sessionId='test-1',
-    inputText='What are the open issues in GitLab?'
-)
-
-for event in response['completion']:
-    if 'chunk' in event and 'bytes' in event['chunk']:
-        print(event['chunk']['bytes'].decode('utf-8'), end='')
-EOF
-```
-
-## 💡 Các Tính Năng Chính
-
-### 1. Multi-Agent Orchestration
-
-Orchestrator Agent tự động:
-- Phân tích intent của user
-- Quyết định sử dụng agent nào
-- Thực thi tuần tự hoặc song song
-- Tổng hợp kết quả
-
-### 2. Specialized Agents
-
-**Report Agent**
-- Tạo Backlog tickets
-- Post messages lên Slack
-- Update tickets
-
-**Summarize Agent**
-- Lấy messages từ Slack
-- Tóm tắt discussions
-- Trích xuất action items
-
-**Code Review Agent**
-- Fetch GitLab MRs
-- Analyze code changes
-- Check coding standards
-
-### 3. Knowledge Base
-
-- Tìm kiếm semantic + keyword (hybrid)
-- Vector embeddings với Amazon Titan
-- OpenSearch Serverless
-- Support GitLab, Slack, Backlog data
-
-## 📖 Tài Liệu Chi Tiết
-
-1. **[Architecture](docs/orchestrator-architecture.md)** - Kiến trúc hệ thống
-2. **[Implementation Guide](docs/orchestrator-implementation.md)** - Hướng dẫn chi tiết
-3. **[Quick Start](docs/orchestrator-quickstart.md)** - Deploy trong 2 giờ
-4. **[Terraform IaC](docs/orchestrator-terraform.md)** - Infrastructure as Code
-
-## 🎯 Ví Dụ Sử Dụng
-
-### Simple Query
-
-```
-User: "Show me all high-priority bugs"
-→ Orchestrator queries Knowledge Base
-→ Returns list of bugs with citations
-```
-
-### Single Agent Action
-
-```
-User: "Create a Backlog ticket for the login bug"
-→ Orchestrator invokes Report Agent
-→ Report Agent creates ticket
-→ Returns ticket URL
-```
-
-### Multi-Agent Workflow
-
-```
-User: "Summarize today's Slack discussions and create tickets for mentioned bugs"
-→ Orchestrator plans:
-  1. Summarize Agent → Get Slack messages & extract bugs
-  2. Report Agent → Create tickets for each bug
-→ Returns summary + ticket links
-```
-
-### Complex Coordination
-
-```
-User: "Generate weekly status report"
-→ Orchestrator executes in parallel:
-  ├─ Knowledge Base → Open issues count
-  ├─ Summarize Agent → Slack activity
-  └─ Code Review Agent → GitLab MR status
-→ Synthesizes comprehensive report
-```
-
-## 💰 Chi Phí Ước Tính
-
-### Development (10K requests/tháng)
-- Bedrock Agents (4): ~$100-150
-- Lambda: ~$10-20
-- OpenSearch Serverless (1 OCU): ~$173
-- Knowledge Base: ~$30-50
-- DynamoDB: ~$10-20
-- **Total: ~$350-500/tháng**
-
-### Production (100K requests/tháng)
-- Bedrock Agents (4): ~$200-400
-- Lambda: ~$20-50
-- OpenSearch Serverless (2-4 OCU): ~$350-700
-- Knowledge Base: ~$50-100
-- DynamoDB: ~$50-100
-- ElastiCache: ~$25-50
-- **Total: ~$700-1,400/tháng**
-
-## 🔧 Development
-
-### Lambda Functions Implementation Status
-
-✅ **data_fetcher** - Hoàn thành (fetch GitLab/Slack/Backlog)
-⏳ **orchestrator_actions** - Cần implement (invoke sub-agents)
-⏳ **report_actions** - Cần implement (Backlog/Slack operations)
-⏳ **summarize_actions** - Cần implement (Slack analysis)
-⏳ **code_review_actions** - Cần implement (GitLab review)
-⏳ **chat_handler** - Cần implement (API Gateway entry point)
-
-### Next Steps
-
-1. **Implement các Lambda actions** (xem docs/orchestrator-implementation.md)
-2. **Create Bedrock Agents** (xem scripts/create_agents.py)
-3. **Setup API Gateway** với Cognito
-4. **Deploy và test** end-to-end
-
-## 📚 Resources
-
-- [AWS Bedrock Agents Documentation](https://docs.aws.amazon.com/bedrock/latest/userguide/agents.html)
-- [AWS Knowledge Bases](https://docs.aws.amazon.com/bedrock/latest/userguide/knowledge-base.html)
-- [OpenSearch Serverless](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/serverless.html)
-
-## 🤝 Contributing
-
-Xem [docs/orchestrator-implementation.md](docs/orchestrator-implementation.md) để hiểu chi tiết về cách implement các components.
-
-## 📄 License
-
-[Add your license]
+| Component | Technology |
+|-----------|-----------|
+| **LLM** | StabilityAI/stablelm-zephyr-3b |
+| **Embeddings** | sentence-transformers/all-MiniLM-L12-v2 |
+| **Framework** | LangChain + FastAPI |
+| **Vector DB** | ChromaDB |
+| **Storage** | LocalStack S3 + DynamoDB |
+| **Database** | PostgreSQL + Redis |
+| **Orchestration** | Docker Compose |
 
 ---
 
-**⚠️ Lưu Ý**: Đây là hệ thống Multi-Agent Orchestrator phức tạp. Nên đọc kỹ tài liệu trong thư mục `docs/` trước khi bắt đầu deploy.
+## 📊 Service Ports
 
-**🚀 Bắt đầu**: Đọc [docs/orchestrator-quickstart.md](docs/orchestrator-quickstart.md) để deploy nhanh trong 2 giờ!
+| Service | Port | URL |
+|---------|------|-----|
+| Main App | 8000 | http://localhost:8000 |
+| ChromaDB | 8001 | http://localhost:8001 |
+| Embedding Service | 8002 | http://localhost:8002 |
+| LLM Service | 8003 | http://localhost:8003 |
+| LocalStack | 4566 | http://localhost:4566 |
+| PostgreSQL | 5432 | localhost:5432 |
+| Redis | 6379 | localhost:6379 |
+
+---
+
+## 🎮 Discord Integration (Recommended!)
+
+Thay vì GitLab/Slack/Backlog (phức tạp, tốn phí), dùng **Discord** (miễn phí, 5 phút setup):
+
+### Tại sao Discord?
+
+- ✅ **Miễn phí** - Không cần paid plan
+- ✅ **Dễ setup** - Chỉ 5 phút
+- ✅ **Rich API** - Messages, threads, reactions, embeds
+- ✅ **Webhook support** - Realtime notifications
+
+### Quick Setup
+
+```bash
+# 1. Tạo Discord bot (5 phút)
+# Xem: DISCORD_SETUP_GUIDE.md
+
+# 2. Add credentials to .env
+DISCORD_BOT_TOKEN=MTIzNDU2...
+DISCORD_CHANNEL_IDS=111111,222222
+
+# 3. Fetch data
+python scripts/run_data_fetcher.py --source discord
+
+# 4. Build index
+python scripts/build_vector_index.py
+```
+
+Xem chi tiết: [DISCORD_SETUP_GUIDE.md](DISCORD_SETUP_GUIDE.md)
+
+---
+
+## 🛠️ Usage Examples
+
+### Chat API
+
+```bash
+# Simple chat
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "What are the recent Discord messages?",
+    "conversation_id": "conv-123"
+  }'
+
+# Response:
+{
+  "conversation_id": "conv-123",
+  "answer": "Based on recent messages...",
+  "sources": ["discord_msg_1", "discord_msg_2"],
+  "processing_time": 4.2
+}
+```
+
+### Search Knowledge Base
+
+```bash
+# Search for context
+curl "http://localhost:8000/search?query=bug&limit=5"
+
+# Response:
+{
+  "results": [
+    {
+      "content": "Bug report from Discord...",
+      "metadata": {"source": "discord", "channel": "dev"},
+      "score": 0.89
+    }
+  ]
+}
+```
+
+### View Conversation History
+
+```bash
+# Get conversation
+curl http://localhost:8000/conversation/conv-123
+
+# Response:
+{
+  "conversation_id": "conv-123",
+  "messages": [
+    {"role": "user", "content": "Hello"},
+    {"role": "assistant", "content": "Hi! How can I help?"}
+  ]
+}
+```
+
+---
+
+## 🔧 Development
+
+### Project Structure
+
+```
+chat-bot/
+├── app/                      # Main application
+│   ├── main.py              # FastAPI app
+│   ├── agents/              # LangChain agents
+│   ├── tools/               # Agent tools
+│   ├── llm/                 # LLM wrappers
+│   └── stores/              # Data stores
+├── services/                # Microservices
+│   ├── embedding/           # Embedding service
+│   └── llm/                 # LLM service
+├── scripts/                 # Utility scripts
+│   ├── setup_localstack.py
+│   ├── run_data_fetcher.py
+│   └── build_vector_index.py
+├── lambda/                  # AWS Lambda functions (for cloud deployment)
+├── docs/                    # AWS Bedrock documentation (legacy)
+├── docker-compose.yml
+├── .env.example
+└── README.md
+```
+
+### Local Development
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Run app locally (without Docker)
+uvicorn app.main:app --reload --port 8000
+
+# Run tests
+pytest tests/
+```
+
+### Adding New Tools
+
+```python
+# app/tools/my_tool.py
+from langchain.tools import BaseTool
+
+class MyTool(BaseTool):
+    name = "my_tool"
+    description = "Tool description for LLM"
+
+    def _run(self, query: str) -> str:
+        # Tool logic
+        return "Result"
+```
+
+---
+
+## 🐛 Troubleshooting
+
+### Models Not Downloading
+
+```bash
+# Check internet connection
+ping huggingface.co
+
+# Check Docker logs
+docker-compose logs llm-service
+
+# Restart service
+docker-compose restart llm-service
+```
+
+### LocalStack Connection Error
+
+```bash
+# Verify LocalStack running
+curl http://localhost:4566/_localstack/health
+
+# Check .env configuration
+cat .env | grep LOCALSTACK
+
+# Restart LocalStack
+docker-compose restart localstack
+```
+
+### ChromaDB Error
+
+```bash
+# Check ChromaDB status
+curl http://localhost:8001/api/v1/heartbeat
+
+# Clear and rebuild
+docker-compose down chromadb
+docker volume rm chat-bot_chroma-data
+docker-compose up -d chromadb
+python scripts/build_vector_index.py
+```
+
+---
+
+## 📈 Performance
+
+### Resource Usage
+
+| Service | RAM | CPU | Disk |
+|---------|-----|-----|------|
+| LLM (StableLM-7B) | ~8GB | 2-4 cores | ~14GB |
+| Embedding (MiniLM) | ~1GB | 1 core | ~500MB |
+| ChromaDB | ~500MB | 1 core | Varies |
+| PostgreSQL | ~200MB | 1 core | ~100MB |
+| Redis | ~100MB | 1 core | ~50MB |
+| **Total** | **~10GB** | **5-7 cores** | **~15GB** |
+
+### Response Times
+
+| Query Type | CPU | GPU (if available) |
+|-----------|-----|---------------------|
+| Simple QA | 5-10s | 2-3s |
+| RAG Query | 8-15s | 3-5s |
+| Code Review | 10-20s | 4-7s |
+
+---
+
+## 🔐 Security
+
+- ✅ All credentials in `.env` (gitignored)
+- ✅ No data sent to external APIs
+- ✅ LocalStack for AWS mock (no cloud)
+- ✅ Network isolated via Docker
+
+---
+
+## 📝 License
+
+MIT License - See [LICENSE](LICENSE) file
+
+---
+
+## 🤝 Contributing
+
+Contributions welcome! Please:
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing`)
+5. Open Pull Request
+
+---
+
+## 🆘 Support
+
+- **Documentation**: See docs above
+- **Issues**: Create GitHub issue với logs
+- **Discord Setup**: See [DISCORD_SETUP_GUIDE.md](DISCORD_SETUP_GUIDE.md)
+- **LocalStack**: See [LOCALSTACK_DOCKER.md](LOCALSTACK_DOCKER.md)
+
+---
+
+## 🎉 Status
+
+**Current Version**: v1.0.0 (Local Setup Complete)
+
+- ✅ Core infrastructure implemented
+- ✅ Multi-agent orchestration working
+- ✅ Discord integration ready
+- ✅ LocalStack configured
+- ✅ Vector search functional
+- ⏳ UI in development (optional)
+
+---
+
+**Built with ❤️ using Open Source**

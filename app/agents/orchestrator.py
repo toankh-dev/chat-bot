@@ -4,6 +4,7 @@ Coordinates multiple specialized agents to handle user requests
 """
 
 import logging
+import os
 from typing import Any, Optional, List, Dict
 from langchain.agents import AgentExecutor, create_react_agent
 from langchain.prompts import PromptTemplate
@@ -13,13 +14,13 @@ from tools.report_tool import ReportTool
 from tools.summarize_tool import SummarizeTool
 from tools.code_review_tool import CodeReviewTool
 from tools.vector_search_tool import VectorSearchTool
-from llm.custom_llm import CustomLLM
+from llm.groq_llm import GroqLLM
 
 logger = logging.getLogger(__name__)
 
 
 # Orchestrator prompt template
-ORCHESTRATOR_PROMPT = """You are an intelligent orchestrator agent that coordinates multiple specialized agents to help users with project management tasks.
+ORCHESTRATOR_PROMPT = """You are an intelligent AI assistant that helps users with project management and information tasks.
 
 You have access to the following tools:
 
@@ -30,28 +31,27 @@ Tool Names: {tool_names}
 **Your Responsibilities:**
 
 1. **Analyze** user questions to understand their intent
-2. **Plan** the execution strategy:
-   - For simple queries: Use VectorSearch to find information
-   - For actions: Use appropriate agent (Report, Summarize, or CodeReview)
+2. **Respond appropriately:**
+   - For simple greetings/casual conversation: Answer directly without using tools
+   - For information queries: Use VectorSearch to find information
+   - For actions: Use appropriate tool (Report, Summarize, or CodeReview)
    - For complex tasks: Coordinate multiple tools sequentially
-3. **Execute** the plan by calling tools with proper parameters
-4. **Synthesize** results into a clear, helpful response
+3. **Synthesize** results into a clear, helpful response
 
 **Decision Framework:**
 
-- If user asks "What/Where/Show/Find/List" → Use VectorSearch tool
+- For greetings ("hello", "hi", "how are you"): Respond directly with a friendly greeting
+- If user asks "What/Where/Show/Find/List" about project data → Use VectorSearch tool
 - If user says "Create/Update/Post/Send" → Use Report tool
-- If user wants "Summarize/Analyze" Slack → Use Summarize tool
+- If user wants "Summarize/Analyze" → Use Summarize tool
 - If user wants code review → Use CodeReview tool
-- If task requires multiple steps → Execute sequentially, passing context between steps
 
 **Guidelines:**
 
+- Be friendly and conversational for simple messages
+- Use tools only when necessary to fetch data or perform actions
 - Always provide clear, concise answers
-- Cite sources when referencing data
-- Ask for clarification if the request is ambiguous
-- Explain your reasoning when coordinating multiple tools
-- Handle errors gracefully and provide helpful alternatives
+- Handle errors gracefully
 
 **Format:**
 
@@ -66,6 +66,8 @@ Observation: the result of the action
 Thought: I now know the final answer
 Final Answer: the final answer to the original input question
 
+**IMPORTANT:** For simple greetings or casual conversation, skip directly to "Final Answer:" without using any tools.
+
 Begin!
 
 Question: {input}
@@ -74,7 +76,6 @@ Thought: {agent_scratchpad}
 
 
 def create_orchestrator_agent(
-    llm_service_url: str,
     vector_store: Any,
     verbose: bool = True
 ) -> AgentExecutor:
@@ -82,18 +83,32 @@ def create_orchestrator_agent(
     Create the orchestrator agent with all tools
 
     Args:
-        llm_service_url: URL of the LLM service
         vector_store: Vector store client instance
         verbose: Whether to print agent reasoning
 
     Returns:
-        AgentExecutor instance
+        OrchestratorAgent instance
     """
 
     logger.info("Creating orchestrator agent...")
 
-    # Initialize custom LLM
-    llm = CustomLLM(service_url=llm_service_url)
+    # Initialize LLM based on provider
+    llm_provider = os.getenv("LLM_PROVIDER", "groq").lower()
+
+    if llm_provider == "groq":
+        logger.info("Using Groq API (Fast & Free)")
+        api_key = os.getenv("GROQ_API_KEY")
+        if not api_key:
+            raise ValueError("GROQ_API_KEY environment variable is required")
+
+        llm = GroqLLM(
+            api_key=api_key,
+            model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+            max_tokens=int(os.getenv("GROQ_MAX_TOKENS", "1024")),
+            temperature=float(os.getenv("GROQ_TEMPERATURE", "0.7"))
+        )
+    else:
+        raise ValueError(f"Unsupported LLM provider: {llm_provider}. Currently only 'groq' is supported.")
 
     # Initialize tools
     logger.info("Initializing tools...")
@@ -218,7 +233,8 @@ def create_orchestrator_agent(
 
     logger.info("✅ Orchestrator agent created successfully")
 
-    return agent_executor
+    # Wrap in OrchestratorAgent class for better control
+    return OrchestratorAgent(agent_executor)
 
 
 class OrchestratorAgent:
@@ -271,9 +287,14 @@ class OrchestratorAgent:
                 return_only_outputs=False
             )
 
+            self.logger.info(f"Raw result from agent: {result}")
+            self.logger.info(f"Result keys: {result.keys() if isinstance(result, dict) else 'not a dict'}")
+
             # Extract output and intermediate steps
             output = result.get("output", "")
+            self.logger.info(f"Extracted output: '{output}'")
             intermediate_steps = result.get("intermediate_steps", [])
+            self.logger.info(f"Intermediate steps count: {len(intermediate_steps)}")
 
             # Extract sources from intermediate steps
             sources = []
@@ -286,8 +307,11 @@ class OrchestratorAgent:
                             sources.extend(observation)
 
             self.logger.info(f"Agent completed successfully")
-            self.logger.info(f"Output length: {len(output)} chars")
+            self.logger.info(f"Output: {output}")
+            self.logger.info(f"Output type: {type(output)}")
+            self.logger.info(f"Output length: {len(str(output))} chars")
             self.logger.info(f"Sources found: {len(sources)}")
+            self.logger.info(f"Result dict: {result}")
 
             return {
                 "output": output,

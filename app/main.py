@@ -27,7 +27,6 @@ logger = logging.getLogger(__name__)
 
 # Configuration
 EMBEDDING_SERVICE_URL = os.getenv("EMBEDDING_SERVICE_URL", "http://embedding-service:8000")
-LLM_SERVICE_URL = os.getenv("LLM_SERVICE_URL", "http://llm-service:8000")
 CHROMADB_HOST = os.getenv("CHROMADB_HOST", "chromadb")
 CHROMADB_PORT = int(os.getenv("CHROMADB_PORT", "8000"))
 
@@ -64,7 +63,6 @@ async def lifespan(app: FastAPI):
         # Initialize Orchestrator Agent
         logger.info("🤖 Creating orchestrator agent...")
         orchestrator_agent = create_orchestrator_agent(
-            llm_service_url=LLM_SERVICE_URL,
             vector_store=vector_store
         )
         logger.info("✅ Orchestrator agent ready")
@@ -245,17 +243,6 @@ async def health_check():
                 services["embedding_service"] = f"unhealthy: status {response.status_code}"
     except Exception as e:
         services["embedding_service"] = f"unhealthy: {str(e)}"
-
-    # Check LLM service
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(f"{LLM_SERVICE_URL}/health", timeout=5.0)
-            if response.status_code == 200:
-                services["llm_service"] = "healthy"
-            else:
-                services["llm_service"] = f"unhealthy: status {response.status_code}"
-    except Exception as e:
-        services["llm_service"] = f"unhealthy: {str(e)}"
 
     # Overall status
     all_healthy = all(s == "healthy" for s in services.values())
