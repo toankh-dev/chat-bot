@@ -1,21 +1,17 @@
 services:
-  # LocalStack - AWS services mock
-  # NOTE: Nếu dùng LocalStack Desktop, comment section này và sử dụng Desktop app
-  # LocalStack Desktop sẽ chạy trên port 4566 tự động
   localstack:
-    image: localstack/localstack-pro:latest  # Pro version cho auth key
+    image: localstack/localstack:latest
     container_name: chatbot-localstack
     ports:
-      - "4566:4566"  # LocalStack gateway
-      - "4571:4571"  # LocalStack edge
+      - "4566:4566"
+      - "4571:4571"
     environment:
       - SERVICES=s3,dynamodb,secretsmanager,lambda,events
       - DEBUG=1
       - DATA_DIR=/var/lib/localstack
       - LAMBDA_EXECUTOR=docker
       - DOCKER_HOST=unix:///var/run/docker.sock
-      # LocalStack Pro configuration
-      - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN}  # Auth key từ .env
+      - ACTIVATE_PRO=0
     volumes:
       - "./localstack-data:/var/lib/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
@@ -36,30 +32,30 @@ services:
     networks:
       - chatbot-network
 
-  # Embedding Service - Sentence Transformers
-  embedding-service:
-    build:
-      context: ./services/embedding
-      dockerfile: Dockerfile
-    container_name: chatbot-embedding
-    ports:
-      - "8002:8000"
-    environment:
-      - MODEL_NAME=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
-      - DEVICE=cpu  # Change to 'cuda' if GPU available
-      - BATCH_SIZE=32
-    volumes:
-      - "./models-cache:/root/.cache/huggingface"
-    networks:
-      - chatbot-network
-    deploy:
-      resources:
-        limits:
-          cpus: '4'
-          memory: 8G
-        reservations:
-          cpus: '2'
-          memory: 4G
+  # Embedding Service - Sentence Transformers (DISABLED - Using VoyageAI instead)
+  # embedding-service:
+  #   build:
+  #     context: ./services/embedding
+  #     dockerfile: Dockerfile
+  #   container_name: chatbot-embedding
+  #   ports:
+  #     - "8002:8000"
+  #   environment:
+  #     - MODEL_NAME=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+  #     - DEVICE=cpu  # Change to 'cuda' if GPU available
+  #     - BATCH_SIZE=32
+  #   volumes:
+  #     - "./models-cache:/root/.cache/huggingface"
+  #   networks:
+  #     - chatbot-network
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: '4'
+  #         memory: 8G
+  #       reservations:
+  #         cpus: '2'
+  #         memory: 4G
 
   # # LLM Service - StableLM
   # llm-service:
@@ -137,8 +133,13 @@ services:
       # Services
       - CHROMADB_HOST=chromadb
       - CHROMADB_PORT=8000
-      - EMBEDDING_SERVICE_URL=http://embedding-service:8000
+      # - EMBEDDING_SERVICE_URL=http://embedding-service:8000  # Using VoyageAI instead
       # - LLM_SERVICE_URL=http://llm-service:8000
+
+      # Embedding Configuration (VoyageAI)
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-voyageai}
+      - VOYAGE_API_KEY=${VOYAGE_API_KEY}
+      - VOYAGE_MODEL=${VOYAGE_MODEL:-voyage-2}
 
       # Database
       - POSTGRES_HOST=postgres
@@ -174,7 +175,7 @@ services:
     depends_on:
       - localstack
       - chromadb
-      - embedding-service
+      # - embedding-service  # Using VoyageAI instead
       # - llm-service
       - postgres
       - redis

@@ -9,6 +9,9 @@ import httpx
 import chromadb
 from chromadb.config import Settings
 
+# Import embedding providers
+from embeddings import VoyageEmbeddingProvider, LocalEmbeddingProvider
+
 logger = logging.getLogger(__name__)
 
 
@@ -22,7 +25,10 @@ class VectorStoreClient:
         host: str = "chromadb",
         port: int = 8000,
         collection_name: str = "chatbot_knowledge",
-        embedding_service_url: str = "http://embedding-service:8000"
+        embedding_provider: str = None,
+        embedding_service_url: str = None,
+        voyage_api_key: str = None,
+        voyage_model: str = "voyage-2"
     ):
         """
         Initialize ChromaDB client
@@ -31,12 +37,28 @@ class VectorStoreClient:
             host: ChromaDB host
             port: ChromaDB port
             collection_name: Collection name
-            embedding_service_url: URL of embedding service
+            embedding_provider: Embedding provider ('voyageai' or 'local')
+            embedding_service_url: URL of embedding service (for local provider)
+            voyage_api_key: VoyageAI API key (for voyageai provider)
+            voyage_model: VoyageAI model name
         """
         self.host = host
         self.port = port
         self.collection_name = collection_name
-        self.embedding_service_url = embedding_service_url
+
+        # Determine embedding provider
+        self.embedding_provider_type = embedding_provider or os.getenv("EMBEDDING_PROVIDER", "voyageai")
+
+        # Initialize embedding provider
+        if self.embedding_provider_type == "voyageai":
+            self.embedding_provider = VoyageEmbeddingProvider(
+                api_key=voyage_api_key or os.getenv("VOYAGE_API_KEY"),
+                model=voyage_model or os.getenv("VOYAGE_MODEL", "voyage-2")
+            )
+        else:
+            # Local embedding service
+            service_url = embedding_service_url or os.getenv("EMBEDDING_SERVICE_URL", "http://embedding-service:8000")
+            self.embedding_provider = LocalEmbeddingProvider(service_url=service_url)
 
         self.client = None
         self.collection = None
@@ -80,7 +102,7 @@ class VectorStoreClient:
 
     async def embed_texts(self, texts: List[str]) -> List[List[float]]:
         """
-        Generate embeddings for texts using embedding service
+        Generate embeddings for texts using configured embedding provider
 
         Args:
             texts: List of texts to embed
@@ -89,18 +111,7 @@ class VectorStoreClient:
             List of embedding vectors
         """
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(
-                    f"{self.embedding_service_url}/embed",
-                    json={"texts": texts, "normalize": True}
-                )
-
-                if response.status_code == 200:
-                    result = response.json()
-                    return result["embeddings"]
-                else:
-                    raise Exception(f"Embedding service error: {response.status_code}")
-
+            return await self.embedding_provider.embed_texts(texts)
         except Exception as e:
             self.logger.error(f"Error generating embeddings: {e}")
             raise
@@ -216,17 +227,7 @@ class VectorStoreClient:
         """
         try:
             # Generate query embedding (sync version)
-            import requests
-            response = requests.post(
-                f"{self.embedding_service_url}/embed",
-                json={"texts": [query], "normalize": True},
-                timeout=30
-            )
-
-            if response.status_code != 200:
-                raise Exception(f"Embedding service error: {response.status_code}")
-
-            query_embeddings = response.json()["embeddings"]
+            query_embeddings = self.embedding_provider.embed_texts_sync([query])
 
             # Search
             results = self.collection.query(

@@ -45,7 +45,21 @@
       "Bash(docker logs:*)",
       "Bash(powershell -Command:*)",
       "Bash(docker-compose build:*)",
-      "Bash(docker exec:*)"
+      "Bash(docker exec:*)",
+      "Bash(docker-compose down:*)",
+      "Bash(timeout 60 bash:*)",
+      "Bash(python scripts/deploy_lambdas.py:*)",
+      "Bash(docker ps:*)",
+      "Bash(dir \"C:\\Users\\ToanKH\\Documents\\source\\kass\\app\" /b)",
+      "Bash(docker-compose stop:*)",
+      "Bash(test:*)",
+      "Bash(docker rm:*)",
+      "Bash(docker-compose restart:*)",
+      "Bash(python scripts/test_embedding.py:*)",
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(curl:*)",
+      "Bash(powershell -ExecutionPolicy Bypass -File scripts/monitor_embedding.ps1:*)"
     ],
     "deny": [],
     "ask": []

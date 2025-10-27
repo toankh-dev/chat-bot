@@ -26,9 +26,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Configuration
-EMBEDDING_SERVICE_URL = os.getenv("EMBEDDING_SERVICE_URL", "http://embedding-service:8000")
 CHROMADB_HOST = os.getenv("CHROMADB_HOST", "chromadb")
 CHROMADB_PORT = int(os.getenv("CHROMADB_PORT", "8000"))
+EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "voyageai")
 
 # Global instances
 vector_store: Optional[VectorStoreClient] = None
@@ -45,11 +45,11 @@ async def lifespan(app: FastAPI):
 
     try:
         # Initialize Vector Store
-        logger.info("📚 Connecting to ChromaDB...")
+        logger.info(f"📚 Connecting to ChromaDB with {EMBEDDING_PROVIDER} embeddings...")
         vector_store = VectorStoreClient(
             host=CHROMADB_HOST,
             port=CHROMADB_PORT,
-            embedding_service_url=EMBEDDING_SERVICE_URL
+            embedding_provider=EMBEDDING_PROVIDER
         )
         await vector_store.initialize()
         logger.info("✅ ChromaDB connected")
@@ -209,8 +209,7 @@ async def health_check():
         "vector_store": "unknown",
         "conversation_store": "unknown",
         "orchestrator": "unknown",
-        "embedding_service": "unknown",
-        "llm_service": "unknown"
+        "embedding_provider": f"{EMBEDDING_PROVIDER}"
     }
 
     # Check vector store
@@ -232,17 +231,6 @@ async def health_check():
     # Check orchestrator
     if orchestrator_agent is not None:
         services["orchestrator"] = "healthy"
-
-    # Check embedding service
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(f"{EMBEDDING_SERVICE_URL}/health", timeout=5.0)
-            if response.status_code == 200:
-                services["embedding_service"] = "healthy"
-            else:
-                services["embedding_service"] = f"unhealthy: status {response.status_code}"
-    except Exception as e:
-        services["embedding_service"] = f"unhealthy: {str(e)}"
 
     # Overall status
     all_healthy = all(s == "healthy" for s in services.values())
