@@ -1,0 +1,23 @@
+{
+  "Records": [
+    {
+      "eventVersion": "2.1",
+      "eventSource": "aws:s3",
+      "awsRegion": "ap-southeast-1",
+      "eventTime": "2025-10-27T10:00:00.000Z",
+      "eventName": "ObjectCreated:Put",
+      "s3": {
+        "s3SchemaVersion": "1.0",
+        "configurationId": "embedder-trigger",
+        "bucket": {
+          "name": "chatbot-knowledge-base",
+          "arn": "arn:aws:s3:::chatbot-knowledge-base"
+        },
+        "object": {
+          "key": "slack/chunked/year=2025/month=10/day=27/batch_test.json",
+          "size": 1024
+        }
+      }
+    }
+  ]
+}

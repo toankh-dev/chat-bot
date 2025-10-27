@@ -29,53 +29,88 @@ def print_section(title):
     print("=" * 60)
 
 
-def process_excel_file(file_path):
-    """Extract documents from Excel file"""
-    print(f"\nReading: {file_path}")
+import pandas as pd
+from pathlib import Path
+from textwrap import shorten
 
+def process_excel_file(file_path, chunk_size=4000, max_metadata_fields=10, min_text_length=20):
+    """
+    Extract and enrich documents from an Excel file for ChromaDB ingestion.
+    Includes both row-level and sheet-level context.
+    """
+
+    print(f"\n📘 Reading Excel file: {file_path}")
     documents = []
+
     excel_file = pd.ExcelFile(file_path)
-    print(f"Found {len(excel_file.sheet_names)} sheets")
+    print(f"→ Found {len(excel_file.sheet_names)} sheets")
 
     for sheet_idx, sheet_name in enumerate(excel_file.sheet_names, 1):
-        print(f"  [{sheet_idx}/{len(excel_file.sheet_names)}] {sheet_name}", end=" ")
+        print(f"\n[{sheet_idx}/{len(excel_file.sheet_names)}] Processing sheet: '{sheet_name}'")
 
         df = pd.read_excel(file_path, sheet_name=sheet_name)
+        if df.empty:
+            print("  ⚠️ Sheet is empty, skipping.")
+            continue
 
-        sheet_docs = 0
-        for idx, row in df.iterrows():
+        row_docs = 0
+        all_texts = []  # để tạo sheet-level summary sau
+
+        # ---- 1️⃣ Row-level documents ----
+        for row in df.itertuples(index=True):
             text_parts = []
             metadata = {
                 "source": "excel",
                 "file": Path(file_path).name,
                 "sheet": sheet_name,
-                "row": idx + 2
+                "row": row.Index + 2,  # dòng thật trong Excel
+                "type": "row"
             }
 
+            # duyệt từng cột nhanh hơn qua df.columns
             for col in df.columns:
-                value = row[col]
+                value = getattr(row, col)
                 if pd.notna(value) and str(value).strip():
                     text_parts.append(f"{col}: {value}")
 
-                    if len(metadata) < 10:
+                    # thêm metadata hạn chế
+                    if len(metadata) - 5 < max_metadata_fields:
                         clean_col = str(col).replace(" ", "_").lower()[:50]
-                        metadata[clean_col] = str(value)[:100]
+                        metadata[clean_col] = shorten(str(value), width=100, placeholder="...")
 
             if text_parts:
                 text = " | ".join(text_parts)
-                if len(text) >= 20:
-                    if len(text) > 8000:
-                        text = text[:8000] + "..."
-
+                if len(text) >= min_text_length:
+                    if len(text) > chunk_size:
+                        text = text[:chunk_size] + "..."
                     documents.append({
                         "text": text,
                         "metadata": metadata
                     })
-                    sheet_docs += 1
+                    row_docs += 1
+                    all_texts.append(text)
 
-        print(f"- {sheet_docs} docs")
+        print(f"  ✔ Created {row_docs} row-level docs")
 
-    print(f"\n✓ Total: {len(documents)} documents")
+        # ---- 2️⃣ Sheet-level summary document ----
+        if all_texts:
+            full_text = "\n".join(all_texts)
+            # chia nhỏ theo chunk_size để tránh quá dài
+            chunks = [full_text[i:i+chunk_size] for i in range(0, len(full_text), chunk_size)]
+            for j, chunk in enumerate(chunks, 1):
+                documents.append({
+                    "text": chunk,
+                    "metadata": {
+                        "source": "excel",
+                        "file": Path(file_path).name,
+                        "sheet": sheet_name,
+                        "type": "sheet_summary",
+                        "chunk": j
+                    }
+                })
+            print(f"  ➕ Added {len(chunks)} sheet-level summary chunks")
+
+    print(f"\n✅ Total {len(documents)} documents extracted from {len(excel_file.sheet_names)} sheets.")
     return documents
 
 
@@ -85,82 +120,99 @@ def embed_via_docker(documents, batch_size=10):
 
     # Create a temporary Python script
     script = '''
-import sys
-import json
-import asyncio
-import time
-sys.path.append("/app")
+        import sys
+        import json
+        import asyncio
+        import time
+        sys.path.append("/app")
 
-from embeddings.voyage_client import VoyageEmbeddingProvider
-import chromadb
+        from embeddings.voyage_client import VoyageEmbeddingProvider
+        from embeddings.chunk_router import chunk_data
+        import chromadb
 
-async def main():
-    # Load documents
-    with open("/tmp/documents.json", "r", encoding="utf-8") as f:
-        documents = json.load(f)
+        async def main():
+            # Load documents
+            with open("/tmp/documents.json", "r", encoding="utf-8") as f:
+                documents = json.load(f)
 
-    print(f"Loaded {len(documents)} documents")
+            print(f"Loaded {len(documents)} documents")
 
-    # Initialize VoyageAI
-    voyage = VoyageEmbeddingProvider()
-    print(f"✓ VoyageAI initialized")
+            # ===== CHUNKING LOGIC =====
+            print("\\n🔀 Chunking documents...")
+            chunked_documents = []
+            for doc in documents:
+                source_type = doc["metadata"].get("source", "text")
+                # Chunk based on source type
+                chunks = chunk_data(source_type, doc["text"])
+                for chunk in chunks:
+                    # Merge original metadata with chunk metadata
+                    merged_metadata = {**doc["metadata"], **chunk["metadata"]}
+                    chunked_documents.append({
+                        "text": chunk["text"],
+                        "metadata": merged_metadata
+                    })
+            print(f"✓ Chunked into {len(chunked_documents)} pieces (from {len(documents)} original docs)")
 
-    # Connect to ChromaDB
-    client = chromadb.HttpClient(host="chromadb", port=8000)
-    collection = client.get_or_create_collection(
-        name="chatbot_knowledge",
-        metadata={"description": "Knowledge base for chatbot"}
-    )
-    print(f"✓ ChromaDB connected (current count: {collection.count()})")
+            # Initialize VoyageAI
+            voyage = VoyageEmbeddingProvider()
+            print(f"✓ VoyageAI initialized")
 
-    # Process in batches with rate limiting
-    # VoyageAI free tier: 3 RPM, so wait 20 seconds between requests
-    batch_size = 50
-    total = len(documents)
-    wait_time = 20  # seconds between batches
-
-    for i in range(0, total, batch_size):
-        batch = documents[i:i + batch_size]
-        batch_num = i // batch_size + 1
-        total_batches = (total - 1) // batch_size + 1
-
-        print(f"\\nBatch {batch_num}/{total_batches}: Processing {len(batch)} documents...")
-
-        # Extract texts
-        texts = [doc["text"] for doc in batch]
-
-        try:
-            # Generate embeddings
-            embeddings = await voyage.embed_texts(texts)
-            print(f"  ✓ Generated {len(embeddings)} embeddings")
-
-            # Store in ChromaDB
-            ids = [f"doc_{i + j}" for j in range(len(batch))]
-            metadatas = [doc["metadata"] for doc in batch]
-
-            collection.add(
-                ids=ids,
-                embeddings=embeddings,
-                documents=texts,
-                metadatas=metadatas
+            # Connect to ChromaDB
+            client = chromadb.HttpClient(host="chromadb", port=8000)
+            collection = client.get_or_create_collection(
+                name="chatbot_knowledge",
+                metadata={"description": "Knowledge base for chatbot"}
             )
-            print(f"  ✓ Stored in ChromaDB (total: {collection.count()})")
+            print(f"✓ ChromaDB connected (current count: {collection.count()})")
 
-            # Wait to avoid rate limit (except for last batch)
-            if batch_num < total_batches:
-                print(f"  ⏳ Waiting {wait_time}s for rate limit...")
-                time.sleep(wait_time)
+            # Process in batches with rate limiting
+            # VoyageAI free tier: 3 RPM, so wait 20 seconds between requests
+            batch_size = 50
+            total = len(chunked_documents)
+            wait_time = 20  # seconds between batches
 
-        except Exception as e:
-            print(f"  ✗ Error: {e}")
-            print(f"  Continuing from where we left off...")
-            break
+            for i in range(0, total, batch_size):
+                batch = chunked_documents[i:i + batch_size]
+                batch_num = i // batch_size + 1
+                total_batches = (total - 1) // batch_size + 1
 
-    print(f"\\n✅ Total documents in collection: {collection.count()}")
+                print(f"\\nBatch {batch_num}/{total_batches}: Processing {len(batch)} documents...")
 
-if __name__ == "__main__":
-    asyncio.run(main())
-'''
+                # Extract texts
+                texts = [doc["text"] for doc in batch]
+
+                try:
+                    # Generate embeddings
+                    embeddings = await voyage.embed_texts(texts)
+                    print(f"  ✓ Generated {len(embeddings)} embeddings")
+
+                    # Store in ChromaDB
+                    ids = [f"doc_{i + j}" for j in range(len(batch))]
+                    metadatas = [doc["metadata"] for doc in batch]
+
+                    collection.add(
+                        ids=ids,
+                        embeddings=embeddings,
+                        documents=texts,
+                        metadatas=metadatas
+                    )
+                    print(f"  ✓ Stored in ChromaDB (total: {collection.count()})")
+
+                    # Wait to avoid rate limit (except for last batch)
+                    if batch_num < total_batches:
+                        print(f"  ⏳ Waiting {wait_time}s for rate limit...")
+                        time.sleep(wait_time)
+
+                except Exception as e:
+                    print(f"  ✗ Error: {e}")
+                    print(f"  Continuing from where we left off...")
+                    break
+
+            print(f"\\n✅ Total documents in collection: {collection.count()}")
+
+        if __name__ == "__main__":
+            asyncio.run(main())
+    '''
 
     # Save documents to JSON
     import tempfile

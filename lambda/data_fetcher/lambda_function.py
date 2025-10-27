@@ -1,6 +1,7 @@
 """
-Lambda function to fetch data from GitLab, Slack, and Backlog APIs
-and store in S3 for Bedrock Knowledge Base ingestion.
+Lambda function to fetch data from GitLab, Slack, and Backlog APIs,
+chunk the data, and save to S3.
+S3 event will trigger embedder Lambda to process the chunked data.
 """
 
 import json
@@ -18,6 +19,16 @@ logger.setLevel(logging.INFO)
 # Initialize AWS clients
 s3_client = boto3.client('s3')
 secrets_client = boto3.client('secretsmanager')
+
+# Import chunking module
+try:
+    import sys
+    sys.path.append('/opt/python')  # Lambda layer path
+    from embeddings.chunk_router import chunk_data
+    CHUNKING_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Chunking module not available: {e}")
+    CHUNKING_AVAILABLE = False
 
 
 def get_secret(secret_name: str) -> Dict[str, Any]:
@@ -319,37 +330,104 @@ def transform_to_documents(source: str, data: Dict[str, List[Dict]]) -> List[Dic
     return documents
 
 
-def upload_to_s3(bucket: str, prefix: str, documents: List[Dict[str, Any]]) -> int:
-    """Upload documents to S3."""
+def chunk_and_upload_to_s3(bucket: str, prefix: str, documents: List[Dict[str, Any]]) -> Dict[str, int]:
+    """
+    Chunk documents and upload to S3.
+    Returns stats about chunking and upload.
+    """
     now = datetime.now(timezone.utc)
     date_path = f"year={now.year}/month={now.month:02d}/day={now.day:02d}"
     timestamp = now.strftime('%Y%m%d_%H%M%S')
+    batch_id = f"{timestamp}_{os.urandom(4).hex()}"
 
-    uploaded_count = 0
+    stats = {
+        'original_docs': len(documents),
+        'total_chunks': 0,
+        'uploaded': 0,
+        'errors': 0
+    }
 
-    for idx, doc in enumerate(documents):
-        key = f"{prefix}/{date_path}/{timestamp}_doc_{idx}.json"
+    all_chunks = []
 
-        try:
-            s3_client.put_object(
-                Bucket=bucket,
-                Key=key,
-                Body=json.dumps(doc, ensure_ascii=False, indent=2),
-                ContentType='application/json',
-                Metadata={k: str(v) for k, v in doc['metadata'].items()}
-            )
-            uploaded_count += 1
-        except Exception as e:
-            logger.error(f"Error uploading document {idx}: {str(e)}")
-            continue
+    # Chunk all documents
+    if CHUNKING_AVAILABLE:
+        logger.info(f"Chunking {len(documents)} documents...")
+        for doc in documents:
+            try:
+                source_type = doc.get('metadata', {}).get('source', 'text')
+                text = doc.get('text', '')
 
-    logger.info(f"Uploaded {uploaded_count} documents to s3://{bucket}/{prefix}/{date_path}/")
-    return uploaded_count
+                if not text:
+                    logger.warning(f"Empty text in document, skipping")
+                    continue
+
+                # Chunk based on source type
+                chunks = chunk_data(source_type, text)
+
+                for chunk in chunks:
+                    # Merge original metadata with chunk metadata
+                    merged_metadata = {**doc.get('metadata', {}), **chunk.get('metadata', {})}
+                    all_chunks.append({
+                        'text': chunk['text'],
+                        'metadata': merged_metadata
+                    })
+
+            except Exception as e:
+                logger.error(f"Error chunking document: {e}")
+                stats['errors'] += 1
+                continue
+
+        stats['total_chunks'] = len(all_chunks)
+        logger.info(f"Chunked into {len(all_chunks)} pieces")
+    else:
+        # If chunking not available, treat each document as a chunk
+        all_chunks = documents
+        stats['total_chunks'] = len(documents)
+        logger.warning("Chunking not available, uploading documents as-is")
+
+    # Upload chunks to S3
+    # Group all chunks into a single batch file for efficient processing
+    batch_key = f"{prefix}/chunked/{date_path}/batch_{batch_id}.json"
+
+    try:
+        batch_data = {
+            'batch_id': batch_id,
+            'timestamp': now.isoformat(),
+            'source': prefix,
+            'chunk_count': len(all_chunks),
+            'chunks': all_chunks
+        }
+
+        s3_client.put_object(
+            Bucket=bucket,
+            Key=batch_key,
+            Body=json.dumps(batch_data, ensure_ascii=False, indent=2),
+            ContentType='application/json',
+            Metadata={
+                'batch_id': batch_id,
+                'source': prefix,
+                'chunk_count': str(len(all_chunks)),
+                'timestamp': timestamp
+            }
+        )
+        stats['uploaded'] = len(all_chunks)
+        logger.info(f"Uploaded batch with {len(all_chunks)} chunks to s3://{bucket}/{batch_key}")
+
+    except Exception as e:
+        logger.error(f"Error uploading batch: {str(e)}")
+        stats['errors'] += 1
+
+    return stats
+
+
 
 
 def lambda_handler(event, context):
-    """Main Lambda handler."""
-    logger.info("Starting data fetch process...")
+    """
+    Main Lambda handler - fetches, chunks, and saves data to S3.
+    S3 event will trigger embedder Lambda.
+    """
+    logger.info("Starting data fetch and chunk process...")
 
     try:
         bucket_name = os.environ.get('S3_BUCKET_NAME')
@@ -357,9 +435,9 @@ def lambda_handler(event, context):
             raise ValueError("S3_BUCKET_NAME environment variable not set")
 
         results = {
-            'gitlab': {'docs': 0, 'status': 'not_attempted'},
-            'slack': {'docs': 0, 'status': 'not_attempted'},
-            'backlog': {'docs': 0, 'status': 'not_attempted'}
+            'gitlab': {'docs': 0, 'chunks': 0, 'status': 'not_attempted'},
+            'slack': {'docs': 0, 'chunks': 0, 'status': 'not_attempted'},
+            'backlog': {'docs': 0, 'chunks': 0, 'status': 'not_attempted'}
         }
 
         # Fetch GitLab data
@@ -368,11 +446,18 @@ def lambda_handler(event, context):
             gitlab_secret = get_secret('/chatbot/gitlab/api-token')
             gitlab_data = fetch_gitlab_data(gitlab_secret['token'], gitlab_secret['base_url'])
             gitlab_docs = transform_to_documents('gitlab', gitlab_data)
-            gitlab_count = upload_to_s3(bucket_name, 'gitlab', gitlab_docs)
-            results['gitlab'] = {'docs': gitlab_count, 'status': 'success'}
+
+            # Chunk and upload
+            gitlab_stats = chunk_and_upload_to_s3(bucket_name, 'gitlab', gitlab_docs)
+            results['gitlab'] = {
+                'docs': gitlab_stats['original_docs'],
+                'chunks': gitlab_stats['total_chunks'],
+                'uploaded': gitlab_stats['uploaded'],
+                'status': 'success'
+            }
         except Exception as e:
             logger.error(f"GitLab processing failed: {str(e)}")
-            results['gitlab'] = {'docs': 0, 'status': 'failed', 'error': str(e)}
+            results['gitlab'] = {'docs': 0, 'chunks': 0, 'status': 'failed', 'error': str(e)}
 
         # Fetch Slack data
         try:
@@ -380,11 +465,18 @@ def lambda_handler(event, context):
             slack_secret = get_secret('/chatbot/slack/bot-token')
             slack_data = fetch_slack_data(slack_secret['bot_token'])
             slack_docs = transform_to_documents('slack', slack_data)
-            slack_count = upload_to_s3(bucket_name, 'slack', slack_docs)
-            results['slack'] = {'docs': slack_count, 'status': 'success'}
+
+            # Chunk and upload
+            slack_stats = chunk_and_upload_to_s3(bucket_name, 'slack', slack_docs)
+            results['slack'] = {
+                'docs': slack_stats['original_docs'],
+                'chunks': slack_stats['total_chunks'],
+                'uploaded': slack_stats['uploaded'],
+                'status': 'success'
+            }
         except Exception as e:
             logger.error(f"Slack processing failed: {str(e)}")
-            results['slack'] = {'docs': 0, 'status': 'failed', 'error': str(e)}
+            results['slack'] = {'docs': 0, 'chunks': 0, 'status': 'failed', 'error': str(e)}
 
         # Fetch Backlog data
         try:
@@ -392,25 +484,35 @@ def lambda_handler(event, context):
             backlog_secret = get_secret('/chatbot/backlog/api-key')
             backlog_data = fetch_backlog_data(backlog_secret['api_key'], backlog_secret['space_url'])
             backlog_docs = transform_to_documents('backlog', backlog_data)
-            backlog_count = upload_to_s3(bucket_name, 'backlog', backlog_docs)
-            results['backlog'] = {'docs': backlog_count, 'status': 'success'}
+
+            # Chunk and upload
+            backlog_stats = chunk_and_upload_to_s3(bucket_name, 'backlog', backlog_docs)
+            results['backlog'] = {
+                'docs': backlog_stats['original_docs'],
+                'chunks': backlog_stats['total_chunks'],
+                'uploaded': backlog_stats['uploaded'],
+                'status': 'success'
+            }
         except Exception as e:
             logger.error(f"Backlog processing failed: {str(e)}")
-            results['backlog'] = {'docs': 0, 'status': 'failed', 'error': str(e)}
+            results['backlog'] = {'docs': 0, 'chunks': 0, 'status': 'failed', 'error': str(e)}
 
-        total_docs = sum(r['docs'] for r in results.values())
+        total_docs = sum(r['docs'] for r in results.values() if r['docs'] > 0)
+        total_chunks = sum(r['chunks'] for r in results.values() if r['chunks'] > 0)
         success = any(r['status'] == 'success' for r in results.values())
 
-        logger.info(f"Data fetch completed. Total documents: {total_docs}")
+        logger.info(f"Data fetch completed. Total: {total_docs} docs → {total_chunks} chunks")
 
         return {
             'statusCode': 200 if success else 500,
             'body': json.dumps({
-                'message': 'Data fetch completed',
+                'message': 'Data fetch and chunk completed',
                 'total_documents': total_docs,
+                'total_chunks': total_chunks,
                 'results': results,
                 'bucket': bucket_name,
-                'timestamp': datetime.now(timezone.utc).isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat(),
+                'note': 'Chunked data uploaded to S3. Embedder Lambda will be triggered automatically.'
             })
         }
 

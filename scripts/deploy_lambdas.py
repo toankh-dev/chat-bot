@@ -18,43 +18,25 @@ LAMBDA_FUNCTIONS = [
         "name": "data_fetcher",
         "handler": "lambda_function.lambda_handler",
         "runtime": "python3.11",
-        "description": "Fetch data from GitLab, Slack, and Backlog"
-    },
-    {
-        "name": "chat_handler",
-        "handler": "lambda_function.lambda_handler",
-        "runtime": "python3.11",
-        "description": "Handle chat requests and orchestrate agents"
-    },
-    {
-        "name": "orchestrator_actions",
-        "handler": "lambda_function.lambda_handler",
-        "runtime": "python3.11",
-        "description": "Orchestrator actions for multi-agent coordination"
-    },
-    {
-        "name": "report_actions",
-        "handler": "lambda_function.lambda_handler",
-        "runtime": "python3.11",
-        "description": "Generate and post reports to external services"
-    },
-    {
-        "name": "summarize_actions",
-        "handler": "lambda_function.lambda_handler",
-        "runtime": "python3.11",
-        "description": "Summarize conversations and documents"
-    },
-    {
-        "name": "code_review_actions",
-        "handler": "lambda_function.lambda_handler",
-        "runtime": "python3.11",
-        "description": "Perform code reviews and analysis"
+        "description": "Fetch and chunk data from GitLab, Slack, and Backlog",
+        "timeout": 300,  # 5 minutes for fetching + chunking
+        "memory_size": 512  # 512MB memory
     },
     {
         "name": "discord_fetcher",
         "handler": "lambda_function.lambda_handler",
         "runtime": "python3.11",
-        "description": "Fetch data from Discord channels"
+        "description": "Fetch data from Discord channels",
+        "timeout": 300,
+        "memory_size": 512
+    },
+    {
+        "name": "embedder",
+        "handler": "lambda_function.lambda_handler",
+        "runtime": "python3.11",
+        "description": "Embed chunked data into ChromaDB (S3 triggered)",
+        "timeout": 900,  # 15 minutes for embedding
+        "memory_size": 1024  # 1GB memory for embedding
     }
 ]
 
