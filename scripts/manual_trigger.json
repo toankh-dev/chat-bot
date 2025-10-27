@@ -1,7 +1,0 @@
-[
-  {
-    "Source": "chatbot.manual",
-    "DetailType": "Manual Trigger",
-    "Detail": "{\"source\": \"all\", \"max_items\": 200}"
-  }
-]

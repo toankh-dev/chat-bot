@@ -137,19 +137,22 @@ aws --endpoint-url=http://localhost:4566 lambda invoke `
   response.json
 ```
 
-## Old Scripts (Deprecated)
+## Available Scripts
 
-These scripts are replaced by `deploy.py`:
+### Deployment (Main)
+- ⭐ `deploy.py` - Unified deployment script (all-in-one)
+- ⭐ `deploy.ps1` - PowerShell wrapper for deploy.py
 
-- ❌ `deploy_lambdas.py` → Use `deploy.py`
-- ❌ `setup_eventbridge_cronjobs.py` → Use `deploy.py`
-- ❌ `setup_s3_triggers.py` → Use `deploy.py`
-- ❌ `deploy_full_system.ps1` → Use `deploy.ps1`
+### Utility Scripts
+- ✅ `embed_via_api.py` - Manual embedding from Excel files
+- ✅ `run_data_fetcher.py` - Quick local testing of data fetcher
+- ✅ `test_s3_event.json` - Sample S3 event for testing embedder
 
-Other scripts still useful:
-
-- ✅ `embed_via_api.py` - Manual embedding from Excel
-- ✅ `run_data_fetcher.py` - Quick local testing
+### Legacy/Optional
+- `setup_localstack.py` - LocalStack initialization (if needed)
+- `build_vector_index.py` - Alternative vector store setup
+- `monitor_embedding.ps1` - Monitoring helper
+- `deploy_lambdas.sh` - Bash alternative (Unix/Mac)
 
 ## Advanced
 
@@ -184,15 +187,19 @@ Other scripts still useful:
 }
 ```
 
-## Files
+## Scripts Directory
 
 ```
 scripts/
-├── deploy.py          # ⭐ Unified deployment (Python)
-├── deploy.ps1         # ⭐ Simple wrapper (PowerShell)
-├── test_s3_event.json # Test S3 event payload
-├── embed_via_api.py   # Manual Excel embedding
-└── run_data_fetcher.py # Local testing
+├── deploy.py              # ⭐ Unified deployment (Python)
+├── deploy.ps1             # ⭐ Simple wrapper (PowerShell)
+├── test_s3_event.json     # Test S3 event payload
+├── embed_via_api.py       # Manual Excel embedding
+├── run_data_fetcher.py    # Local testing
+├── setup_localstack.py    # LocalStack setup (optional)
+├── build_vector_index.py  # Alternative vector store
+├── monitor_embedding.ps1  # Monitoring helper
+└── deploy_lambdas.sh      # Bash deployment (Unix/Mac)
 ```
 
 ## Support
