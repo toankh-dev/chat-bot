@@ -10,11 +10,11 @@ from pathlib import Path
 
 
 # ==========================
-# 1️⃣ CHUNKER CỤ THỂ THEO NGUỒN
+# 1️⃣ SPECIFIC CHUNKER BY SOURCE
 # ==========================
 
 def chunk_slack(messages: List[Dict[str, Any]], window_size=10, overlap=2) -> List[Dict]:
-    """Chunk Slack messages theo conversation window"""
+    """Chunk Slack messages by conversation window"""
     chunks = []
     for i in range(0, len(messages), window_size - overlap):
         group = messages[i:i + window_size]
@@ -33,7 +33,7 @@ def chunk_slack(messages: List[Dict[str, Any]], window_size=10, overlap=2) -> Li
 
 
 def chunk_code(code_text: str, language: str = "python") -> List[Dict]:
-    """Chunk code theo function/class boundaries"""
+    """Chunk code by function/class boundaries"""
     # Fallback to RecursiveCharacterTextSplitter with code-friendly separators
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=1200,
@@ -45,7 +45,7 @@ def chunk_code(code_text: str, language: str = "python") -> List[Dict]:
 
 
 def chunk_markdown(markdown_text: str) -> List[Dict]:
-    """Chunk markdown hoặc wiki"""
+    """Chunk markdown or wiki"""
     splitter = MarkdownTextSplitter(chunk_size=1200, chunk_overlap=200)
     sections = splitter.split_text(markdown_text)
     return [{"text": s, "metadata": {"source": "markdown"}} for s in sections]
@@ -75,7 +75,7 @@ def chunk_backlog_issues(issues: List[Dict[str, Any]]) -> List[Dict]:
 
 
 def chunk_excel(file_path: str) -> List[Dict]:
-    """Chunk Excel sheet theo hàng hoặc nhóm logic"""
+    """Chunk Excel sheet by row or logical group"""
     documents = []
     excel_file = pd.ExcelFile(file_path)
     splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=100)
@@ -102,7 +102,7 @@ def chunk_excel(file_path: str) -> List[Dict]:
 
 
 def chunk_commit_or_pr(data: Dict[str, Any]) -> List[Dict]:
-    """Chunk Git commit hoặc Pull Request"""
+    """Chunk Git commit or Pull Request"""
     text = f"Title: {data.get('title')}\n\nDescription:\n{data.get('description', '')}"
     if diff := data.get("diff"):
         text += f"\n\nDiff:\n{diff}"
@@ -115,7 +115,7 @@ def chunk_commit_or_pr(data: Dict[str, Any]) -> List[Dict]:
 
 
 def chunk_discord(messages: List[Dict[str, Any]], window_size=10, overlap=2) -> List[Dict]:
-    """Chunk Discord messages theo conversation window"""
+    """Chunk Discord messages by conversation window"""
     chunks = []
     for i in range(0, len(messages), window_size - overlap):
         group = messages[i:i + window_size]
@@ -134,20 +134,20 @@ def chunk_discord(messages: List[Dict[str, Any]], window_size=10, overlap=2) -> 
 
 
 # ==========================
-# 2️⃣ ROUTER CHÍNH
+# 2️⃣ MAIN ROUTER
 # ==========================
 
 def chunk_data(source_type: str, data: Any, **kwargs) -> List[Dict]:
     """
-    Router chọn chiến lược chunk phù hợp theo loại dữ liệu
+    Router selects appropriate chunking strategy by data type
 
     Args:
-        source_type: Loại nguồn dữ liệu (slack, discord, code, markdown, etc.)
-        data: Dữ liệu cần chunk
-        **kwargs: Các tham số tùy chọn cho chunker cụ thể
+        source_type: Data source type (slack, discord, code, markdown, etc.)
+        data: Data to be chunked
+        **kwargs: Optional parameters for specific chunker
 
     Returns:
-        List[Dict]: Danh sách các chunks với format {"text": str, "metadata": dict}
+        List[Dict]: List of chunks with format {"text": str, "metadata": dict}
     """
     source_type = source_type.lower()
 
@@ -188,10 +188,10 @@ def chunk_data(source_type: str, data: Any, **kwargs) -> List[Dict]:
 
 
 # ==========================
-# 3️⃣ TEST NHANH (TÙY CHỌN)
+# 3️⃣ QUICK TEST (OPTIONAL)
 # ==========================
 if __name__ == "__main__":
-    # ví dụ: chunk Slack messages
+    # example: chunk Slack messages
     messages = [
         {"user": "Alice", "text": "Hey team, any update on bug #42?", "timestamp": "2025-10-27T10:00", "channel": "dev"},
         {"user": "Bob", "text": "Yes, fixed and merged!", "timestamp": "2025-10-27T10:05", "channel": "dev"},

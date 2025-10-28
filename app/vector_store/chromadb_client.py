@@ -10,7 +10,7 @@ import chromadb
 from chromadb.config import Settings
 
 # Import embedding providers
-from embeddings import VoyageEmbeddingProvider, LocalEmbeddingProvider
+from embeddings import VoyageEmbeddingProvider
 
 logger = logging.getLogger(__name__)
 
@@ -50,15 +50,10 @@ class VectorStoreClient:
         self.embedding_provider_type = embedding_provider or os.getenv("EMBEDDING_PROVIDER", "voyageai")
 
         # Initialize embedding provider
-        if self.embedding_provider_type == "voyageai":
-            self.embedding_provider = VoyageEmbeddingProvider(
-                api_key=voyage_api_key or os.getenv("VOYAGE_API_KEY"),
-                model=voyage_model or os.getenv("VOYAGE_MODEL", "voyage-2")
-            )
-        else:
-            # Local embedding service
-            service_url = embedding_service_url or os.getenv("EMBEDDING_SERVICE_URL", "http://embedding-service:8000")
-            self.embedding_provider = LocalEmbeddingProvider(service_url=service_url)
+        self.embedding_provider = VoyageEmbeddingProvider(
+            api_key=voyage_api_key or os.getenv("VOYAGE_API_KEY"),
+            model=voyage_model or os.getenv("VOYAGE_MODEL", "voyage-2")
+        )
 
         self.client = None
         self.collection = None

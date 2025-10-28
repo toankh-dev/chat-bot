@@ -59,7 +59,9 @@
       "Bash(python:*)",
       "Bash(pip install:*)",
       "Bash(curl:*)",
-      "Bash(powershell -ExecutionPolicy Bypass -File scripts/monitor_embedding.ps1:*)"
+      "Bash(powershell -ExecutionPolicy Bypass -File scripts/monitor_embedding.ps1:*)",
+      "Bash(powershell:*)",
+      "Bash(dir:*)"
     ],
     "deny": [],
     "ask": []

@@ -114,139 +114,155 @@ def process_excel_file(file_path, chunk_size=4000, max_metadata_fields=10, min_t
     return documents
 
 
-def embed_via_docker(documents, batch_size=10):
-    """Embed documents using Docker container's Python environment"""
+def embed_via_docker(excel_files, batch_size=10):
+    """Embed Excel files using Docker container's Python environment with chunking"""
     print_section("Embedding via Docker Container")
 
-    # Create a temporary Python script
-    script = '''
-        import sys
-        import json
-        import asyncio
-        import time
-        sys.path.append("/app")
+    # Create a temporary Python script that processes Excel files directly
+    script = '''import sys
+import json
+import asyncio
+import time
+sys.path.append("/app")
 
-        from embeddings.voyage_client import VoyageEmbeddingProvider
-        from embeddings.chunk_router import chunk_data
-        import chromadb
+from embeddings.voyage_client import VoyageEmbeddingProvider
+from embeddings.chunk_router import chunk_excel
+import chromadb
 
-        async def main():
-            # Load documents
-            with open("/tmp/documents.json", "r", encoding="utf-8") as f:
-                documents = json.load(f)
+async def main():
+    # Load Excel file paths
+    with open("/tmp/excel_files.json", "r", encoding="utf-8") as f:
+        excel_files = json.load(f)
 
-            print(f"Loaded {len(documents)} documents")
+    print(f"Processing {len(excel_files)} Excel file(s)")
 
-            # ===== CHUNKING LOGIC =====
-            print("\\n🔀 Chunking documents...")
-            chunked_documents = []
-            for doc in documents:
-                source_type = doc["metadata"].get("source", "text")
-                # Chunk based on source type
-                chunks = chunk_data(source_type, doc["text"])
-                for chunk in chunks:
-                    # Merge original metadata with chunk metadata
-                    merged_metadata = {**doc["metadata"], **chunk["metadata"]}
-                    chunked_documents.append({
-                        "text": chunk["text"],
-                        "metadata": merged_metadata
-                    })
-            print(f"✓ Chunked into {len(chunked_documents)} pieces (from {len(documents)} original docs)")
+    # ===== CHUNKING EXCEL FILES =====
+    print("\\n🔀 Chunking Excel files using chunk_router...")
+    all_chunks = []
 
-            # Initialize VoyageAI
-            voyage = VoyageEmbeddingProvider()
-            print(f"✓ VoyageAI initialized")
+    for excel_path in excel_files:
+        print(f"\\n📘 Chunking: {excel_path}")
+        try:
+            # Use chunk_excel from chunk_router
+            chunks = chunk_excel(excel_path)
+            print(f"  ✓ Created {len(chunks)} chunks")
+            all_chunks.extend(chunks)
+        except Exception as e:
+            print(f"  ✗ Error: {e}")
+            continue
 
-            # Connect to ChromaDB
-            client = chromadb.HttpClient(host="chromadb", port=8000)
-            collection = client.get_or_create_collection(
-                name="chatbot_knowledge",
-                metadata={"description": "Knowledge base for chatbot"}
+    print(f"\\n✅ Total chunks: {len(all_chunks)}")
+
+    # Initialize VoyageAI
+    voyage = VoyageEmbeddingProvider()
+    print(f"✓ VoyageAI initialized")
+
+    # Connect to ChromaDB
+    client = chromadb.HttpClient(host="chromadb", port=8000)
+    collection = client.get_or_create_collection(
+        name="chatbot_knowledge",
+        metadata={"description": "Knowledge base for chatbot"}
+    )
+    print(f"✓ ChromaDB connected (current count: {collection.count()})")
+
+    # Process in batches with rate limiting
+    # VoyageAI free tier: 3 RPM, so wait 20 seconds between requests
+    batch_size = 50
+    total = len(all_chunks)
+    wait_time = 20  # seconds between batches
+
+    for i in range(0, total, batch_size):
+        batch = all_chunks[i:i + batch_size]
+        batch_num = i // batch_size + 1
+        total_batches = (total - 1) // batch_size + 1
+
+        print(f"\\nBatch {batch_num}/{total_batches}: Processing {len(batch)} chunks...")
+
+        # Extract texts
+        texts = [chunk["text"] for chunk in batch]
+
+        try:
+            # Generate embeddings
+            embeddings = await voyage.embed_texts(texts)
+            print(f"  ✓ Generated {len(embeddings)} embeddings")
+
+            # Store in ChromaDB with unique IDs
+            import time as time_module
+            timestamp = int(time_module.time() * 1000)
+            ids = [f"chunk_{timestamp}_{i + j}" for j in range(len(batch))]
+            metadatas = [chunk["metadata"] for chunk in batch]
+
+            collection.add(
+                ids=ids,
+                embeddings=embeddings,
+                documents=texts,
+                metadatas=metadatas
             )
-            print(f"✓ ChromaDB connected (current count: {collection.count()})")
+            print(f"  ✓ Stored in ChromaDB (total: {collection.count()})")
 
-            # Process in batches with rate limiting
-            # VoyageAI free tier: 3 RPM, so wait 20 seconds between requests
-            batch_size = 50
-            total = len(chunked_documents)
-            wait_time = 20  # seconds between batches
+            # Wait to avoid rate limit (except for last batch)
+            if batch_num < total_batches:
+                print(f"  ⏳ Waiting {wait_time}s for rate limit...")
+                time.sleep(wait_time)
 
-            for i in range(0, total, batch_size):
-                batch = chunked_documents[i:i + batch_size]
-                batch_num = i // batch_size + 1
-                total_batches = (total - 1) // batch_size + 1
+        except Exception as e:
+            print(f"  ✗ Error: {e}")
+            print(f"  Continuing from where we left off...")
+            continue
 
-                print(f"\\nBatch {batch_num}/{total_batches}: Processing {len(batch)} documents...")
+    print(f"\\n✅ Total documents in collection: {collection.count()}")
 
-                # Extract texts
-                texts = [doc["text"] for doc in batch]
+if __name__ == "__main__":
+    asyncio.run(main())
+'''
 
-                try:
-                    # Generate embeddings
-                    embeddings = await voyage.embed_texts(texts)
-                    print(f"  ✓ Generated {len(embeddings)} embeddings")
-
-                    # Store in ChromaDB
-                    ids = [f"doc_{i + j}" for j in range(len(batch))]
-                    metadatas = [doc["metadata"] for doc in batch]
-
-                    collection.add(
-                        ids=ids,
-                        embeddings=embeddings,
-                        documents=texts,
-                        metadatas=metadatas
-                    )
-                    print(f"  ✓ Stored in ChromaDB (total: {collection.count()})")
-
-                    # Wait to avoid rate limit (except for last batch)
-                    if batch_num < total_batches:
-                        print(f"  ⏳ Waiting {wait_time}s for rate limit...")
-                        time.sleep(wait_time)
-
-                except Exception as e:
-                    print(f"  ✗ Error: {e}")
-                    print(f"  Continuing from where we left off...")
-                    break
-
-            print(f"\\n✅ Total documents in collection: {collection.count()}")
-
-        if __name__ == "__main__":
-            asyncio.run(main())
-    '''
-
-    # Save documents to JSON
+    # Save Excel file paths to JSON
     import tempfile
     import os
+    import subprocess
 
     temp_dir = tempfile.gettempdir()
-    doc_file = os.path.join(temp_dir, "documents.json")
+    excel_list_file = os.path.join(temp_dir, "excel_files.json")
     script_file = os.path.join(temp_dir, "embed_script.py")
 
-    print(f"Saving {len(documents)} documents to temp file...")
-    with open(doc_file, "w", encoding="utf-8") as f:
-        json.dump(documents, f, ensure_ascii=False)
+    # Convert Excel file paths to strings (inside container paths)
+    excel_paths_in_container = [f"/tmp/{Path(f).name}" for f in excel_files]
+
+    print(f"Preparing {len(excel_files)} Excel file(s)...")
+    with open(excel_list_file, "w", encoding="utf-8") as f:
+        json.dump(excel_paths_in_container, f, ensure_ascii=False)
 
     with open(script_file, "w", encoding="utf-8") as f:
         f.write(script)
 
-    print(f"✓ Saved to {doc_file}")
+    print(f"✓ Saved file list to {excel_list_file}")
     print(f"✓ Saved script to {script_file}")
 
-    # Copy files to container and run
+    # Copy Excel files and script to container
     print("\nCopying files to Docker container...")
 
-    import subprocess
+    # Copy each Excel file
+    for excel_file in excel_files:
+        result = subprocess.run(
+            ["docker", "cp", str(excel_file), f"chatbot-app:/tmp/{Path(excel_file).name}"],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            print(f"✗ Failed to copy {excel_file}: {result.stderr}")
+            return False
+        print(f"✓ Copied {Path(excel_file).name}")
 
-    # Copy documents
+    # Copy Excel file list
     result = subprocess.run(
-        ["docker", "cp", doc_file, "chatbot-app:/tmp/documents.json"],
+        ["docker", "cp", excel_list_file, "chatbot-app:/tmp/excel_files.json"],
         capture_output=True,
         text=True
     )
     if result.returncode != 0:
-        print(f"✗ Failed to copy documents: {result.stderr}")
+        print(f"✗ Failed to copy file list: {result.stderr}")
         return False
-    print("✓ Copied documents.json")
+    print("✓ Copied excel_files.json")
 
     # Copy script
     result = subprocess.run(
@@ -285,7 +301,7 @@ def embed_via_docker(documents, batch_size=10):
 
 def main():
     """Main function"""
-    print_section("EXCEL EMBEDDING VIA DOCKER")
+    print_section("EXCEL EMBEDDING VIA DOCKER WITH CHUNKING")
 
     # Find Excel files
     data_dir = Path("embedding-data")
@@ -295,26 +311,16 @@ def main():
         print(f"\n✗ No Excel files in {data_dir}")
         return 1
 
-    print(f"\n✓ Found {len(excel_files)} file(s)")
+    print(f"\n✓ Found {len(excel_files)} file(s):")
+    for f in excel_files:
+        print(f"  - {f.name}")
 
-    # Process
-    all_documents = []
-    for excel_file in excel_files:
-        print_section(f"Processing: {excel_file.name}")
-        documents = process_excel_file(excel_file)
-        if documents:
-            all_documents.extend(documents)
+    # Embed via Docker (with chunking inside container using chunk_router)
+    print("\n🔀 Chunking will be done inside Docker container using chunk_router.chunk_excel()")
 
-    if not all_documents:
-        print("\n✗ No documents extracted")
-        return 1
-
-    print(f"\n✓ Total: {len(all_documents)} documents ready to embed")
-
-    # Embed via Docker
-    if embed_via_docker(all_documents):
+    if embed_via_docker(excel_files):
         print_section("✅ SUCCESS")
-        print(f"\nEmbedded {len(all_documents)} documents!")
+        print("\nExcel files have been chunked and embedded!")
         print("\nTest with:")
         print("  curl -X POST http://localhost:8000/search \\")
         print("    -H 'Content-Type: application/json' \\")

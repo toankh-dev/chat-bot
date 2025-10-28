@@ -1,23 +1,4 @@
 services:
-  localstack:
-    image: localstack/localstack:latest
-    container_name: chatbot-localstack
-    ports:
-      - "4566:4566"
-      - "4571:4571"
-    environment:
-      - SERVICES=s3,dynamodb,secretsmanager,lambda,events
-      - DEBUG=1
-      - DATA_DIR=/var/lib/localstack
-      - LAMBDA_EXECUTOR=docker
-      - DOCKER_HOST=unix:///var/run/docker.sock
-      - ACTIVATE_PRO=0
-    volumes:
-      - "./localstack-data:/var/lib/localstack"
-      - "/var/run/docker.sock:/var/run/docker.sock"
-    networks:
-      - chatbot-network
-
   # ChromaDB - Vector database
   chromadb:
     image: chromadb/chroma:0.4.24
@@ -31,62 +12,6 @@ services:
       - "./chromadb-data:/chroma/chroma"
     networks:
       - chatbot-network
-
-  # Embedding Service - Sentence Transformers (DISABLED - Using VoyageAI instead)
-  # embedding-service:
-  #   build:
-  #     context: ./services/embedding
-  #     dockerfile: Dockerfile
-  #   container_name: chatbot-embedding
-  #   ports:
-  #     - "8002:8000"
-  #   environment:
-  #     - MODEL_NAME=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
-  #     - DEVICE=cpu  # Change to 'cuda' if GPU available
-  #     - BATCH_SIZE=32
-  #   volumes:
-  #     - "./models-cache:/root/.cache/huggingface"
-  #   networks:
-  #     - chatbot-network
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         cpus: '4'
-  #         memory: 8G
-  #       reservations:
-  #         cpus: '2'
-  #         memory: 4G
-
-  # # LLM Service - StableLM
-  # llm-service:
-  #   build:
-  #     context: ./services/llm
-  #     dockerfile: Dockerfile
-  #   container_name: chatbot-llm
-  #   ports:
-  #     - "8003:8000"
-  #   environment:
-  #     - MODEL_NAME=TinyLlama/TinyLlama-1.1B-Chat-v1.0
-  #     - DEVICE=cpu  # Change to 'cuda' if GPU available
-  #     - LOAD_IN_4BIT=false
-  #     - MAX_NEW_TOKENS=128
-  #     - TEMPERATURE=0.7
-  #   volumes:
-  #     - "./models-cache:/root/.cache/huggingface"
-  #   networks:
-  #     - chatbot-network
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         cpus: '8'
-  #         memory: 16G
-  #       reservations:
-  #         cpus: '4'
-  #         memory: 8G
-  #   # Uncomment if using GPU
-  #   # runtime: nvidia
-  #   # environment:
-  #   #   - NVIDIA_VISIBLE_DEVICES=all
 
   # PostgreSQL - Conversation history (optional)
   postgres:
@@ -124,17 +49,9 @@ services:
     ports:
       - "8000:8000"
     environment:
-      # LocalStack
-      - LOCALSTACK_ENDPOINT=http://localstack:4566
-      - AWS_DEFAULT_REGION=ap-southeast-1
-      - AWS_ACCESS_KEY_ID=test
-      - AWS_SECRET_ACCESS_KEY=test
-
       # Services
       - CHROMADB_HOST=chromadb
       - CHROMADB_PORT=8000
-      # - EMBEDDING_SERVICE_URL=http://embedding-service:8000  # Using VoyageAI instead
-      # - LLM_SERVICE_URL=http://llm-service:8000
 
       # Embedding Configuration (VoyageAI)
       - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-voyageai}
@@ -171,12 +88,8 @@ services:
       - LOG_LEVEL=INFO
     volumes:
       - "./app:/app"
-      - "./lambda:/lambda"
     depends_on:
-      - localstack
       - chromadb
-      # - embedding-service  # Using VoyageAI instead
-      # - llm-service
       - postgres
       - redis
     networks:
@@ -204,8 +117,6 @@ networks:
     driver: bridge
 
 volumes:
-  localstack-data:
   chromadb-data:
   postgres-data:
   redis-data:
-  models-cache:
