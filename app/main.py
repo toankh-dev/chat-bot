@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 # Configuration
 CHROMADB_HOST = os.getenv("CHROMADB_HOST", "chromadb")
 CHROMADB_PORT = int(os.getenv("CHROMADB_PORT", "8000"))
-EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "voyageai")
+EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "gemini")
 
 # Global instances
 vector_store: Optional[VectorStoreClient] = None

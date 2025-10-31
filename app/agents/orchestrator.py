@@ -15,6 +15,7 @@ from tools.summarize_tool import SummarizeTool
 from tools.code_review_tool import CodeReviewTool
 from tools.vector_search_tool import VectorSearchTool
 from llm.groq_llm import GroqLLM
+from llm.gemini_llm import GeminiLLM
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +94,7 @@ def create_orchestrator_agent(
     logger.info("Creating orchestrator agent...")
 
     # Initialize LLM based on provider
-    llm_provider = os.getenv("LLM_PROVIDER", "groq").lower()
+    llm_provider = os.getenv("LLM_PROVIDER", "gemini").lower()
 
     if llm_provider == "groq":
         logger.info("Using Groq API (Fast & Free)")
@@ -107,8 +108,20 @@ def create_orchestrator_agent(
             max_tokens=int(os.getenv("GROQ_MAX_TOKENS", "1024")),
             temperature=float(os.getenv("GROQ_TEMPERATURE", "0.7"))
         )
+    elif llm_provider == "gemini":
+        logger.info("Using Google Gemini API")
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY environment variable is required")
+
+        llm = GeminiLLM(
+            api_key=api_key,
+            model=os.getenv("GEMINI_MODEL", "gemini-2.0-flash-exp"),
+            max_tokens=int(os.getenv("GEMINI_MAX_TOKENS", "2048")),
+            temperature=float(os.getenv("GEMINI_TEMPERATURE", "0.7"))
+        )
     else:
-        raise ValueError(f"Unsupported LLM provider: {llm_provider}. Currently only 'groq' is supported.")
+        raise ValueError(f"Unsupported LLM provider: {llm_provider}. Supported: 'groq', 'gemini'")
 
     # Initialize tools
     logger.info("Initializing tools...")

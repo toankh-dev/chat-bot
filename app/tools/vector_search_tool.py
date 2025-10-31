@@ -43,9 +43,9 @@ class VectorSearchTool:
             if not results:
                 return "No relevant information found in the knowledge base."
 
-            # Format results
+            # Format results for better readability
             formatted_results = []
-            formatted_results.append(f"Found {len(results)} relevant documents:\n")
+            formatted_results.append(f"I found {len(results)} relevant documents:\n")
 
             for i, result in enumerate(results, 1):
                 doc = result.get("document", {})
@@ -53,20 +53,46 @@ class VectorSearchTool:
                 score = result.get("score", 0)
 
                 source = metadata.get("source", "unknown")
-                doc_type = metadata.get("type", "unknown")
-                doc_id = metadata.get("id", "unknown")
+                file_name = metadata.get("file", "")
+                sheet_name = metadata.get("sheet", "")
 
-                # Get text preview
+                # Get text and clean it up
                 text = doc.get("text", "")
-                preview = text[:200] + "..." if len(text) > 200 else text
 
-                formatted_results.append(
-                    f"\n{i}. [{source.upper()}] {doc_type} (ID: {doc_id})\n"
-                    f"   Relevance: {score:.2f}\n"
-                    f"   {preview}\n"
-                )
+                # For Excel data, format it better
+                if source == "excel":
+                    # Remove "Unnamed: X: " patterns and format as bullet points
+                    lines = text.split(" | ")
+                    cleaned_lines = []
+                    for line in lines[:5]:  # Show first 5 fields only
+                        # Remove "Unnamed: X: " prefix
+                        if "Unnamed:" in line:
+                            parts = line.split(": ", 1)
+                            if len(parts) > 1:
+                                cleaned_lines.append(parts[1])
+                        else:
+                            cleaned_lines.append(line)
 
-            result_text = "".join(formatted_results)
+                    preview = "\n   • " + "\n   • ".join(cleaned_lines)
+                    if len(lines) > 5:
+                        preview += f"\n   ... and {len(lines) - 5} more fields"
+                else:
+                    # For other sources, simple preview
+                    preview = text[:300] + "..." if len(text) > 300 else text
+
+                # Build formatted result
+                result_parts = [f"\n📄 **Result {i}** (Relevance: {score:.0%})"]
+
+                if file_name:
+                    result_parts.append(f"   📁 File: {file_name}")
+                if sheet_name:
+                    result_parts.append(f"   📊 Sheet: {sheet_name}")
+
+                result_parts.append(f"   Content:{preview}\n")
+
+                formatted_results.append("\n".join(result_parts))
+
+            result_text = "\n".join(formatted_results)
 
             self.logger.info(f"Search completed: {len(results)} results")
 
@@ -96,9 +122,9 @@ class VectorSearchTool:
             if not results:
                 return "No relevant information found in the knowledge base."
 
-            # Format results (same as sync version)
+            # Format results for better readability (same as sync version)
             formatted_results = []
-            formatted_results.append(f"Found {len(results)} relevant documents:\n")
+            formatted_results.append(f"I found {len(results)} relevant documents:\n")
 
             for i, result in enumerate(results, 1):
                 doc = result.get("document", {})
@@ -106,19 +132,46 @@ class VectorSearchTool:
                 score = result.get("score", 0)
 
                 source = metadata.get("source", "unknown")
-                doc_type = metadata.get("type", "unknown")
-                doc_id = metadata.get("id", "unknown")
+                file_name = metadata.get("file", "")
+                sheet_name = metadata.get("sheet", "")
 
+                # Get text and clean it up
                 text = doc.get("text", "")
-                preview = text[:200] + "..." if len(text) > 200 else text
 
-                formatted_results.append(
-                    f"\n{i}. [{source.upper()}] {doc_type} (ID: {doc_id})\n"
-                    f"   Relevance: {score:.2f}\n"
-                    f"   {preview}\n"
-                )
+                # For Excel data, format it better
+                if source == "excel":
+                    # Remove "Unnamed: X: " patterns and format as bullet points
+                    lines = text.split(" | ")
+                    cleaned_lines = []
+                    for line in lines[:5]:  # Show first 5 fields only
+                        # Remove "Unnamed: X: " prefix
+                        if "Unnamed:" in line:
+                            parts = line.split(": ", 1)
+                            if len(parts) > 1:
+                                cleaned_lines.append(parts[1])
+                        else:
+                            cleaned_lines.append(line)
 
-            return "".join(formatted_results)
+                    preview = "\n   • " + "\n   • ".join(cleaned_lines)
+                    if len(lines) > 5:
+                        preview += f"\n   ... and {len(lines) - 5} more fields"
+                else:
+                    # For other sources, simple preview
+                    preview = text[:300] + "..." if len(text) > 300 else text
+
+                # Build formatted result
+                result_parts = [f"\n📄 **Result {i}** (Relevance: {score:.0%})"]
+
+                if file_name:
+                    result_parts.append(f"   📁 File: {file_name}")
+                if sheet_name:
+                    result_parts.append(f"   📊 Sheet: {sheet_name}")
+
+                result_parts.append(f"   Content:{preview}\n")
+
+                formatted_results.append("\n".join(result_parts))
+
+            return "\n".join(formatted_results)
 
         except Exception as e:
             self.logger.error(f"Error in async vector search: {e}")

@@ -4,11 +4,8 @@ This bypasses ChromaDB version issues by using the app's endpoint
 """
 
 import sys
-import pandas as pd
-import requests
 import json
 from pathlib import Path
-from datetime import datetime
 
 # Set UTF-8 encoding for Windows
 if sys.platform == "win32":
@@ -27,91 +24,6 @@ def print_section(title):
     print("\n" + "=" * 60)
     print(title)
     print("=" * 60)
-
-
-import pandas as pd
-from pathlib import Path
-from textwrap import shorten
-
-def process_excel_file(file_path, chunk_size=4000, max_metadata_fields=10, min_text_length=20):
-    """
-    Extract and enrich documents from an Excel file for ChromaDB ingestion.
-    Includes both row-level and sheet-level context.
-    """
-
-    print(f"\n📘 Reading Excel file: {file_path}")
-    documents = []
-
-    excel_file = pd.ExcelFile(file_path)
-    print(f"→ Found {len(excel_file.sheet_names)} sheets")
-
-    for sheet_idx, sheet_name in enumerate(excel_file.sheet_names, 1):
-        print(f"\n[{sheet_idx}/{len(excel_file.sheet_names)}] Processing sheet: '{sheet_name}'")
-
-        df = pd.read_excel(file_path, sheet_name=sheet_name)
-        if df.empty:
-            print("  ⚠️ Sheet is empty, skipping.")
-            continue
-
-        row_docs = 0
-        all_texts = []  # để tạo sheet-level summary sau
-
-        # ---- 1️⃣ Row-level documents ----
-        for row in df.itertuples(index=True):
-            text_parts = []
-            metadata = {
-                "source": "excel",
-                "file": Path(file_path).name,
-                "sheet": sheet_name,
-                "row": row.Index + 2,  # dòng thật trong Excel
-                "type": "row"
-            }
-
-            # duyệt từng cột nhanh hơn qua df.columns
-            for col in df.columns:
-                value = getattr(row, col)
-                if pd.notna(value) and str(value).strip():
-                    text_parts.append(f"{col}: {value}")
-
-                    # thêm metadata hạn chế
-                    if len(metadata) - 5 < max_metadata_fields:
-                        clean_col = str(col).replace(" ", "_").lower()[:50]
-                        metadata[clean_col] = shorten(str(value), width=100, placeholder="...")
-
-            if text_parts:
-                text = " | ".join(text_parts)
-                if len(text) >= min_text_length:
-                    if len(text) > chunk_size:
-                        text = text[:chunk_size] + "..."
-                    documents.append({
-                        "text": text,
-                        "metadata": metadata
-                    })
-                    row_docs += 1
-                    all_texts.append(text)
-
-        print(f"  ✔ Created {row_docs} row-level docs")
-
-        # ---- 2️⃣ Sheet-level summary document ----
-        if all_texts:
-            full_text = "\n".join(all_texts)
-            # chia nhỏ theo chunk_size để tránh quá dài
-            chunks = [full_text[i:i+chunk_size] for i in range(0, len(full_text), chunk_size)]
-            for j, chunk in enumerate(chunks, 1):
-                documents.append({
-                    "text": chunk,
-                    "metadata": {
-                        "source": "excel",
-                        "file": Path(file_path).name,
-                        "sheet": sheet_name,
-                        "type": "sheet_summary",
-                        "chunk": j
-                    }
-                })
-            print(f"  ➕ Added {len(chunks)} sheet-level summary chunks")
-
-    print(f"\n✅ Total {len(documents)} documents extracted from {len(excel_file.sheet_names)} sheets.")
-    return documents
 
 
 def embed_via_docker(excel_files, batch_size=10):
@@ -321,10 +233,6 @@ def main():
     if embed_via_docker(excel_files):
         print_section("✅ SUCCESS")
         print("\nExcel files have been chunked and embedded!")
-        print("\nTest with:")
-        print("  curl -X POST http://localhost:8000/search \\")
-        print("    -H 'Content-Type: application/json' \\")
-        print("    -d '{\"query\": \"画面一覧\", \"limit\": 5}'")
         return 0
     else:
         print_section("✗ FAILED")

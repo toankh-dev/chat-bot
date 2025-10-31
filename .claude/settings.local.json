@@ -61,7 +61,8 @@
       "Bash(curl:*)",
       "Bash(powershell -ExecutionPolicy Bypass -File scripts/monitor_embedding.ps1:*)",
       "Bash(powershell:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(docker cp:*)"
     ],
     "deny": [],
     "ask": []

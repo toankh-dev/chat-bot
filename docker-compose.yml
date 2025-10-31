@@ -53,11 +53,6 @@ services:
       - CHROMADB_HOST=chromadb
       - CHROMADB_PORT=8000
 
-      # Embedding Configuration (VoyageAI)
-      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-voyageai}
-      - VOYAGE_API_KEY=${VOYAGE_API_KEY}
-      - VOYAGE_MODEL=${VOYAGE_MODEL:-voyage-2}
-
       # Database
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
@@ -68,20 +63,6 @@ services:
       # Redis
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-
-      # External APIs (override in .env)
-      - GITLAB_TOKEN=${GITLAB_TOKEN}
-      - GITLAB_BASE_URL=${GITLAB_BASE_URL}
-      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
-      - BACKLOG_API_KEY=${BACKLOG_API_KEY}
-      - BACKLOG_SPACE_URL=${BACKLOG_SPACE_URL}
-
-      # LLM Configuration
-      - LLM_PROVIDER=${LLM_PROVIDER:-groq}
-      - GROQ_API_KEY=${GROQ_API_KEY}
-      - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}
-      - GROQ_MAX_TOKENS=${GROQ_MAX_TOKENS:-1024}
-      - GROQ_TEMPERATURE=${GROQ_TEMPERATURE:-0.7}
 
       # App config
       - DEBUG=true

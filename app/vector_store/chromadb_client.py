@@ -5,12 +5,11 @@ ChromaDB Client for vector storage and retrieval
 import logging
 import os
 from typing import List, Dict, Any, Optional
-import httpx
 import chromadb
 from chromadb.config import Settings
 
 # Import embedding providers
-from embeddings import VoyageEmbeddingProvider
+from embeddings import VoyageEmbeddingProvider, GeminiEmbeddingProvider
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +18,22 @@ class VectorStoreClient:
     """
     Client for interacting with ChromaDB vector store
     """
+    _EMBEDDING_PROVIDER_MAP = {
+        "gemini": {
+            "cls": GeminiEmbeddingProvider,
+            "init_kwargs": {
+                "api_key": os.getenv("  "),
+                "model": os.getenv("EMBED_MODEL", "gemini-embedding-001"),
+            },
+        },
+        'voyage': {
+            "cls": VoyageEmbeddingProvider,
+            "init_kwargs": {
+                "api_key": os.getenv("EMBED_API_KEY"),
+                "model": os.getenv("EMBED_MODEL", "voyage-2"),
+            },
+        },
+    }
 
     def __init__(
         self,
@@ -26,9 +41,6 @@ class VectorStoreClient:
         port: int = 8000,
         collection_name: str = "chatbot_knowledge",
         embedding_provider: str = None,
-        embedding_service_url: str = None,
-        voyage_api_key: str = None,
-        voyage_model: str = "voyage-2"
     ):
         """
         Initialize ChromaDB client
@@ -37,28 +49,43 @@ class VectorStoreClient:
             host: ChromaDB host
             port: ChromaDB port
             collection_name: Collection name
-            embedding_provider: Embedding provider ('voyageai' or 'local')
-            embedding_service_url: URL of embedding service (for local provider)
-            voyage_api_key: VoyageAI API key (for voyageai provider)
-            voyage_model: VoyageAI model name
+            embedding_provider: Embedding provider ('gemini' or 'voyage')
         """
         self.host = host
         self.port = port
         self.collection_name = collection_name
 
         # Determine embedding provider
-        self.embedding_provider_type = embedding_provider or os.getenv("EMBEDDING_PROVIDER", "voyageai")
+        provider_name = embedding_provider or os.getenv("EMBEDDING_PROVIDER", "gemini")
+        provider_info = self._EMBEDDING_PROVIDER_MAP.get(provider_name)
+        
+        print("provider_info:: ", provider_info)
+        
+        if provider_info is None:
+            raise ValueError(f"Unsupported embedding provider: {provider_name}")
 
         # Initialize embedding provider
-        self.embedding_provider = VoyageEmbeddingProvider(
-            api_key=voyage_api_key or os.getenv("VOYAGE_API_KEY"),
-            model=voyage_model or os.getenv("VOYAGE_MODEL", "voyage-2")
-        )
+        provider_cls = provider_info["cls"]
+        self.embedding_provider = provider_cls(**provider_info.get("init_kwargs", {}))
 
         self.client = None
-        self.collection = None
 
         self.logger = logging.getLogger(__name__)
+
+    def _get_collection(self):
+        """
+        Get collection dynamically (not cached) to handle collection recreation
+
+        Returns:
+            ChromaDB collection object
+        """
+        if self.client is None:
+            raise RuntimeError("ChromaDB client not initialized. Call initialize() first.")
+
+        return self.client.get_or_create_collection(
+            name=self.collection_name,
+            metadata={"description": "Knowledge base for chatbot"}
+        )
 
     async def initialize(self):
         """Initialize ChromaDB connection"""
@@ -81,14 +108,11 @@ class VectorStoreClient:
                     settings=Settings(anonymized_telemetry=False)
                 )
 
-            # Get or create collection
-            self.collection = self.client.get_or_create_collection(
-                name=self.collection_name,
-                metadata={"description": "Knowledge base for chatbot"}
-            )
+            # Get or create collection (don't cache it)
+            collection = self._get_collection()
 
             # Get collection info
-            count = self.collection.count()
+            count = collection.count()
             self.logger.info(f"✅ Connected to collection '{self.collection_name}' ({count} documents)")
 
         except Exception as e:
@@ -130,6 +154,7 @@ class VectorStoreClient:
             self.logger.info(f"Adding {len(documents)} documents to vector store...")
 
             added_count = 0
+            collection = self._get_collection()
 
             # Process in batches
             for i in range(0, len(documents), batch_size):
@@ -144,7 +169,7 @@ class VectorStoreClient:
                 embeddings = await self.embed_texts(texts)
 
                 # Add to collection
-                self.collection.add(
+                collection.add(
                     embeddings=embeddings,
                     documents=texts,
                     metadatas=metadatas,
@@ -181,11 +206,14 @@ class VectorStoreClient:
         try:
             self.logger.info(f"Searching for: {query[:100]}...")
 
+            # Get collection dynamically
+            collection = self._get_collection()
+
             # Generate query embedding
             query_embeddings = await self.embed_texts([query])
 
             # Search
-            results = self.collection.query(
+            results = collection.query(
                 query_embeddings=query_embeddings,
                 n_results=limit,
                 where=filter
@@ -221,11 +249,14 @@ class VectorStoreClient:
         Synchronous version of search (for non-async tools)
         """
         try:
+            # Get collection dynamically
+            collection = self._get_collection()
+
             # Generate query embedding (sync version)
             query_embeddings = self.embedding_provider.embed_texts_sync([query])
 
             # Search
-            results = self.collection.query(
+            results = collection.query(
                 query_embeddings=query_embeddings,
                 n_results=limit,
                 where=filter
@@ -269,4 +300,3 @@ class VectorStoreClient:
         self.logger.info("Closing ChromaDB connection")
         # ChromaDB HttpClient doesn't need explicit close
         self.client = None
-        self.collection = None

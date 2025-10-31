@@ -1,12 +1,10 @@
-# Monitor Embedding Progress in Real-time
+# Monitor ChromaDB Embedding Progress in Real-time
 # Usage: powershell -ExecutionPolicy Bypass -File scripts/monitor_embedding.ps1
 
 Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host "EMBEDDING PROGRESS MONITOR" -ForegroundColor Cyan
+Write-Host "CHROMADB EMBEDDING MONITOR" -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host ""
-
-$target = 3606
 
 function Get-DocumentCount {
     try {
@@ -28,44 +26,54 @@ except Exception as e:
 }
 
 $lastCount = 0
+$stableCount = 0
 $startTime = Get-Date
 
+Write-Host "Monitoring ChromaDB collection: chatbot_knowledge" -ForegroundColor Cyan
 Write-Host "Press Ctrl+C to stop monitoring" -ForegroundColor Yellow
 Write-Host ""
 
 while ($true) {
     $count = Get-DocumentCount
-    $progress = [math]::Round(($count / $target) * 100, 2)
-    $remaining = $target - $count
     $elapsed = (Get-Date) - $startTime
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
 
-    # Clear line and show progress
-    $timestamp = Get-Date -Format "HH:mm:ss"
+    # Check if count is stable
+    if ($count -eq $lastCount) {
+        $stableCount++
+    } else {
+        $stableCount = 0
 
-    if ($count -ne $lastCount) {
+        # Calculate rate when count changes
         $rate = if ($elapsed.TotalSeconds -gt 0) {
-            [math]::Round(($count - 0) / $elapsed.TotalSeconds, 2)
+            [math]::Round($count / $elapsed.TotalSeconds, 2)
         } else { 0 }
 
-        $eta = if ($rate -gt 0) {
-            $remainingSeconds = $remaining / $rate
-            $etaTime = [TimeSpan]::FromSeconds($remainingSeconds)
-            "$($etaTime.Hours)h $($etaTime.Minutes)m $($etaTime.Seconds)s"
-        } else { "calculating..." }
-
         Write-Host "[$timestamp] " -NoNewline -ForegroundColor Gray
-        Write-Host "Documents: $count / $target " -NoNewline -ForegroundColor Green
-        Write-Host "($progress%) " -NoNewline -ForegroundColor Cyan
-        Write-Host "| Rate: $rate docs/sec " -NoNewline -ForegroundColor Yellow
-        Write-Host "| ETA: $eta" -ForegroundColor Magenta
+        Write-Host "Documents in ChromaDB: " -NoNewline -ForegroundColor Green
+        Write-Host "$count " -NoNewline -ForegroundColor Cyan
+        Write-Host "| Rate: $rate docs/sec" -ForegroundColor Yellow
 
         $lastCount = $count
     }
 
-    if ($count -ge $target) {
+    # If count hasn't changed for 30 seconds (6 iterations at 5s interval), consider complete
+    if ($stableCount -ge 6 -and $count -gt 0) {
         Write-Host ""
-        Write-Host "✅ EMBEDDING COMPLETE! ($count documents)" -ForegroundColor Green
+        Write-Host "✅ Embedding appears complete - count stable at $count documents" -ForegroundColor Green
         Write-Host "Total time: $($elapsed.Hours)h $($elapsed.Minutes)m $($elapsed.Seconds)s" -ForegroundColor Cyan
+        Write-Host ""
+
+        # Show collection details
+        Write-Host "Collection details:" -ForegroundColor Cyan
+        docker exec chatbot-app python -c @"
+import chromadb
+client = chromadb.HttpClient(host='chromadb', port=8000)
+collection = client.get_collection('chatbot_knowledge')
+print(f'  Total documents: {collection.count()}')
+print(f'  Collection name: {collection.name}')
+"@ 2>$null
+
         break
     }
 

@@ -5,7 +5,7 @@ from langchain.text_splitter import (
     TokenTextSplitter,
     MarkdownTextSplitter,
 )
-import pandas as pd
+from openpyxl import load_workbook
 from pathlib import Path
 
 
@@ -75,29 +75,105 @@ def chunk_backlog_issues(issues: List[Dict[str, Any]]) -> List[Dict]:
 
 
 def chunk_excel(file_path: str) -> List[Dict]:
-    """Chunk Excel sheet by row or logical group"""
+    """
+    Improved Excel chunking:
+    - Reads both structured (DataFrame) and unstructured (cell-by-cell) content.
+    - Each row is a chunk if tabular data is detected.
+    - Full sheet text is also added as fallback.
+    """
     documents = []
-    excel_file = pd.ExcelFile(file_path)
-    splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=100)
+    file_name = Path(file_path).name
 
-    for sheet_name in excel_file.sheet_names:
-        df = pd.read_excel(file_path, sheet_name=sheet_name)
-        text = ""
-        for idx, row in df.iterrows():
-            row_text = " | ".join([f"{col}: {row[col]}" for col in df.columns if pd.notna(row[col])])
-            text += row_text + "\n"
+    # Load workbook fully (for non-tabular data)
+    wb = load_workbook(file_path, data_only=True)
 
-        parts = splitter.split_text(text)
-        for p in parts:
-            documents.append({
-                "text": p,
-                "metadata": {
-                    "source": "excel",
-                    "file": Path(file_path).name,
-                    "sheet": sheet_name,
-                    "rows": len(df),
-                }
-            })
+    for sheet_name in wb.sheetnames:
+        ws = wb[sheet_name]
+
+        # --- Step 1: Extract raw text of entire sheet (cell-by-cell) ---
+        raw_sheet_text = []
+        for row in ws.iter_rows(values_only=True):
+            row_text = [str(cell).strip() for cell in row if cell is not None and str(cell).strip()]
+            if row_text:
+                raw_sheet_text.append(" | ".join(row_text))
+
+        # Create a full-sheet text version (for context embedding)
+        if raw_sheet_text:
+            full_text = f"Sheet: {sheet_name}\n\n" + "\n".join(raw_sheet_text)
+            splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=200)
+            for i, chunk in enumerate(splitter.split_text(full_text)):
+                documents.append({
+                    "text": chunk,
+                    "metadata": {
+                        "source": "excel",
+                        "file": file_name,
+                        "sheet": sheet_name,
+                        "type": "full_sheet",
+                        "chunk_index": i
+                    }
+                })
+
+        # --- Step 2: Try structured read using pandas ---
+        try:
+            df = pd.read_excel(file_path, sheet_name=sheet_name)
+        except Exception:
+            df = None
+
+        if df is not None and not df.empty:
+            # Individual row chunks
+            for idx, row in df.iterrows():
+                row_parts = []
+                for col in df.columns:
+                    val = row[col]
+                    if pd.notna(val) and str(val).strip():
+                        clean_col = col if not str(col).startswith("Unnamed:") else f"Column_{col.split(':')[-1].strip()}"
+                        row_parts.append(f"{clean_col}: {val}")
+                if row_parts:
+                    row_text = " | ".join(row_parts)
+                    documents.append({
+                        "text": row_text,
+                        "metadata": {
+                            "source": "excel",
+                            "file": file_name,
+                            "sheet": sheet_name,
+                            "row_number": int(idx) + 2,
+                            "total_rows": len(df),
+                            "type": "row"
+                        }
+                    })
+
+            # Sheet summary chunk (based on first 10 rows)
+            sample_rows = []
+            for idx, row in df.head(10).iterrows():
+                row_parts = []
+                for col in df.columns:
+                    val = row[col]
+                    if pd.notna(val) and str(val).strip():
+                        clean_col = col if not str(col).startswith("Unnamed:") else f"Column_{col.split(':')[-1].strip()}"
+                        row_parts.append(f"{clean_col}: {val}")
+                if row_parts:
+                    sample_rows.append(" | ".join(row_parts))
+
+            if sample_rows:
+                summary_text = (
+                    f"Sheet: {sheet_name}\n"
+                    f"Total rows: {len(df)}\n"
+                    f"Columns: {', '.join(map(str, df.columns[:10]))}\n\n"
+                    "Sample (first 10 rows):\n" + "\n".join(sample_rows)
+                )
+                splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=200)
+                for i, chunk in enumerate(splitter.split_text(summary_text)):
+                    documents.append({
+                        "text": chunk,
+                        "metadata": {
+                            "source": "excel",
+                            "file": file_name,
+                            "sheet": sheet_name,
+                            "type": "sheet_summary",
+                            "chunk_index": i
+                        }
+                    })
+
     return documents
 
 
