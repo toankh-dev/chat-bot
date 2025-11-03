@@ -278,13 +278,15 @@ resource "aws_vpc_endpoint" "bedrock" {
 }
 
 # OpenSearch Interface Endpoint
+# Note: OpenSearch Serverless VPC endpoints are only available in specific AZs
+# We use only the first private subnet to avoid AZ compatibility issues
 resource "aws_vpc_endpoint" "opensearch" {
   count = var.enable_opensearch_endpoint ? 1 : 0
 
   vpc_id              = aws_vpc.main.id
   service_name        = "com.amazonaws.${data.aws_region.current.name}.aoss"
   vpc_endpoint_type   = "Interface"
-  subnet_ids          = aws_subnet.private[*].id
+  subnet_ids          = [aws_subnet.private[0].id]
   security_group_ids  = [aws_security_group.vpc_endpoints[0].id]
   private_dns_enabled = true
 

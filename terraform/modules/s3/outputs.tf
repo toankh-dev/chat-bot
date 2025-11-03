@@ -8,8 +8,8 @@ output "bucket_ids" {
 }
 
 output "bucket_arns" {
-  description = "Map of bucket names to ARNs"
-  value       = { for k, v in aws_s3_bucket.buckets : k => v.arn }
+  description = "List of bucket ARNs"
+  value       = [for v in aws_s3_bucket.buckets : v.arn]
 }
 
 output "bucket_names" {

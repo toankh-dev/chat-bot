@@ -91,7 +91,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "buckets" {
 
       # Transitions
       dynamic "transition" {
-        for_each = lookup(rule.value, "transitions", [])
+        for_each = coalesce(lookup(rule.value, "transitions", []), [])
 
         content {
           days          = transition.value.days
@@ -108,13 +108,11 @@ resource "aws_s3_bucket_lifecycle_configuration" "buckets" {
         }
       }
 
-      # Filter (optional)
-      dynamic "filter" {
-        for_each = lookup(rule.value, "prefix", null) != null ? [1] : []
-
-        content {
-          prefix = lookup(rule.value, "prefix", "")
-        }
+      # -------------------------------------
+      # Filter (always exactly one)
+      # -------------------------------------
+      filter {
+        prefix = lookup(rule.value, "prefix", "")
       }
     }
   }
@@ -127,7 +125,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "buckets" {
 # ============================================================================
 
 resource "aws_s3_bucket_notification" "lambda" {
-  count = var.enable_event_notifications && var.lambda_processor_arn != null ? 1 : 0
+  count = var.enable_event_notifications ? 1 : 0
 
   bucket = aws_s3_bucket.buckets["documents"].id
 
@@ -138,12 +136,12 @@ resource "aws_s3_bucket_notification" "lambda" {
     filter_suffix       = ""
   }
 
-  depends_on = [aws_lambda_permission.allow_s3[0]]
+  depends_on = [aws_lambda_permission.allow_s3]
 }
 
 # Lambda permission for S3 to invoke
 resource "aws_lambda_permission" "allow_s3" {
-  count = var.enable_event_notifications && var.lambda_processor_arn != null ? 1 : 0
+  count = var.enable_event_notifications ? 1 : 0
 
   statement_id  = "AllowS3Invoke"
   action        = "lambda:InvokeFunction"

@@ -62,7 +62,14 @@
       "Bash(powershell -ExecutionPolicy Bypass -File scripts/monitor_embedding.ps1:*)",
       "Bash(powershell:*)",
       "Bash(dir:*)",
-      "Bash(docker cp:*)"
+      "Bash(docker cp:*)",
+      "Bash(terraform validate:*)",
+      "Bash(terraform plan:*)",
+      "Bash(timeout 30 terraform force-unlock:*)",
+      "Bash(for file in vector_search.zip document_processor.zip discord_handler.zip)",
+      "Bash(do echo \"=== $file ===\")",
+      "Bash(unzip:*)",
+      "Bash(terraform apply:*)"
     ],
     "deny": [],
     "ask": []

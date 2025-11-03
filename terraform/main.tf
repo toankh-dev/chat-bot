@@ -94,7 +94,8 @@ module "vpc" {
   enable_s3_endpoint       = true
   enable_dynamodb_endpoint = true
   enable_bedrock_endpoint  = var.enable_bedrock_vpc_endpoint
-  enable_opensearch_endpoint = var.enable_opensearch_vpc_endpoint
+  # OpenSearch Serverless VPC endpoint is created by the opensearch module
+  enable_opensearch_endpoint = false
 
   tags = local.common_tags
 }
@@ -237,19 +238,17 @@ module "opensearch" {
   source = "./modules/opensearch"
 
   name_prefix     = local.name_prefix
+  environment     = var.environment
   collection_name = "${local.name_prefix}-vectors"
-  collection_type = "VECTORSEARCH"
-
-  # Capacity
-  max_indexing_capacity_in_ocu = var.opensearch_max_ocu
-  max_search_capacity_in_ocu   = var.opensearch_max_ocu
 
   # Network
-  vpc_id     = module.vpc.vpc_id
-  subnet_ids = module.vpc.private_subnet_ids
+  vpc_id              = module.vpc.vpc_id
+  subnet_ids          = module.vpc.private_subnet_ids
+  security_group_ids  = [module.vpc.opensearch_security_group_id]
+  create_vpc_endpoint = true
 
   # Security
-  allowed_principals = [
+  lambda_execution_role_arns = [
     module.iam.lambda_execution_role_arn
   ]
 
@@ -264,8 +263,7 @@ module "iam" {
   source = "./modules/iam"
 
   name_prefix = local.name_prefix
-  account_id  = local.account_id
-  region      = local.region
+  environment = var.environment
 
   # S3 buckets
   s3_bucket_arns = module.s3.bucket_arns
@@ -290,7 +288,7 @@ module "lambda" {
   source = "./modules/lambda"
 
   name_prefix = local.name_prefix
-  account_id  = local.account_id
+  environment = var.environment
 
   # Networking
   vpc_id             = module.vpc.vpc_id
@@ -320,43 +318,43 @@ module "lambda" {
   # Lambda functions configuration
   functions = {
     orchestrator = {
-      handler     = "orchestrator.handler"
+      handler     = "handler.lambda_handler"
       memory_size = 1024
       timeout     = 300
       runtime     = "python3.11"
     }
     vector_search = {
-      handler     = "vector_search.handler"
+      handler     = "handler.lambda_handler"
       memory_size = 512
       timeout     = 30
       runtime     = "python3.11"
     }
     document_processor = {
-      handler     = "document_processor.handler"
+      handler     = "handler.lambda_handler"
       memory_size = 3008
       timeout     = 900
       runtime     = "python3.11"
     }
     report_tool = {
-      handler     = "tools/report_tool.handler"
+      handler     = "handler.lambda_handler"
       memory_size = 512
       timeout     = 60
       runtime     = "python3.11"
     }
     summarize_tool = {
-      handler     = "tools/summarize_tool.handler"
+      handler     = "handler.lambda_handler"
       memory_size = 512
       timeout     = 120
       runtime     = "python3.11"
     }
     code_review_tool = {
-      handler     = "tools/code_review_tool.handler"
+      handler     = "handler.lambda_handler"
       memory_size = 512
       timeout     = 120
       runtime     = "python3.11"
     }
     discord_handler = {
-      handler     = "discord_handler.handler"
+      handler     = "handler.lambda_handler"
       memory_size = 512
       timeout     = 30
       runtime     = "python3.11"
@@ -393,9 +391,9 @@ module "api_gateway" {
   source = "./modules/api_gateway"
 
   name_prefix = local.name_prefix
+  environment = var.environment
 
   # API Configuration
-  api_name        = "${local.name_prefix}-api"
   api_description = "KASS Chatbot REST API"
   stage_name      = var.environment
 
@@ -466,6 +464,7 @@ module "eventbridge" {
   source = "./modules/eventbridge"
 
   name_prefix = local.name_prefix
+  environment = var.environment
 
   # Event rules
   rules = {
@@ -542,7 +541,7 @@ output "opensearch_endpoint" {
 
 output "opensearch_dashboard_url" {
   description = "OpenSearch dashboard URL"
-  value       = module.opensearch.dashboard_url
+  value       = module.opensearch.dashboard_endpoint
 }
 
 output "s3_bucket_names" {

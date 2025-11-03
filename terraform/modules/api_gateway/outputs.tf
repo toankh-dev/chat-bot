@@ -78,18 +78,18 @@ output "health_endpoint" {
 
 output "api_key_id" {
   description = "ID of the API key (if enabled)"
-  value       = var.enable_api_key ? aws_api_gateway_api_key.main[0].id : null
+  value       = var.enable_api_key_auth ? aws_api_gateway_api_key.main[0].id : null
 }
 
 output "api_key_value" {
   description = "Value of the API key (sensitive, if enabled)"
-  value       = var.enable_api_key ? aws_api_gateway_api_key.main[0].value : null
+  value       = var.enable_api_key_auth ? aws_api_gateway_api_key.main[0].value : null
   sensitive   = true
 }
 
 output "usage_plan_id" {
   description = "ID of the usage plan (if enabled)"
-  value       = var.enable_api_key ? aws_api_gateway_usage_plan.main[0].id : null
+  value       = var.enable_api_key_auth ? aws_api_gateway_usage_plan.main[0].id : null
 }
 
 # ============================================================================
@@ -129,4 +129,25 @@ output "log_group_name" {
 output "log_group_arn" {
   description = "ARN of the CloudWatch log group for API Gateway"
   value       = aws_cloudwatch_log_group.api_gateway.arn
+}
+
+# ============================================================================
+# Dynamic Routes Information
+# ============================================================================
+
+output "configured_routes" {
+  description = "List of configured API routes"
+  value = [
+    for route_key, route in local.routes : {
+      route       = route_key
+      method      = route.method
+      path        = route.path
+      lambda_arn  = route.lambda_arn
+    }
+  ]
+}
+
+output "api_invoke_url" {
+  description = "Full invoke URL for the API Gateway stage"
+  value       = aws_api_gateway_stage.main.invoke_url
 }

@@ -1,5 +1,5 @@
 # EventBridge Module for KASS Chatbot
-# Creates EventBridge rules for async processing
+# Creates EventBridge rules dynamically for async processing
 
 terraform {
   required_version = ">= 1.5.0"
@@ -11,11 +11,25 @@ terraform {
   }
 }
 
-# Data source for current AWS account
+# Data sources
 data "aws_caller_identity" "current" {}
-
-# Data source for current AWS region
 data "aws_region" "current" {}
+
+# ============================================================================
+# Local Variables
+# ============================================================================
+
+locals {
+  event_bus_name = var.create_custom_event_bus ? aws_cloudwatch_event_bus.main[0].name : "default"
+  event_bus_arn  = var.create_custom_event_bus ? aws_cloudwatch_event_bus.main[0].arn : "arn:aws:events:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:event-bus/default"
+
+  # DLQ ARN to use
+  dlq_arn = var.create_dlq ? aws_sqs_queue.dlq[0].arn : var.dlq_arn
+
+  # Use the provided lambda_function_arns map for permissions
+  # This is a static map with known keys at plan time
+  lambda_permissions = var.lambda_function_arns
+}
 
 # ============================================================================
 # EventBridge Event Bus
@@ -23,241 +37,118 @@ data "aws_region" "current" {}
 
 resource "aws_cloudwatch_event_bus" "main" {
   count = var.create_custom_event_bus ? 1 : 0
-  name  = "${var.name_prefix}-event-bus"
+  name  = var.custom_event_bus_name != "" ? var.custom_event_bus_name : "${var.name_prefix}-event-bus"
 
   tags = merge(var.tags, {
-    Name = "${var.name_prefix}-event-bus"
+    Name = var.custom_event_bus_name != "" ? var.custom_event_bus_name : "${var.name_prefix}-event-bus"
   })
 }
 
-# Use custom event bus or default
-locals {
-  event_bus_name = var.create_custom_event_bus ? aws_cloudwatch_event_bus.main[0].name : "default"
-  event_bus_arn  = var.create_custom_event_bus ? aws_cloudwatch_event_bus.main[0].arn : "arn:aws:events:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:event-bus/default"
+# ============================================================================
+# Dynamic EventBridge Rules
+# ============================================================================
+
+resource "aws_cloudwatch_event_rule" "rules" {
+  for_each = var.rules
+
+  name           = "${var.name_prefix}-${each.key}"
+  description    = each.value.description != "" ? each.value.description : "EventBridge rule: ${each.key}"
+  event_bus_name = local.event_bus_name
+
+  # Either event pattern or schedule expression must be provided
+  event_pattern       = each.value.event_pattern
+  schedule_expression = each.value.schedule_expression
+
+  state = each.value.enabled ? "ENABLED" : "DISABLED"
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-${each.key}"
+  })
 }
 
 # ============================================================================
-# EventBridge Rules
+# Dynamic EventBridge Targets
 # ============================================================================
 
-# Rule: Document uploaded to S3 (triggers document processor)
-resource "aws_cloudwatch_event_rule" "document_uploaded" {
-  name           = "${var.name_prefix}-document-uploaded"
-  description    = "Trigger document processor when document is uploaded to S3"
-  event_bus_name = local.event_bus_name
+resource "aws_cloudwatch_event_target" "targets" {
+  for_each = {
+    for pair in flatten([
+      for rule_key, rule in var.rules : [
+        for idx, target in rule.targets : {
+          key        = "${rule_key}-${idx}"
+          rule_key   = rule_key
+          target_idx = idx
+          target     = target
+        }
+      ]
+    ]) : pair.key => pair
+  }
 
-  event_pattern = jsonencode({
-    source      = ["aws.s3"]
-    detail-type = ["Object Created"]
-    detail = {
-      bucket = {
-        name = [var.documents_bucket_name]
-      }
+  rule           = aws_cloudwatch_event_rule.rules[each.value.rule_key].name
+  event_bus_name = local.event_bus_name
+  arn            = each.value.target.arn
+  target_id      = "target-${each.value.target_idx}"
+
+  # Optional: IAM role for target invocation
+  role_arn = each.value.target.role_arn
+
+  # Optional: Custom input to target
+  input      = each.value.target.input
+  input_path = each.value.target.input_path
+
+  # Retry policy
+  dynamic "retry_policy" {
+    for_each = each.value.target.retry_policy != null ? [each.value.target.retry_policy] : []
+    content {
+      maximum_event_age_in_seconds = retry_policy.value.maximum_event_age
+      maximum_retry_attempts       = retry_policy.value.maximum_retry_attempts
     }
-  })
-
-  tags = merge(var.tags, {
-    Name = "${var.name_prefix}-document-uploaded"
-  })
-}
-
-# Target: Lambda function for document processor
-resource "aws_cloudwatch_event_target" "document_processor" {
-  rule           = aws_cloudwatch_event_rule.document_uploaded.name
-  event_bus_name = local.event_bus_name
-  arn            = var.document_processor_lambda_arn
-  target_id      = "DocumentProcessor"
-
-  # Retry policy
-  retry_policy {
-    maximum_retry_attempts       = 3
-    maximum_event_age_in_seconds = 3600
   }
 
   # Dead letter queue
-  dead_letter_config {
-    arn = var.dlq_arn != "" ? var.dlq_arn : null
-  }
-}
-
-# Rule: Scheduled data fetching (runs daily)
-resource "aws_cloudwatch_event_rule" "scheduled_data_fetch" {
-  count          = var.enable_scheduled_fetch ? 1 : 0
-  name           = "${var.name_prefix}-scheduled-data-fetch"
-  description    = "Trigger data fetcher on a schedule"
-  event_bus_name = local.event_bus_name
-  schedule_expression = var.fetch_schedule
-
-  tags = merge(var.tags, {
-    Name = "${var.name_prefix}-scheduled-data-fetch"
-  })
-}
-
-# Target: Lambda function for data fetcher
-resource "aws_cloudwatch_event_target" "data_fetcher" {
-  count          = var.enable_scheduled_fetch ? 1 : 0
-  rule           = aws_cloudwatch_event_rule.scheduled_data_fetch[0].name
-  event_bus_name = local.event_bus_name
-  arn            = var.data_fetcher_lambda_arn
-  target_id      = "DataFetcher"
-
-  # Input to Lambda
-  input = jsonencode({
-    source = "eventbridge"
-    action = "fetch_data"
-  })
-
-  # Retry policy
-  retry_policy {
-    maximum_retry_attempts       = 2
-    maximum_event_age_in_seconds = 1800
+  dynamic "dead_letter_config" {
+    for_each = (each.value.target.dead_letter_arn != null || local.dlq_arn != "") ? [1] : []
+    content {
+      arn = coalesce(each.value.target.dead_letter_arn, local.dlq_arn)
+    }
   }
 
-  # Dead letter queue
-  dead_letter_config {
-    arn = var.dlq_arn != "" ? var.dlq_arn : null
-  }
-}
-
-# Rule: Scheduled Discord fetching (runs every hour)
-resource "aws_cloudwatch_event_rule" "scheduled_discord_fetch" {
-  count          = var.enable_discord_fetch ? 1 : 0
-  name           = "${var.name_prefix}-scheduled-discord-fetch"
-  description    = "Trigger Discord fetcher on a schedule"
-  event_bus_name = local.event_bus_name
-  schedule_expression = var.discord_fetch_schedule
-
-  tags = merge(var.tags, {
-    Name = "${var.name_prefix}-scheduled-discord-fetch"
-  })
-}
-
-# Target: Lambda function for Discord fetcher
-resource "aws_cloudwatch_event_target" "discord_fetcher" {
-  count          = var.enable_discord_fetch ? 1 : 0
-  rule           = aws_cloudwatch_event_rule.scheduled_discord_fetch[0].name
-  event_bus_name = local.event_bus_name
-  arn            = var.discord_handler_lambda_arn
-  target_id      = "DiscordFetcher"
-
-  # Input to Lambda
-  input = jsonencode({
-    source = "eventbridge"
-    action = "fetch_messages"
-  })
-
-  # Retry policy
-  retry_policy {
-    maximum_retry_attempts       = 2
-    maximum_event_age_in_seconds = 1800
-  }
-
-  # Dead letter queue
-  dead_letter_config {
-    arn = var.dlq_arn != "" ? var.dlq_arn : null
-  }
-}
-
-# Rule: Async report generation
-resource "aws_cloudwatch_event_rule" "report_generation" {
-  count          = var.enable_report_generation ? 1 : 0
-  name           = "${var.name_prefix}-report-generation"
-  description    = "Trigger report generation for async requests"
-  event_bus_name = local.event_bus_name
-
-  event_pattern = jsonencode({
-    source      = ["kass.chatbot"]
-    detail-type = ["Report Requested"]
-  })
-
-  tags = merge(var.tags, {
-    Name = "${var.name_prefix}-report-generation"
-  })
-}
-
-# Target: Lambda function for report generation
-resource "aws_cloudwatch_event_target" "report_generator" {
-  count          = var.enable_report_generation ? 1 : 0
-  rule           = aws_cloudwatch_event_rule.report_generation[0].name
-  event_bus_name = local.event_bus_name
-  arn            = var.report_tool_lambda_arn
-  target_id      = "ReportGenerator"
-
-  # Retry policy
-  retry_policy {
-    maximum_retry_attempts       = 2
-    maximum_event_age_in_seconds = 7200
-  }
-
-  # Dead letter queue
-  dead_letter_config {
-    arn = var.dlq_arn != "" ? var.dlq_arn : null
-  }
-}
-
-# Rule: Cache warming (optional - runs every 5 minutes)
-resource "aws_cloudwatch_event_rule" "cache_warming" {
-  count          = var.enable_cache_warming ? 1 : 0
-  name           = "${var.name_prefix}-cache-warming"
-  description    = "Warm up Lambda functions to reduce cold starts"
-  event_bus_name = local.event_bus_name
-  schedule_expression = "rate(5 minutes)"
-
-  tags = merge(var.tags, {
-    Name = "${var.name_prefix}-cache-warming"
-  })
-}
-
-# Target: Orchestrator Lambda for cache warming
-resource "aws_cloudwatch_event_target" "cache_warmer_orchestrator" {
-  count          = var.enable_cache_warming ? 1 : 0
-  rule           = aws_cloudwatch_event_rule.cache_warming[0].name
-  event_bus_name = local.event_bus_name
-  arn            = var.orchestrator_lambda_arn
-  target_id      = "CacheWarmerOrchestrator"
-
-  # Input to Lambda (health check)
-  input = jsonencode({
-    source = "eventbridge"
-    action = "health_check"
-  })
-}
-
-# Target: Vector search Lambda for cache warming
-resource "aws_cloudwatch_event_target" "cache_warmer_search" {
-  count          = var.enable_cache_warming ? 1 : 0
-  rule           = aws_cloudwatch_event_rule.cache_warming[0].name
-  event_bus_name = local.event_bus_name
-  arn            = var.vector_search_lambda_arn
-  target_id      = "CacheWarmerSearch"
-
-  # Input to Lambda (health check)
-  input = jsonencode({
-    source = "eventbridge"
-    action = "health_check"
-  })
+  depends_on = [aws_cloudwatch_event_rule.rules]
 }
 
 # ============================================================================
-# Dead Letter Queue (DLQ) for failed events
+# Lambda Permissions for EventBridge
+# ============================================================================
+
+resource "aws_lambda_permission" "eventbridge" {
+  for_each = local.lambda_permissions
+
+  statement_id  = "AllowEventBridgeInvoke-${replace(each.key, "-", "_")}"
+  action        = "lambda:InvokeFunction"
+  function_name = each.value  # This is the Lambda ARN
+  principal     = "events.amazonaws.com"
+  source_arn    = local.event_bus_arn
+
+  # Note: This gives permission for any rule on this event bus to invoke the function
+  # For more granular control, you could create per-rule permissions
+}
+
+# ============================================================================
+# Dead Letter Queue (DLQ)
 # ============================================================================
 
 resource "aws_sqs_queue" "dlq" {
   count = var.create_dlq ? 1 : 0
   name  = "${var.name_prefix}-eventbridge-dlq"
 
-  # Message retention (14 days)
-  message_retention_seconds = 1209600
-
-  # Enable encryption
-  sqs_managed_sse_enabled = true
+  message_retention_seconds = var.dlq_message_retention_seconds
+  sqs_managed_sse_enabled   = true
 
   tags = merge(var.tags, {
     Name = "${var.name_prefix}-eventbridge-dlq"
   })
 }
 
-# DLQ policy to allow EventBridge to send messages
 resource "aws_sqs_queue_policy" "dlq" {
   count     = var.create_dlq ? 1 : 0
   queue_url = aws_sqs_queue.dlq[0].id
@@ -272,20 +163,43 @@ resource "aws_sqs_queue_policy" "dlq" {
         }
         Action   = "sqs:SendMessage"
         Resource = aws_sqs_queue.dlq[0].arn
+        Condition = {
+          ArnEquals = {
+            "aws:SourceArn" = [
+              for rule_key, rule in var.rules :
+              "arn:aws:events:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:rule/${local.event_bus_name}/${var.name_prefix}-${rule_key}"
+            ]
+          }
+        }
       }
     ]
   })
 }
 
 # ============================================================================
-# CloudWatch Alarms for EventBridge
+# CloudWatch Log Group (Optional)
 # ============================================================================
 
-# Alarm for failed invocations
+resource "aws_cloudwatch_log_group" "eventbridge" {
+  count             = var.enable_eventbridge_logging ? 1 : 0
+  name              = "/aws/events/${var.name_prefix}"
+  retention_in_days = var.log_retention_days
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-eventbridge-logs"
+  })
+}
+
+# ============================================================================
+# CloudWatch Alarms
+# ============================================================================
+
+# Alarm for failed invocations (monitors all rules)
 resource "aws_cloudwatch_metric_alarm" "failed_invocations" {
-  count               = var.enable_cloudwatch_alarms ? 1 : 0
-  alarm_name          = "${var.name_prefix}-eventbridge-failed-invocations"
-  alarm_description   = "EventBridge has high failed invocation rate"
+  for_each = var.enable_cloudwatch_alarms ? var.rules : {}
+
+  alarm_name          = "${var.name_prefix}-${each.key}-failed-invocations"
+  alarm_description   = "EventBridge rule ${each.key} has high failed invocation rate"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
   metric_name         = "FailedInvocations"
@@ -296,7 +210,7 @@ resource "aws_cloudwatch_metric_alarm" "failed_invocations" {
   treat_missing_data  = "notBreaching"
 
   dimensions = {
-    RuleName = aws_cloudwatch_event_rule.document_uploaded.name
+    RuleName = aws_cloudwatch_event_rule.rules[each.key].name
   }
 
   alarm_actions = var.alarm_sns_topic_arn != "" ? [var.alarm_sns_topic_arn] : []
@@ -304,7 +218,7 @@ resource "aws_cloudwatch_metric_alarm" "failed_invocations" {
   tags = var.tags
 }
 
-# Alarm for throttled rules
+# Alarm for throttled rules (global)
 resource "aws_cloudwatch_metric_alarm" "throttled_rules" {
   count               = var.enable_cloudwatch_alarms ? 1 : 0
   alarm_name          = "${var.name_prefix}-eventbridge-throttled-rules"
@@ -344,18 +258,4 @@ resource "aws_cloudwatch_metric_alarm" "dlq_messages" {
   alarm_actions = var.alarm_sns_topic_arn != "" ? [var.alarm_sns_topic_arn] : []
 
   tags = var.tags
-}
-
-# ============================================================================
-# CloudWatch Log Group for EventBridge (optional)
-# ============================================================================
-
-resource "aws_cloudwatch_log_group" "eventbridge" {
-  count             = var.enable_eventbridge_logging ? 1 : 0
-  name              = "/aws/events/${var.name_prefix}"
-  retention_in_days = var.log_retention_days
-
-  tags = merge(var.tags, {
-    Name = "${var.name_prefix}-eventbridge-logs"
-  })
 }

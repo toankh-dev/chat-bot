@@ -26,96 +26,46 @@ variable "create_custom_event_bus" {
   default     = false
 }
 
-# ============================================================================
-# Lambda Function ARNs
-# ============================================================================
-
-variable "orchestrator_lambda_arn" {
-  description = "ARN of the orchestrator Lambda function"
-  type        = string
-  default     = ""
-}
-
-variable "vector_search_lambda_arn" {
-  description = "ARN of the vector search Lambda function"
-  type        = string
-  default     = ""
-}
-
-variable "document_processor_lambda_arn" {
-  description = "ARN of the document processor Lambda function"
-  type        = string
-}
-
-variable "data_fetcher_lambda_arn" {
-  description = "ARN of the data fetcher Lambda function"
-  type        = string
-  default     = ""
-}
-
-variable "discord_handler_lambda_arn" {
-  description = "ARN of the Discord handler Lambda function"
-  type        = string
-  default     = ""
-}
-
-variable "report_tool_lambda_arn" {
-  description = "ARN of the report generation Lambda function"
+variable "custom_event_bus_name" {
+  description = "Name of the custom event bus (if create_custom_event_bus is true)"
   type        = string
   default     = ""
 }
 
 # ============================================================================
-# S3 Configuration
+# Dynamic Rules Configuration (New Structure)
 # ============================================================================
 
-variable "documents_bucket_name" {
-  description = "Name of the S3 bucket for documents"
-  type        = string
-}
-
-# ============================================================================
-# Feature Flags
-# ============================================================================
-
-variable "enable_scheduled_fetch" {
-  description = "Enable scheduled data fetching"
-  type        = bool
-  default     = true
-}
-
-variable "enable_discord_fetch" {
-  description = "Enable scheduled Discord message fetching"
-  type        = bool
-  default     = false
-}
-
-variable "enable_report_generation" {
-  description = "Enable async report generation"
-  type        = bool
-  default     = true
-}
-
-variable "enable_cache_warming" {
-  description = "Enable Lambda cache warming (reduces cold starts)"
-  type        = bool
-  default     = false
+variable "rules" {
+  description = "Map of EventBridge rules configurations"
+  type = map(object({
+    description          = optional(string, "")
+    event_pattern        = optional(string, null)
+    schedule_expression  = optional(string, null)
+    enabled              = optional(bool, true)
+    targets = list(object({
+      arn              = string
+      input            = optional(string, null)
+      input_path       = optional(string, null)
+      role_arn         = optional(string, null)
+      dead_letter_arn  = optional(string, null)
+      retry_policy = optional(object({
+        maximum_event_age       = optional(number, 3600)
+        maximum_retry_attempts  = optional(number, 2)
+      }), null)
+    }))
+  }))
+  default = {}
 }
 
 # ============================================================================
-# Schedule Configuration
+# Lambda Function ARNs Map (for backward compatibility and permissions)
 # ============================================================================
 
-variable "fetch_schedule" {
-  description = "Schedule expression for data fetching (e.g., 'rate(1 day)' or 'cron(0 0 * * ? *)')"
-  type        = string
-  default     = "rate(1 day)"
-}
-
-variable "discord_fetch_schedule" {
-  description = "Schedule expression for Discord message fetching"
-  type        = string
-  default     = "rate(1 hour)"
+variable "lambda_function_arns" {
+  description = "Map of Lambda function ARNs for creating permissions"
+  type        = map(string)
+  default     = {}
 }
 
 # ============================================================================
@@ -132,6 +82,12 @@ variable "dlq_arn" {
   description = "ARN of an existing DLQ (if create_dlq is false)"
   type        = string
   default     = ""
+}
+
+variable "dlq_message_retention_seconds" {
+  description = "Message retention period for DLQ in seconds"
+  type        = number
+  default     = 1209600  # 14 days
 }
 
 # ============================================================================
@@ -176,4 +132,20 @@ variable "throttled_rules_threshold" {
   description = "Threshold for throttled rules alarm"
   type        = number
   default     = 5
+}
+
+# ============================================================================
+# IAM Role Configuration
+# ============================================================================
+
+variable "create_event_bus_role" {
+  description = "Create an IAM role for EventBridge to invoke targets"
+  type        = bool
+  default     = true
+}
+
+variable "event_bus_role_arn" {
+  description = "ARN of an existing IAM role for EventBridge (if create_event_bus_role is false)"
+  type        = string
+  default     = ""
 }

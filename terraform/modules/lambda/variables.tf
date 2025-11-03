@@ -26,7 +26,7 @@ variable "python_runtime" {
   default     = "python3.11"
 }
 
-variable "lambda_execution_role_arn" {
+variable "execution_role_arn" {
   description = "ARN of the IAM role for Lambda execution"
   type        = string
 }
@@ -52,41 +52,19 @@ variable "log_retention_days" {
 # ============================================================================
 # Lambda Functions Configuration
 # ============================================================================
-
-variable "lambda_functions" {
-  description = "Map of Lambda functions to create"
+variable "functions" {
+  description = "Simplified map of Lambda functions configuration"
   type = map(object({
-    description                    = string
-    handler                        = string
-    zip_path                       = string
-    timeout                        = optional(number)
-    memory_size                    = optional(number)
-    environment_variables          = optional(map(string))
-    use_langchain_layer            = optional(bool, false)
-    use_document_layer             = optional(bool, false)
-    additional_layers              = optional(list(string), [])
-    reserved_concurrent_executions = optional(number)
-    dead_letter_queue_arn          = optional(string)
-    ephemeral_storage_size         = optional(number, 512)
-    allow_api_gateway              = optional(bool, false)
-    allow_eventbridge              = optional(bool, false)
-    allow_s3                       = optional(bool, false)
-    enable_function_url            = optional(bool, false)
-    function_url_auth_type         = optional(string, "AWS_IAM")
-    enable_cors                    = optional(bool, false)
-    cors_allow_credentials         = optional(bool, false)
-    cors_allow_origins             = optional(list(string), ["*"])
-    cors_allow_methods             = optional(list(string), ["GET", "POST"])
-    cors_allow_headers             = optional(list(string), ["*"])
-    cors_max_age                   = optional(number, 86400)
-    error_threshold                = optional(number, 10)
-    throttle_threshold             = optional(number, 5)
+    handler     = string
+    memory_size = optional(number, 1024)
+    timeout     = optional(number, 300)
+    runtime     = optional(string, "python3.11")
   }))
   default = {}
 }
 
-variable "common_environment_variables" {
-  description = "Common environment variables for all Lambda functions"
+variable "environment_variables" {
+  description = "Environment variables shared across all Lambda functions"
   type        = map(string)
   default     = {}
 }
@@ -94,41 +72,14 @@ variable "common_environment_variables" {
 # ============================================================================
 # Lambda Layers Configuration
 # ============================================================================
-
-variable "create_common_layer" {
-  description = "Create the common utilities Lambda layer"
-  type        = bool
-  default     = true
-}
-
-variable "common_layer_zip_path" {
-  description = "Path to the common utilities layer zip file"
-  type        = string
-  default     = ""
-}
-
-variable "create_langchain_layer" {
-  description = "Create the LangChain Lambda layer"
-  type        = bool
-  default     = true
-}
-
-variable "langchain_layer_zip_path" {
-  description = "Path to the LangChain layer zip file"
-  type        = string
-  default     = ""
-}
-
-variable "create_document_layer" {
-  description = "Create the document processing Lambda layer"
-  type        = bool
-  default     = true
-}
-
-variable "document_layer_zip_path" {
-  description = "Path to the document processing layer zip file"
-  type        = string
-  default     = ""
+variable "layers" {
+  description = "Simplified list of Lambda layers configuration"
+  type = list(object({
+    name                 = string
+    description          = optional(string, "")
+    compatible_runtimes  = optional(list(string), ["python3.11"])
+  }))
+  default = []
 }
 
 # ============================================================================

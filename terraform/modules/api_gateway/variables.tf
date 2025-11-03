@@ -49,43 +49,61 @@ variable "minimum_compression_size" {
 }
 
 # ============================================================================
-# Lambda Integration
+# Lambda Integration Configuration (New Dynamic Structure)
 # ============================================================================
 
-variable "orchestrator_lambda_invoke_arn" {
-  description = "Invoke ARN of the orchestrator Lambda function"
-  type        = string
-}
-
-variable "vector_search_lambda_invoke_arn" {
-  description = "Invoke ARN of the vector search Lambda function"
-  type        = string
+variable "lambda_integrations" {
+  description = "Map of route patterns to Lambda integration configurations"
+  type = map(object({
+    lambda_arn            = string
+    lambda_invoke_arn     = string
+    timeout_milliseconds  = optional(number, 29000)
+    authorization         = optional(string, "NONE")
+    api_key_required      = optional(bool, false)
+  }))
+  default = {}
 }
 
 # ============================================================================
 # CORS Configuration
 # ============================================================================
 
-variable "enable_cors" {
-  description = "Enable CORS for API Gateway"
-  type        = bool
-  default     = true
-}
-
-variable "cors_allow_origin" {
-  description = "Allowed origin for CORS"
-  type        = string
-  default     = "*"
+variable "cors_configuration" {
+  description = "CORS configuration for API Gateway"
+  type = object({
+    allow_origins = list(string)
+    allow_methods = list(string)
+    allow_headers = list(string)
+    max_age       = number
+  })
+  default = {
+    allow_origins = ["*"]
+    allow_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    allow_headers = ["Content-Type", "Authorization", "X-Api-Key"]
+    max_age       = 300
+  }
 }
 
 # ============================================================================
 # Authentication & Authorization
 # ============================================================================
 
-variable "enable_api_key" {
+variable "enable_api_key_auth" {
   description = "Enable API key authentication"
   type        = bool
   default     = true
+}
+
+variable "enable_cognito_auth" {
+  description = "Enable Cognito authentication"
+  type        = bool
+  default     = false
+}
+
+variable "cognito_user_pool_arn" {
+  description = "ARN of the Cognito User Pool for authentication"
+  type        = string
+  default     = ""
 }
 
 # ============================================================================
@@ -190,6 +208,18 @@ variable "enable_data_trace" {
 
 variable "enable_metrics" {
   description = "Enable detailed CloudWatch metrics"
+  type        = bool
+  default     = true
+}
+
+variable "enable_access_logging" {
+  description = "Enable access logging for API Gateway"
+  type        = bool
+  default     = true
+}
+
+variable "enable_execution_logging" {
+  description = "Enable execution logging for API Gateway"
   type        = bool
   default     = true
 }

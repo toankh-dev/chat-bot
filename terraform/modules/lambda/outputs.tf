@@ -47,40 +47,6 @@ output "function_urls" {
 }
 
 # ============================================================================
-# Lambda Layer Outputs
-# ============================================================================
-
-output "common_layer_arn" {
-  description = "ARN of the common utilities Lambda layer"
-  value       = var.create_common_layer ? aws_lambda_layer_version.common_utilities[0].arn : null
-}
-
-output "common_layer_version" {
-  description = "Version of the common utilities Lambda layer"
-  value       = var.create_common_layer ? aws_lambda_layer_version.common_utilities[0].version : null
-}
-
-output "langchain_layer_arn" {
-  description = "ARN of the LangChain Lambda layer"
-  value       = var.create_langchain_layer ? aws_lambda_layer_version.langchain[0].arn : null
-}
-
-output "langchain_layer_version" {
-  description = "Version of the LangChain Lambda layer"
-  value       = var.create_langchain_layer ? aws_lambda_layer_version.langchain[0].version : null
-}
-
-output "document_layer_arn" {
-  description = "ARN of the document processing Lambda layer"
-  value       = var.create_document_layer ? aws_lambda_layer_version.document_processing[0].arn : null
-}
-
-output "document_layer_version" {
-  description = "Version of the document processing Lambda layer"
-  value       = var.create_document_layer ? aws_lambda_layer_version.document_processing[0].version : null
-}
-
-# ============================================================================
 # CloudWatch Log Groups
 # ============================================================================
 
@@ -118,4 +84,13 @@ output "deployment_info" {
       function_url     = lookup({ for fk, fv in aws_lambda_function_url.function_urls : fk => fv.function_url }, k, null)
     }
   }
+}
+
+# ============================================================================
+# Specific Function ARNs (for backward compatibility)
+# ============================================================================
+
+output "document_processor_arn" {
+  description = "ARN of the document processor Lambda function"
+  value       = lookup({ for k, v in aws_lambda_function.functions : k => v.arn }, "document_processor", null)
 }

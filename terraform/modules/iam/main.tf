@@ -72,8 +72,9 @@ resource "aws_iam_role_policy_attachment" "lambda_xray" {
 
 # Amazon Bedrock access policy
 resource "aws_iam_role_policy" "bedrock_access" {
-  name = "${var.name_prefix}-bedrock-access"
-  role = aws_iam_role.lambda_execution.id
+  count = var.enable_bedrock_access ? 1 : 0
+  name  = "${var.name_prefix}-bedrock-access"
+  role  = aws_iam_role.lambda_execution.id
 
   policy = jsonencode({
     Version = "2012-10-17"

@@ -64,9 +64,9 @@ variable "security_group_ids" {
 }
 
 variable "vpc_endpoint_ids" {
-  description = "List of VPC endpoint IDs that can access the collection"
+  description = "List of VPC endpoint IDs that can access the collection (required when allow_public_access is false)"
   type        = list(string)
-  default     = null
+  default     = []
 }
 
 variable "create_vpc_endpoint" {

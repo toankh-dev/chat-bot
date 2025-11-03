@@ -9,7 +9,7 @@ output "table_names" {
 
 output "table_arns" {
   description = "Map of table keys to table ARNs"
-  value       = { for k, v in aws_dynamodb_table.tables : k => v.arn }
+  value       = [for k, v in aws_dynamodb_table.tables : v.arn]
 }
 
 output "table_ids" {

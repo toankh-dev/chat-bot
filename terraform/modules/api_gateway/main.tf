@@ -1,5 +1,5 @@
 # API Gateway Module for KASS Chatbot
-# Creates REST API with Lambda integrations
+# Creates REST API with Lambda integrations using dynamic configuration
 
 terraform {
   required_version = ">= 1.5.0"
@@ -11,11 +11,82 @@ terraform {
   }
 }
 
-# Data source for current AWS account
+# Data sources
 data "aws_caller_identity" "current" {}
-
-# Data source for current AWS region
 data "aws_region" "current" {}
+
+# ============================================================================
+# API Gateway CloudWatch Logs Role (Account-level)
+# ============================================================================
+
+# IAM role for API Gateway to write to CloudWatch Logs
+resource "aws_iam_role" "cloudwatch" {
+  count = var.enable_execution_logging ? 1 : 0
+  name  = "${var.name_prefix}-apigateway-cloudwatch-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "apigateway.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  tags = var.tags
+}
+
+# Attach AWS managed policy for CloudWatch Logs
+resource "aws_iam_role_policy_attachment" "cloudwatch" {
+  count      = var.enable_execution_logging ? 1 : 0
+  role       = aws_iam_role.cloudwatch[0].name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+}
+
+# Set the CloudWatch Logs role ARN in API Gateway account settings
+resource "aws_api_gateway_account" "main" {
+  count               = var.enable_execution_logging ? 1 : 0
+  cloudwatch_role_arn = aws_iam_role.cloudwatch[0].arn
+
+  depends_on = [aws_iam_role_policy_attachment.cloudwatch]
+}
+
+# ============================================================================
+# Local Variables for Route Parsing
+# ============================================================================
+
+locals {
+  # Parse routes from lambda_integrations keys (e.g., "POST /chat" -> method: POST, path: /chat)
+  routes = {
+    for route_key, config in var.lambda_integrations : route_key => {
+      method           = split(" ", route_key)[0]
+      path             = split(" ", route_key)[1]
+      path_parts       = split("/", trimprefix(split(" ", route_key)[1], "/"))
+      lambda_arn       = config.lambda_arn
+      lambda_invoke_arn = config.lambda_invoke_arn
+      timeout_ms       = config.timeout_milliseconds
+      authorization    = config.authorization
+      api_key_required = config.api_key_required
+    }
+  }
+
+  # Group routes by path for resource creation
+  unique_paths = distinct([for route in local.routes : route.path])
+
+  # Create path hierarchy (e.g., /conversation/{id} needs both /conversation and /conversation/{id})
+  path_segments = flatten([
+    for path in local.unique_paths : [
+      for i in range(1, length(split("/", trimprefix(path, "/"))) + 1) :
+        "/${join("/", slice(split("/", trimprefix(path, "/")), 0, i))}"
+    ]
+  ])
+
+  unique_path_segments = distinct(local.path_segments)
+}
 
 # ============================================================================
 # REST API
@@ -29,7 +100,6 @@ resource "aws_api_gateway_rest_api" "main" {
     types = [var.endpoint_type]
   }
 
-  # Minimum compression size (bytes)
   minimum_compression_size = var.minimum_compression_size
 
   tags = merge(var.tags, {
@@ -38,66 +108,149 @@ resource "aws_api_gateway_rest_api" "main" {
 }
 
 # ============================================================================
-# API Gateway Resources and Methods
+# Cognito Authorizer (if enabled)
 # ============================================================================
 
-# Root resource (already exists, just reference it)
-# aws_api_gateway_rest_api.main.root_resource_id
+resource "aws_api_gateway_authorizer" "cognito" {
+  count = var.enable_cognito_auth && var.cognito_user_pool_arn != "" ? 1 : 0
 
-# /chat resource
-resource "aws_api_gateway_resource" "chat" {
+  name          = "${var.name_prefix}-cognito-authorizer"
+  type          = "COGNITO_USER_POOLS"
+  rest_api_id   = aws_api_gateway_rest_api.main.id
+  provider_arns = [var.cognito_user_pool_arn]
+}
+
+# ============================================================================
+# Dynamic API Gateway Resources
+# Split into levels to avoid circular dependencies
+# ============================================================================
+
+# Level 1: Top-level paths (e.g., /chat, /conversation, /conversations)
+resource "aws_api_gateway_resource" "paths_level_1" {
+  for_each = toset([
+    for path in local.unique_path_segments :
+    path if path != "/" && can(regex("^/[^/]+$", path))
+  ])
+
   rest_api_id = aws_api_gateway_rest_api.main.id
   parent_id   = aws_api_gateway_rest_api.main.root_resource_id
-  path_part   = "chat"
+  path_part   = regex("/([^/]+)$", each.value)[0]
 }
 
-# POST /chat method
-resource "aws_api_gateway_method" "chat_post" {
+# Level 2: Nested paths (e.g., /conversation/{id}, /conversations/{user_id})
+resource "aws_api_gateway_resource" "paths_level_2" {
+  for_each = toset([
+    for path in local.unique_path_segments :
+    path if path != "/" && !can(regex("^/[^/]+$", path))
+  ])
+
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  parent_id   = aws_api_gateway_resource.paths_level_1[regex("^(.+)/[^/]+$", each.value)[0]].id
+  path_part   = regex("/([^/]+)$", each.value)[0]
+
+  depends_on = [aws_api_gateway_resource.paths_level_1]
+}
+
+# Combine both levels for easier reference
+locals {
+  all_path_resources = merge(
+    { for k, v in aws_api_gateway_resource.paths_level_1 : k => v },
+    { for k, v in aws_api_gateway_resource.paths_level_2 : k => v }
+  )
+}
+
+# ============================================================================
+# Dynamic API Gateway Methods
+# ============================================================================
+
+resource "aws_api_gateway_method" "routes" {
+  for_each = local.routes
+
   rest_api_id   = aws_api_gateway_rest_api.main.id
-  resource_id   = aws_api_gateway_resource.chat.id
-  http_method   = "POST"
-  authorization = var.enable_api_key ? "NONE" : "AWS_IAM"
-  api_key_required = var.enable_api_key
+  resource_id   = each.value.path == "/" ? aws_api_gateway_rest_api.main.root_resource_id : local.all_path_resources[each.value.path].id
+  http_method   = each.value.method
+
+  authorization = var.enable_cognito_auth && var.cognito_user_pool_arn != "" ? "COGNITO_USER_POOLS" : each.value.authorization
+  authorizer_id = var.enable_cognito_auth && var.cognito_user_pool_arn != "" ? aws_api_gateway_authorizer.cognito[0].id : null
+
+  api_key_required = var.enable_api_key_auth ? true : each.value.api_key_required
+
+  request_parameters = {
+    for param in regexall("\\{([^}]+)\\}", each.value.path) :
+    "method.request.path.${param[0]}" => true
+  }
 }
 
-# POST /chat integration with Lambda
-resource "aws_api_gateway_integration" "chat_post" {
+# ============================================================================
+# Dynamic Lambda Integrations
+# ============================================================================
+
+resource "aws_api_gateway_integration" "routes" {
+  for_each = local.routes
+
   rest_api_id             = aws_api_gateway_rest_api.main.id
-  resource_id             = aws_api_gateway_resource.chat.id
-  http_method             = aws_api_gateway_method.chat_post.http_method
+  resource_id             = each.value.path == "/" ? aws_api_gateway_rest_api.main.root_resource_id : local.all_path_resources[each.value.path].id
+  http_method             = aws_api_gateway_method.routes[each.key].http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
-  uri                     = var.orchestrator_lambda_invoke_arn
+  uri                     = each.value.lambda_invoke_arn
+  timeout_milliseconds    = each.value.timeout_ms
+
+  depends_on = [aws_api_gateway_method.routes]
 }
 
-# OPTIONS /chat method (for CORS)
-resource "aws_api_gateway_method" "chat_options" {
-  count         = var.enable_cors ? 1 : 0
+# ============================================================================
+# Lambda Permissions for API Gateway
+# ============================================================================
+
+resource "aws_lambda_permission" "api_gateway" {
+  for_each = local.routes
+
+  # Sanitize statement_id: only alphanumeric, underscores, and dashes allowed
+  # Examples:
+  #   "POST /chat" → "AllowAPIGatewayInvoke-POST-chat"
+  #   "GET /conversations/{user_id}" → "AllowAPIGatewayInvoke-GET-conversations-user_id"
+  statement_id  = "AllowAPIGatewayInvoke-${replace(replace(replace(replace(each.key, "/", "-"), " ", "-"), "{", ""), "}", "")}"
+  action        = "lambda:InvokeFunction"
+  function_name = split(":", each.value.lambda_arn)[6] # Extract function name from ARN
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.main.execution_arn}/*/*"
+}
+
+# ============================================================================
+# CORS Support - OPTIONS Methods
+# ============================================================================
+
+resource "aws_api_gateway_method" "cors_options" {
+  for_each = toset(local.unique_paths)
+
   rest_api_id   = aws_api_gateway_rest_api.main.id
-  resource_id   = aws_api_gateway_resource.chat.id
+  resource_id   = each.value == "/" ? aws_api_gateway_rest_api.main.root_resource_id : local.all_path_resources[each.value].id
   http_method   = "OPTIONS"
   authorization = "NONE"
 }
 
-# OPTIONS /chat integration (mock for CORS)
-resource "aws_api_gateway_integration" "chat_options" {
-  count       = var.enable_cors ? 1 : 0
+resource "aws_api_gateway_integration" "cors_options" {
+  for_each = toset(local.unique_paths)
+
   rest_api_id = aws_api_gateway_rest_api.main.id
-  resource_id = aws_api_gateway_resource.chat.id
-  http_method = aws_api_gateway_method.chat_options[0].http_method
+  resource_id = each.value == "/" ? aws_api_gateway_rest_api.main.root_resource_id : local.all_path_resources[each.value].id
+  http_method = aws_api_gateway_method.cors_options[each.value].http_method
   type        = "MOCK"
 
   request_templates = {
-    "application/json" = "{\"statusCode\": 200}"
+    "application/json" = jsonencode({ statusCode = 200 })
   }
+
+  depends_on = [aws_api_gateway_method.cors_options]
 }
 
-# OPTIONS /chat method response
-resource "aws_api_gateway_method_response" "chat_options" {
-  count       = var.enable_cors ? 1 : 0
+resource "aws_api_gateway_method_response" "cors_options" {
+  for_each = toset(local.unique_paths)
+
   rest_api_id = aws_api_gateway_rest_api.main.id
-  resource_id = aws_api_gateway_resource.chat.id
-  http_method = aws_api_gateway_method.chat_options[0].http_method
+  resource_id = each.value == "/" ? aws_api_gateway_rest_api.main.root_resource_id : local.all_path_resources[each.value].id
+  http_method = aws_api_gateway_method.cors_options[each.value].http_method
   status_code = "200"
 
   response_parameters = {
@@ -109,105 +262,27 @@ resource "aws_api_gateway_method_response" "chat_options" {
   response_models = {
     "application/json" = "Empty"
   }
+
+  depends_on = [aws_api_gateway_method.cors_options]
 }
 
-# OPTIONS /chat integration response
-resource "aws_api_gateway_integration_response" "chat_options" {
-  count       = var.enable_cors ? 1 : 0
+resource "aws_api_gateway_integration_response" "cors_options" {
+  for_each = toset(local.unique_paths)
+
   rest_api_id = aws_api_gateway_rest_api.main.id
-  resource_id = aws_api_gateway_resource.chat.id
-  http_method = aws_api_gateway_method.chat_options[0].http_method
-  status_code = aws_api_gateway_method_response.chat_options[0].status_code
+  resource_id = each.value == "/" ? aws_api_gateway_rest_api.main.root_resource_id : local.all_path_resources[each.value].id
+  http_method = aws_api_gateway_method.cors_options[each.value].http_method
+  status_code = aws_api_gateway_method_response.cors_options[each.value].status_code
 
   response_parameters = {
-    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-    "method.response.header.Access-Control-Allow-Methods" = "'POST,OPTIONS'"
-    "method.response.header.Access-Control-Allow-Origin"  = "'${var.cors_allow_origin}'"
+    "method.response.header.Access-Control-Allow-Headers" = "'${join(",", var.cors_configuration.allow_headers)}'"
+    "method.response.header.Access-Control-Allow-Methods" = "'${join(",", var.cors_configuration.allow_methods)}'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'${join(",", var.cors_configuration.allow_origins)}'"
   }
 
   depends_on = [
-    aws_api_gateway_integration.chat_options
-  ]
-}
-
-# /search resource
-resource "aws_api_gateway_resource" "search" {
-  rest_api_id = aws_api_gateway_rest_api.main.id
-  parent_id   = aws_api_gateway_rest_api.main.root_resource_id
-  path_part   = "search"
-}
-
-# POST /search method
-resource "aws_api_gateway_method" "search_post" {
-  rest_api_id   = aws_api_gateway_rest_api.main.id
-  resource_id   = aws_api_gateway_resource.search.id
-  http_method   = "POST"
-  authorization = var.enable_api_key ? "NONE" : "AWS_IAM"
-  api_key_required = var.enable_api_key
-}
-
-# POST /search integration with Lambda
-resource "aws_api_gateway_integration" "search_post" {
-  rest_api_id             = aws_api_gateway_rest_api.main.id
-  resource_id             = aws_api_gateway_resource.search.id
-  http_method             = aws_api_gateway_method.search_post.http_method
-  integration_http_method = "POST"
-  type                    = "AWS_PROXY"
-  uri                     = var.vector_search_lambda_invoke_arn
-}
-
-# /health resource (health check endpoint)
-resource "aws_api_gateway_resource" "health" {
-  rest_api_id = aws_api_gateway_rest_api.main.id
-  parent_id   = aws_api_gateway_rest_api.main.root_resource_id
-  path_part   = "health"
-}
-
-# GET /health method
-resource "aws_api_gateway_method" "health_get" {
-  rest_api_id   = aws_api_gateway_rest_api.main.id
-  resource_id   = aws_api_gateway_resource.health.id
-  http_method   = "GET"
-  authorization = "NONE"
-}
-
-# GET /health integration (mock response)
-resource "aws_api_gateway_integration" "health_get" {
-  rest_api_id = aws_api_gateway_rest_api.main.id
-  resource_id = aws_api_gateway_resource.health.id
-  http_method = aws_api_gateway_method.health_get.http_method
-  type        = "MOCK"
-
-  request_templates = {
-    "application/json" = "{\"statusCode\": 200}"
-  }
-}
-
-# GET /health method response
-resource "aws_api_gateway_method_response" "health_get" {
-  rest_api_id = aws_api_gateway_rest_api.main.id
-  resource_id = aws_api_gateway_resource.health.id
-  http_method = aws_api_gateway_method.health_get.http_method
-  status_code = "200"
-
-  response_models = {
-    "application/json" = "Empty"
-  }
-}
-
-# GET /health integration response
-resource "aws_api_gateway_integration_response" "health_get" {
-  rest_api_id = aws_api_gateway_rest_api.main.id
-  resource_id = aws_api_gateway_resource.health.id
-  http_method = aws_api_gateway_method.health_get.http_method
-  status_code = aws_api_gateway_method_response.health_get.status_code
-
-  response_templates = {
-    "application/json" = "{\"status\": \"healthy\", \"timestamp\": \"$context.requestTime\"}"
-  }
-
-  depends_on = [
-    aws_api_gateway_integration.health_get
+    aws_api_gateway_integration.cors_options,
+    aws_api_gateway_method_response.cors_options
   ]
 }
 
@@ -218,18 +293,11 @@ resource "aws_api_gateway_integration_response" "health_get" {
 resource "aws_api_gateway_deployment" "main" {
   rest_api_id = aws_api_gateway_rest_api.main.id
 
-  # Force redeployment when API changes
   triggers = {
     redeployment = sha1(jsonencode([
-      aws_api_gateway_resource.chat.id,
-      aws_api_gateway_method.chat_post.id,
-      aws_api_gateway_integration.chat_post.id,
-      aws_api_gateway_resource.search.id,
-      aws_api_gateway_method.search_post.id,
-      aws_api_gateway_integration.search_post.id,
-      aws_api_gateway_resource.health.id,
-      aws_api_gateway_method.health_get.id,
-      aws_api_gateway_integration.health_get.id,
+      aws_api_gateway_rest_api.main.body,
+      jsonencode(local.routes),
+      jsonencode(var.cors_configuration),
     ]))
   }
 
@@ -238,50 +306,9 @@ resource "aws_api_gateway_deployment" "main" {
   }
 
   depends_on = [
-    aws_api_gateway_integration.chat_post,
-    aws_api_gateway_integration.search_post,
-    aws_api_gateway_integration.health_get,
+    aws_api_gateway_integration.routes,
+    aws_api_gateway_integration.cors_options,
   ]
-}
-
-# ============================================================================
-# API Gateway Stage
-# ============================================================================
-
-resource "aws_api_gateway_stage" "main" {
-  deployment_id = aws_api_gateway_deployment.main.id
-  rest_api_id   = aws_api_gateway_rest_api.main.id
-  stage_name    = var.stage_name
-
-  # Access logging
-  access_log_settings {
-    destination_arn = aws_cloudwatch_log_group.api_gateway.arn
-    format = jsonencode({
-      requestId      = "$context.requestId"
-      ip             = "$context.identity.sourceIp"
-      caller         = "$context.identity.caller"
-      user           = "$context.identity.user"
-      requestTime    = "$context.requestTime"
-      httpMethod     = "$context.httpMethod"
-      resourcePath   = "$context.resourcePath"
-      status         = "$context.status"
-      protocol       = "$context.protocol"
-      responseLength = "$context.responseLength"
-      errorMessage   = "$context.error.message"
-      errorType      = "$context.error.messageString"
-    })
-  }
-
-  # X-Ray tracing
-  xray_tracing_enabled = var.enable_xray
-
-  # Cache settings
-  cache_cluster_enabled = var.enable_cache
-  cache_cluster_size    = var.enable_cache ? var.cache_size : null
-
-  tags = merge(var.tags, {
-    Name = "${var.name_prefix}-${var.stage_name}"
-  })
 }
 
 # ============================================================================
@@ -298,7 +325,55 @@ resource "aws_cloudwatch_log_group" "api_gateway" {
 }
 
 # ============================================================================
-# API Gateway Method Settings (Throttling, Caching)
+# API Gateway Stage
+# ============================================================================
+
+resource "aws_api_gateway_stage" "main" {
+  deployment_id = aws_api_gateway_deployment.main.id
+  rest_api_id   = aws_api_gateway_rest_api.main.id
+  stage_name    = var.stage_name
+
+  # Access logging
+  dynamic "access_log_settings" {
+    for_each = var.enable_access_logging ? [1] : []
+    content {
+      destination_arn = aws_cloudwatch_log_group.api_gateway.arn
+      format = jsonencode({
+        requestId      = "$context.requestId"
+        ip             = "$context.identity.sourceIp"
+        caller         = "$context.identity.caller"
+        user           = "$context.identity.user"
+        requestTime    = "$context.requestTime"
+        httpMethod     = "$context.httpMethod"
+        resourcePath   = "$context.resourcePath"
+        status         = "$context.status"
+        protocol       = "$context.protocol"
+        responseLength = "$context.responseLength"
+        errorMessage   = "$context.error.message"
+        errorType      = "$context.error.messageString"
+      })
+    }
+  }
+
+  # X-Ray tracing
+  xray_tracing_enabled = var.enable_xray
+
+  # Cache settings
+  cache_cluster_enabled = var.enable_cache
+  cache_cluster_size    = var.enable_cache ? var.cache_size : null
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-${var.stage_name}"
+  })
+
+  # Ensure account settings are configured before enabling logging
+  depends_on = [
+    aws_api_gateway_account.main
+  ]
+}
+
+# ============================================================================
+# API Gateway Method Settings
 # ============================================================================
 
 resource "aws_api_gateway_method_settings" "all" {
@@ -308,7 +383,7 @@ resource "aws_api_gateway_method_settings" "all" {
 
   settings {
     # Logging
-    logging_level      = var.logging_level
+    logging_level      = var.enable_execution_logging ? var.logging_level : "OFF"
     data_trace_enabled = var.enable_data_trace
     metrics_enabled    = var.enable_metrics
 
@@ -317,19 +392,19 @@ resource "aws_api_gateway_method_settings" "all" {
     throttling_burst_limit = var.throttle_burst_limit
 
     # Caching
-    caching_enabled        = var.enable_cache
-    cache_ttl_in_seconds   = var.enable_cache ? var.cache_ttl_seconds : null
-    cache_data_encrypted   = var.enable_cache ? true : null
-    require_authorization_for_cache_control = var.enable_cache ? true : null
+    caching_enabled                             = var.enable_cache
+    cache_ttl_in_seconds                        = var.enable_cache ? var.cache_ttl_seconds : null
+    cache_data_encrypted                        = var.enable_cache ? true : null
+    require_authorization_for_cache_control     = var.enable_cache ? true : null
   }
 }
 
 # ============================================================================
-# API Key and Usage Plan (if enabled)
+# API Key and Usage Plan
 # ============================================================================
 
 resource "aws_api_gateway_api_key" "main" {
-  count   = var.enable_api_key ? 1 : 0
+  count   = var.enable_api_key_auth ? 1 : 0
   name    = "${var.name_prefix}-api-key"
   enabled = true
 
@@ -339,7 +414,7 @@ resource "aws_api_gateway_api_key" "main" {
 }
 
 resource "aws_api_gateway_usage_plan" "main" {
-  count = var.enable_api_key ? 1 : 0
+  count = var.enable_api_key_auth ? 1 : 0
   name  = "${var.name_prefix}-usage-plan"
 
   api_stages {
@@ -347,13 +422,11 @@ resource "aws_api_gateway_usage_plan" "main" {
     stage  = aws_api_gateway_stage.main.stage_name
   }
 
-  # Throttle settings
   throttle_settings {
     rate_limit  = var.usage_plan_rate_limit
     burst_limit = var.usage_plan_burst_limit
   }
 
-  # Quota settings
   quota_settings {
     limit  = var.usage_plan_quota_limit
     period = var.usage_plan_quota_period
@@ -365,7 +438,7 @@ resource "aws_api_gateway_usage_plan" "main" {
 }
 
 resource "aws_api_gateway_usage_plan_key" "main" {
-  count         = var.enable_api_key ? 1 : 0
+  count         = var.enable_api_key_auth ? 1 : 0
   key_id        = aws_api_gateway_api_key.main[0].id
   key_type      = "API_KEY"
   usage_plan_id = aws_api_gateway_usage_plan.main[0].id
@@ -375,7 +448,6 @@ resource "aws_api_gateway_usage_plan_key" "main" {
 # CloudWatch Alarms
 # ============================================================================
 
-# Alarm for 4XX errors
 resource "aws_cloudwatch_metric_alarm" "api_4xx_errors" {
   count               = var.enable_cloudwatch_alarms ? 1 : 0
   alarm_name          = "${var.name_prefix}-api-4xx-errors-high"
@@ -399,7 +471,6 @@ resource "aws_cloudwatch_metric_alarm" "api_4xx_errors" {
   tags = var.tags
 }
 
-# Alarm for 5XX errors
 resource "aws_cloudwatch_metric_alarm" "api_5xx_errors" {
   count               = var.enable_cloudwatch_alarms ? 1 : 0
   alarm_name          = "${var.name_prefix}-api-5xx-errors-high"
@@ -423,7 +494,6 @@ resource "aws_cloudwatch_metric_alarm" "api_5xx_errors" {
   tags = var.tags
 }
 
-# Alarm for high latency
 resource "aws_cloudwatch_metric_alarm" "api_latency" {
   count               = var.enable_cloudwatch_alarms ? 1 : 0
   alarm_name          = "${var.name_prefix}-api-latency-high"

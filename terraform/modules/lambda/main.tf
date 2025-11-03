@@ -18,49 +18,31 @@ data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
 # ============================================================================
-# Lambda Layers
+# Local Variables
 # ============================================================================
 
-# Common utilities layer (boto3, opensearch-py, etc.)
-resource "aws_lambda_layer_version" "common_utilities" {
-  count               = var.create_common_layer ? 1 : 0
-  filename            = var.common_layer_zip_path
-  layer_name          = "${var.name_prefix}-common-utilities"
-  description         = "Common utilities for KASS Chatbot Lambda functions (boto3, opensearch-py, etc.)"
-  compatible_runtimes = [var.python_runtime]
-  source_code_hash    = filebase64sha256(var.common_layer_zip_path)
-
-  lifecycle {
-    create_before_destroy = true
+locals {
+  # Convert simplified `functions` input into the internal `lambda_functions` structure
+  lambda_functions_merged = {
+    for name, cfg in var.functions : name => {
+      description           = "Lambda function ${name}"
+      handler               = cfg.handler
+      zip_path              = "${path.module}/../../dist/functions/${name}.zip"
+      timeout               = lookup(cfg, "timeout", var.default_timeout)
+      memory_size           = lookup(cfg, "memory_size", var.default_memory_size)
+      environment_variables = var.environment_variables
+      runtime               = lookup(cfg, "runtime", var.python_runtime)
+    }
   }
-}
 
-# LangChain layer
-resource "aws_lambda_layer_version" "langchain" {
-  count               = var.create_langchain_layer ? 1 : 0
-  filename            = var.langchain_layer_zip_path
-  layer_name          = "${var.name_prefix}-langchain"
-  description         = "LangChain framework and dependencies"
-  compatible_runtimes = [var.python_runtime]
-  source_code_hash    = filebase64sha256(var.langchain_layer_zip_path)
-
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
-# Document processing layer (pypdf, docx, etc.)
-resource "aws_lambda_layer_version" "document_processing" {
-  count               = var.create_document_layer ? 1 : 0
-  filename            = var.document_layer_zip_path
-  layer_name          = "${var.name_prefix}-document-processing"
-  description         = "Document processing libraries (pypdf, python-docx, openpyxl)"
-  compatible_runtimes = [var.python_runtime]
-  source_code_hash    = filebase64sha256(var.document_layer_zip_path)
-
-  lifecycle {
-    create_before_destroy = true
-  }
+  # Convert simplified `layers` input into creation list (optional)
+  custom_layers = [
+    for layer in var.layers : {
+      name                = layer.name
+      description         = layer.description
+      compatible_runtimes = layer.compatible_runtimes
+    }
+  ]
 }
 
 # ============================================================================
@@ -68,7 +50,7 @@ resource "aws_lambda_layer_version" "document_processing" {
 # ============================================================================
 
 resource "aws_cloudwatch_log_group" "lambda_logs" {
-  for_each = var.lambda_functions
+  for_each = local.lambda_functions_merged
 
   name              = "/aws/lambda/${var.name_prefix}-${each.key}"
   retention_in_days = var.log_retention_days
@@ -84,11 +66,11 @@ resource "aws_cloudwatch_log_group" "lambda_logs" {
 # ============================================================================
 
 resource "aws_lambda_function" "functions" {
-  for_each = var.lambda_functions
+  for_each = local.lambda_functions_merged
 
   function_name = "${var.name_prefix}-${each.key}"
   description   = each.value.description
-  role          = var.lambda_execution_role_arn
+  role          = var.execution_role_arn
 
   filename         = each.value.zip_path
   source_code_hash = filebase64sha256(each.value.zip_path)
@@ -101,18 +83,13 @@ resource "aws_lambda_function" "functions" {
   # Environment variables
   environment {
     variables = merge(
-      var.common_environment_variables,
+      var.environment_variables,
       lookup(each.value, "environment_variables", {})
     )
   }
 
   # Layers
-  layers = concat(
-    var.create_common_layer ? [aws_lambda_layer_version.common_utilities[0].arn] : [],
-    lookup(each.value, "use_langchain_layer", false) && var.create_langchain_layer ? [aws_lambda_layer_version.langchain[0].arn] : [],
-    lookup(each.value, "use_document_layer", false) && var.create_document_layer ? [aws_lambda_layer_version.document_processing[0].arn] : [],
-    lookup(each.value, "additional_layers", [])
-  )
+  layers = lookup(each.value, "layers", [])
 
   # VPC configuration (if enabled)
   dynamic "vpc_config" {
@@ -160,7 +137,7 @@ resource "aws_lambda_function" "functions" {
 
 resource "aws_lambda_permission" "api_gateway" {
   for_each = {
-    for k, v in var.lambda_functions : k => v
+    for k, v in local.lambda_functions_merged : k => v
     if lookup(v, "allow_api_gateway", false)
   }
 
@@ -177,7 +154,7 @@ resource "aws_lambda_permission" "api_gateway" {
 
 resource "aws_lambda_permission" "eventbridge" {
   for_each = {
-    for k, v in var.lambda_functions : k => v
+    for k, v in local.lambda_functions_merged : k => v
     if lookup(v, "allow_eventbridge", false)
   }
 
@@ -194,7 +171,7 @@ resource "aws_lambda_permission" "eventbridge" {
 
 resource "aws_lambda_permission" "s3" {
   for_each = {
-    for k, v in var.lambda_functions : k => v
+    for k, v in local.lambda_functions_merged : k => v
     if lookup(v, "allow_s3", false)
   }
 
@@ -211,7 +188,7 @@ resource "aws_lambda_permission" "s3" {
 
 # Alarm for function errors
 resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
-  for_each = var.enable_cloudwatch_alarms ? var.lambda_functions : {}
+  for_each = var.enable_cloudwatch_alarms ? local.lambda_functions_merged : {}
 
   alarm_name          = "${var.name_prefix}-${each.key}-errors-high"
   alarm_description   = "Lambda function ${each.key} has high error rate"
@@ -235,7 +212,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
 
 # Alarm for function throttles
 resource "aws_cloudwatch_metric_alarm" "lambda_throttles" {
-  for_each = var.enable_cloudwatch_alarms ? var.lambda_functions : {}
+  for_each = var.enable_cloudwatch_alarms ? local.lambda_functions_merged : {}
 
   alarm_name          = "${var.name_prefix}-${each.key}-throttles-high"
   alarm_description   = "Lambda function ${each.key} is being throttled"
@@ -259,7 +236,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_throttles" {
 
 # Alarm for function duration
 resource "aws_cloudwatch_metric_alarm" "lambda_duration" {
-  for_each = var.enable_cloudwatch_alarms ? var.lambda_functions : {}
+  for_each = var.enable_cloudwatch_alarms ? local.lambda_functions_merged : {}
 
   alarm_name          = "${var.name_prefix}-${each.key}-duration-high"
   alarm_description   = "Lambda function ${each.key} has high duration"
@@ -287,7 +264,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_duration" {
 
 resource "aws_lambda_function_url" "function_urls" {
   for_each = {
-    for k, v in var.lambda_functions : k => v
+    for k, v in local.lambda_functions_merged : k => v
     if lookup(v, "enable_function_url", false)
   }
 

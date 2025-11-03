@@ -59,3 +59,9 @@ variable "enable_secrets_manager" {
   type        = bool
   default     = true
 }
+
+variable "enable_bedrock_access" {
+  description = "Enable Amazon Bedrock access for Lambda functions"
+  type        = bool
+  default     = true
+}

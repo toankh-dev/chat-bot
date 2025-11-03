@@ -44,13 +44,7 @@ resource "aws_dynamodb_table" "tables" {
       read_capacity   = each.value.billing_mode == "PROVISIONED" ? lookup(global_secondary_index.value, "read_capacity", 5) : null
       write_capacity  = each.value.billing_mode == "PROVISIONED" ? lookup(global_secondary_index.value, "write_capacity", 5) : null
 
-      dynamic "projection" {
-        for_each = lookup(global_secondary_index.value, "non_key_attributes", null) != null ? [1] : []
-
-        content {
-          non_key_attributes = global_secondary_index.value.non_key_attributes
-        }
-      }
+      non_key_attributes = lookup(global_secondary_index.value, "non_key_attributes", null)
     }
   }
 
@@ -63,13 +57,7 @@ resource "aws_dynamodb_table" "tables" {
       range_key       = local_secondary_index.value.range_key
       projection_type = local_secondary_index.value.projection_type
 
-      dynamic "projection" {
-        for_each = lookup(local_secondary_index.value, "non_key_attributes", null) != null ? [1] : []
-
-        content {
-          non_key_attributes = local_secondary_index.value.non_key_attributes
-        }
-      }
+      non_key_attributes = lookup(local_secondary_index.value, "non_key_attributes", null)
     }
   }
 

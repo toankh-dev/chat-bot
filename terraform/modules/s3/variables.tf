@@ -38,9 +38,9 @@ variable "enable_event_notifications" {
 }
 
 variable "lambda_processor_arn" {
-  description = "ARN of Lambda function to process S3 events"
+  description = "ARN of Lambda function to process S3 events (required if enable_event_notifications is true)"
   type        = string
-  default     = null
+  default     = ""
 }
 
 variable "enable_cors" {

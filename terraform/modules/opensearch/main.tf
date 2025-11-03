@@ -17,14 +17,31 @@ data "aws_caller_identity" "current" {}
 # Data source for current AWS region
 data "aws_region" "current" {}
 
+locals {
+  short_name_prefix = substr(var.name_prefix, 0, 16)
+}
+
+# ============================================================================
+# VPC Endpoint (must be created BEFORE network policy for private access)
+# ============================================================================
+
+resource "aws_opensearchserverless_vpc_endpoint" "main" {
+  count      = var.create_vpc_endpoint ? 1 : 0
+  name       = "${local.short_name_prefix}-vpc-endpoint"
+  subnet_ids = var.subnet_ids
+  vpc_id     = var.vpc_id
+
+  security_group_ids = var.security_group_ids
+}
+
 # ============================================================================
 # Encryption Policy
 # ============================================================================
 
 resource "aws_opensearchserverless_security_policy" "encryption" {
-  name        = "${var.name_prefix}-encryption-policy"
+  name        = "${local.short_name_prefix}-policy"
   type        = "encryption"
-  description = "Encryption policy for ${var.name_prefix} OpenSearch Serverless collection"
+  description = "Encryption policy for ${local.short_name_prefix} OpenSearch Serverless collection"
 
   policy = jsonencode({
     Rules = [
@@ -44,11 +61,13 @@ resource "aws_opensearchserverless_security_policy" "encryption" {
 # ============================================================================
 
 resource "aws_opensearchserverless_security_policy" "network" {
-  name        = "${var.name_prefix}-network-policy"
+  name        = "${local.short_name_prefix}-network-policy"
   type        = "network"
-  description = "Network policy for ${var.name_prefix} OpenSearch Serverless collection"
+  description = "Network policy for ${local.short_name_prefix} OpenSearch Serverless collection"
 
-  policy = jsonencode([
+  # For private access, use the VPC endpoint created by this module
+  # For external VPC endpoints, use the provided vpc_endpoint_ids
+  policy = var.allow_public_access ? jsonencode([
     {
       Rules = [
         {
@@ -58,10 +77,29 @@ resource "aws_opensearchserverless_security_policy" "network" {
           ResourceType = "collection"
         }
       ]
-      AllowFromPublic = var.allow_public_access
-      SourceVPCEs = var.vpc_endpoint_ids != null && length(var.vpc_endpoint_ids) > 0 ? var.vpc_endpoint_ids : null
+      AllowFromPublic = true
+    }
+    ]) : jsonencode([
+    {
+      Rules = [
+        {
+          Resource = [
+            "collection/${var.collection_name}"
+          ]
+          ResourceType = "collection"
+        }
+      ]
+      AllowFromPublic = false
+      SourceVPCEs = var.create_vpc_endpoint ? [
+        aws_opensearchserverless_vpc_endpoint.main[0].id
+      ] : var.vpc_endpoint_ids
     }
   ])
+
+  # Network policy must wait for VPC endpoint if we're creating one
+  depends_on = [
+    aws_opensearchserverless_vpc_endpoint.main
+  ]
 }
 
 # ============================================================================
@@ -89,7 +127,7 @@ resource "aws_opensearchserverless_collection" "main" {
 
 # Data access policy for Lambda execution role
 resource "aws_opensearchserverless_access_policy" "lambda_access" {
-  name        = "${var.name_prefix}-lambda-access-policy"
+  name        = "${local.short_name_prefix}-lambda-access"
   type        = "data"
   description = "Data access policy for Lambda functions to access OpenSearch collection"
 
@@ -134,7 +172,7 @@ resource "aws_opensearchserverless_access_policy" "lambda_access" {
 # Data access policy for admin users (optional)
 resource "aws_opensearchserverless_access_policy" "admin_access" {
   count       = length(var.admin_user_arns) > 0 ? 1 : 0
-  name        = "${var.name_prefix}-admin-access-policy"
+  name        = "${local.short_name_prefix}-admin-access-policy"
   type        = "data"
   description = "Data access policy for admin users to access OpenSearch collection"
 
@@ -170,30 +208,13 @@ resource "aws_opensearchserverless_access_policy" "admin_access" {
 }
 
 # ============================================================================
-# VPC Endpoint (Optional - for private access)
-# ============================================================================
-
-resource "aws_opensearchserverless_vpc_endpoint" "main" {
-  count      = var.create_vpc_endpoint ? 1 : 0
-  name       = "${var.name_prefix}-vpc-endpoint"
-  subnet_ids = var.subnet_ids
-  vpc_id     = var.vpc_id
-
-  security_group_ids = var.security_group_ids
-
-  depends_on = [
-    aws_opensearchserverless_collection.main
-  ]
-}
-
-# ============================================================================
 # CloudWatch Alarms (Optional - for monitoring)
 # ============================================================================
 
 # Alarm for collection storage
 resource "aws_cloudwatch_metric_alarm" "storage_high" {
   count               = var.enable_cloudwatch_alarms ? 1 : 0
-  alarm_name          = "${var.name_prefix}-opensearch-storage-high"
+  alarm_name          = "${local.short_name_prefix}-opensearch-storage-high"
   alarm_description   = "OpenSearch collection storage is high"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
@@ -201,7 +222,7 @@ resource "aws_cloudwatch_metric_alarm" "storage_high" {
   namespace           = "AWS/AOSS"
   period              = 300
   statistic           = "Average"
-  threshold           = var.storage_alarm_threshold_gb * 1024 * 1024 * 1024  # Convert GB to bytes
+  threshold           = var.storage_alarm_threshold_gb * 1024 * 1024 * 1024 # Convert GB to bytes
   treat_missing_data  = "notBreaching"
 
   dimensions = {
@@ -217,7 +238,7 @@ resource "aws_cloudwatch_metric_alarm" "storage_high" {
 # Alarm for search request errors
 resource "aws_cloudwatch_metric_alarm" "search_errors_high" {
   count               = var.enable_cloudwatch_alarms ? 1 : 0
-  alarm_name          = "${var.name_prefix}-opensearch-search-errors-high"
+  alarm_name          = "${local.short_name_prefix}-opensearch-search-errors-high"
   alarm_description   = "OpenSearch collection has high search error rate"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
@@ -241,7 +262,7 @@ resource "aws_cloudwatch_metric_alarm" "search_errors_high" {
 # Alarm for OCU usage
 resource "aws_cloudwatch_metric_alarm" "ocu_high" {
   count               = var.enable_cloudwatch_alarms ? 1 : 0
-  alarm_name          = "${var.name_prefix}-opensearch-ocu-high"
+  alarm_name          = "${local.short_name_prefix}-opensearch-ocu-high"
   alarm_description   = "OpenSearch collection OCU usage is high"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
