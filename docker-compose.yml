@@ -1,5 +1,81 @@
 services:
-  # ChromaDB - Vector database
+  # ==========================================================================
+  # LocalStack - AWS Services Emulator (with Pro features)
+  # ==========================================================================
+  localstack:
+    image: localstack/localstack-pro:latest
+    container_name: chatbot-localstack
+    ports:
+      - "4566:4566"      # LocalStack Gateway
+      - "4510-4559:4510-4559"  # External services port range
+    environment:
+      # Core Configuration
+      - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN}
+      - SERVICES=s3,dynamodb,lambda,events,secretsmanager,opensearch
+      - DEBUG=1
+      - PERSISTENCE=1
+
+      # Lambda Configuration
+      - LAMBDA_EXECUTOR=docker-reuse
+      - LAMBDA_DOCKER_NETWORK=chatbot-network
+      - LAMBDA_REMOVE_CONTAINERS=true
+      - DOCKER_HOST=unix:///var/run/docker.sock
+
+      # AWS Configuration
+      - AWS_DEFAULT_REGION=${AWS_REGION:-us-east-1}
+
+      # Feature Flags
+      - OPENSEARCH_ENDPOINT_STRATEGY=domain
+      - OPENSEARCH_CUSTOM_BACKEND=http://opensearch:9200
+
+    volumes:
+      - "./localstack-data:/var/lib/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "../lambda_functions:/lambda_functions:ro"
+    networks:
+      - chatbot-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ==========================================================================
+  # OpenSearch - For LocalStack OpenSearch backend
+  # ==========================================================================
+  opensearch:
+    image: opensearchproject/opensearch:2.11.0
+    container_name: chatbot-opensearch
+    ports:
+      - "9200:9200"
+      - "9600:9600"
+    environment:
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "DISABLE_SECURITY_PLUGIN=true"
+      - "DISABLE_INSTALL_DEMO_CONFIG=true"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - "./opensearch-data:/usr/share/opensearch/data"
+    networks:
+      - chatbot-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================================================
+  # ChromaDB - Vector Store (Alternative to OpenSearch)
+  # ==========================================================================
   chromadb:
     image: chromadb/chroma:0.4.24
     container_name: chatbot-chromadb
@@ -12,23 +88,38 @@ services:
       - "./chromadb-data:/chroma/chroma"
     networks:
       - chatbot-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
-  # PostgreSQL - Conversation history (optional)
+  # ==========================================================================
+  # PostgreSQL - Relational Database
+  # ==========================================================================
   postgres:
     image: postgres:15-alpine
     container_name: chatbot-postgres
     ports:
       - "5432:5432"
     environment:
-      - POSTGRES_USER=chatbot
-      - POSTGRES_PASSWORD=chatbot123
-      - POSTGRES_DB=chatbot
+      POSTGRES_USER: ${POSTGRES_USER:-chatbot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chatbot123}
+      POSTGRES_DB: ${POSTGRES_DB:-chatbot}
     volumes:
       - "./postgres-data:/var/lib/postgresql/data"
+      - "./docker/init.sql:/docker-entrypoint-initdb.d/init.sql"
     networks:
       - chatbot-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-chatbot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # Redis - Caching (optional)
+  # ==========================================================================
+  # Redis - Caching & Session Store
+  # ==========================================================================
   redis:
     image: redis:7-alpine
     container_name: chatbot-redis
@@ -39,65 +130,123 @@ services:
       - "./redis-data:/data"
     networks:
       - chatbot-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
-  # Main Application - FastAPI
-  app:
+  # ==========================================================================
+  # API Service - RESTful API Server (FastAPI)
+  # ==========================================================================
+  api:
     build:
-      context: ./app
-      dockerfile: Dockerfile
-    container_name: chatbot-app
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    container_name: chatbot-api
     ports:
       - "8000:8000"
     environment:
-      # Services
-      - CHROMADB_HOST=chromadb
-      - CHROMADB_PORT=8000
+      # Load all environment variables from .env
+      - ENVIRONMENT=${ENVIRONMENT}
+      - PROJECT_NAME=${PROJECT_NAME}
+      - AWS_REGION=${AWS_REGION}
+      - LOG_LEVEL=${LOG_LEVEL}
+
+      # AWS/LocalStack
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+
+      # DynamoDB
+      - CONVERSATIONS_TABLE=${CONVERSATIONS_TABLE}
+      - USERS_TABLE=${USERS_TABLE}
+      - GROUPS_TABLE=${GROUPS_TABLE}
+      - PERMISSIONS_TABLE=${PERMISSIONS_TABLE}
+
+      # S3
+      - DOCUMENTS_BUCKET=${DOCUMENTS_BUCKET}
+
+      # OpenSearch
+      - OPENSEARCH_ENDPOINT=http://opensearch:9200
+      - OPENSEARCH_INDEX=${OPENSEARCH_INDEX}
+
+      # LLM
+      - LLM_PROVIDER=${LLM_PROVIDER}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL}
+      - GEMINI_EMBED_MODEL=${GEMINI_EMBED_MODEL}
 
       # Database
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
-      - POSTGRES_DB=chatbot
-      - POSTGRES_USER=chatbot
-      - POSTGRES_PASSWORD=chatbot123
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
 
       # Redis
       - REDIS_HOST=redis
       - REDIS_PORT=6379
 
-      # App config
-      - DEBUG=true
-      - LOG_LEVEL=INFO
-    volumes:
-      - "./app:/app"
-    depends_on:
-      - chromadb
-      - postgres
-      - redis
-    networks:
-      - chatbot-network
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+      # ChromaDB
+      - CHROMADB_HOST=chromadb
+      - CHROMADB_PORT=8000
 
-  # Discord Bot - Listens to Discord messages and responds
-  discord-bot:
-    build:
-      context: ./discord_bot
-      dockerfile: Dockerfile
-    container_name: chatbot-discord-bot
-    environment:
-      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
-      - DISCORD_CHANNEL_IDS=${DISCORD_CHANNEL_IDS}
-      - CHATBOT_API_URL=http://app:8000/chat
+      # API Settings
+      - APP_HOST=${APP_HOST}
+      - APP_PORT=${APP_PORT}
+      - DEBUG=${DEBUG}
+      - API_PREFIX=${API_PREFIX}
+
+      # Authentication
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ALGORITHM=${JWT_ALGORITHM}
+      - ENABLE_AUTHENTICATION=${ENABLE_AUTHENTICATION}
+
+    volumes:
+      - ..:/app
+      - /app/.venv  # Exclude virtual environment
     depends_on:
-      - app
+      localstack:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
     networks:
       - chatbot-network
-    restart: unless-stopped
+    command: >
+      sh -c "
+        echo 'Waiting for services...' &&
+        sleep 10 &&
+        echo 'Initializing LocalStack resources...' &&
+        python scripts/init_localstack.py &&
+        echo 'Deploying Management Lambda functions...' &&
+        python scripts/lambda/deploy_management.py &&
+        echo 'Starting API server...' &&
+        uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      "
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
 networks:
   chatbot-network:
     driver: bridge
 
 volumes:
+  localstack-data:
+    driver: local
+  opensearch-data:
+    driver: local
   chromadb-data:
+    driver: local
   postgres-data:
+    driver: local
   redis-data:
+    driver: local

@@ -62,7 +62,6 @@ rds_master_username     = "kass_admin"
 rds_backup_retention_period = 0 # No backups in dev
 
 # Feature Flags
-enable_discord_integration = true
 enable_slack_integration   = false
 enable_gitlab_integration  = false
 enable_caching             = true

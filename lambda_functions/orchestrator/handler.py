@@ -15,19 +15,30 @@ from typing import Dict, Any
 sys.path.insert(0, '/opt/python')  # Lambda layer
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'common'))
 
-from bedrock_client import BedrockClient
-from opensearch_client import OpenSearchVectorClient
-from dynamodb_client import ConversationStore, CacheStore
-from langchain.agents import AgentExecutor, create_react_agent
-from langchain.prompts import PromptTemplate
-from langchain.tools import Tool
+from config import get_settings
+from llm import get_llm_provider, get_embedding_provider
+from aws.opensearch_client import OpenSearchVectorClient
+from aws.dynamodb_client import ConversationStore, CacheStore
+
+try:
+    from langchain.agents import AgentExecutor, create_react_agent
+    from langchain.prompts import PromptTemplate
+    from langchain.tools import Tool
+    from langchain.llms.base import LLM
+    from langchain.callbacks.manager import CallbackManagerForLLMRun
+    LANGCHAIN_AVAILABLE = True
+except ImportError:
+    LANGCHAIN_AVAILABLE = False
+    logger.warning("LangChain not available - agent functionality will be limited")
 
 # Configure logging
+settings = get_settings()
 logger = logging.getLogger()
-logger.setLevel(os.getenv('LOG_LEVEL', 'INFO'))
+logger.setLevel(settings.log_level)
 
 # Initialize clients (outside handler for connection reuse)
-bedrock_client = None
+llm_provider = None
+embedding_provider = None
 opensearch_client = None
 conversation_store = None
 cache_store = None
@@ -36,39 +47,37 @@ agent_executor = None
 
 def initialize_clients():
     """Initialize all clients (called once on cold start)"""
-    global bedrock_client, opensearch_client, conversation_store, cache_store, agent_executor
+    global llm_provider, embedding_provider, opensearch_client, conversation_store, cache_store, agent_executor
 
     try:
-        logger.info("Initializing clients...")
+        logger.info(f"Initializing clients for environment: {settings.environment.value}")
 
-        # Bedrock client
-        bedrock_client = BedrockClient(
-            region=os.getenv('AWS_REGION'),
-            llm_model_id=os.getenv('BEDROCK_MODEL_ID'),
-            embed_model_id=os.getenv('BEDROCK_EMBED_MODEL_ID')
-        )
+        # LLM and Embedding providers (environment-aware)
+        llm_provider = get_llm_provider()
+        embedding_provider = get_embedding_provider()
+        logger.info(f"LLM Provider: {settings.llm_provider}, Model: {llm_provider.model_id}")
+        logger.info(f"Embedding Model: {embedding_provider.model_id} (dimension: {embedding_provider.dimension})")
 
-        # OpenSearch client
-        opensearch_client = OpenSearchVectorClient(
-            collection_endpoint=os.getenv('OPENSEARCH_ENDPOINT'),
-            collection_id=os.getenv('OPENSEARCH_COLLECTION_ID'),
-            index_name='knowledge_base',
-            region=os.getenv('AWS_REGION')
-        )
+        # OpenSearch client (environment-aware)
+        opensearch_client = OpenSearchVectorClient()
+        logger.info(f"OpenSearch endpoint: {settings.opensearch_endpoint}")
 
-        # DynamoDB stores
-        conversation_store = ConversationStore(
-            table_name=os.getenv('CONVERSATIONS_TABLE')
-        )
+        # DynamoDB stores (environment-aware)
+        conversation_store = ConversationStore()
+        logger.info(f"Conversations table: {settings.conversations_table}")
 
         # Cache store (optional)
-        if os.getenv('ENABLE_CACHING', 'false').lower() == 'true':
-            cache_store = CacheStore(
-                table_name=os.getenv('CACHE_TABLE', os.getenv('CONVERSATIONS_TABLE'))
-            )
+        cache_enabled = os.getenv('ENABLE_CACHING', 'false').lower() == 'true'
+        if cache_enabled:
+            cache_store = CacheStore()
+            logger.info("Caching enabled")
 
-        # Create LangChain agent
-        agent_executor = create_agent()
+        # Create LangChain agent (if available)
+        if LANGCHAIN_AVAILABLE:
+            agent_executor = create_agent()
+            logger.info("LangChain agent initialized")
+        else:
+            logger.warning("LangChain not available - using direct LLM calls")
 
         logger.info("✅ All clients initialized successfully")
 
@@ -132,17 +141,13 @@ Question: {input}
 Thought: {agent_scratchpad}
 """)
 
-    # Create agent (using Bedrock as LLM)
-    from langchain.llms.base import LLM
-    from langchain.callbacks.manager import CallbackManagerForLLMRun
-    from typing import Optional, List
-
-    class BedrockLLM(LLM):
-        """LangChain wrapper for Bedrock"""
+    # Create LangChain wrapper for LLM provider
+    class ProviderLLM(LLM):
+        """LangChain wrapper for environment-aware LLM provider"""
 
         @property
         def _llm_type(self) -> str:
-            return "bedrock"
+            return llm_provider.provider_name
 
         def _call(
             self,
@@ -151,14 +156,15 @@ Thought: {agent_scratchpad}
             run_manager: Optional[CallbackManagerForLLMRun] = None,
             **kwargs: Any,
         ) -> str:
-            return bedrock_client.invoke_llm(
+            response = llm_provider.generate(
                 prompt=prompt,
-                stop_sequences=stop,
                 max_tokens=2048,
-                temperature=0.7
+                temperature=0.7,
+                stop_sequences=stop
             )
+            return response.text
 
-    llm = BedrockLLM()
+    llm = ProviderLLM()
 
     agent = create_react_agent(llm=llm, tools=tools, prompt=prompt)
 
@@ -188,9 +194,9 @@ def vector_search_tool(query: str) -> str:
     try:
         logger.info(f"Vector search: {query}")
 
-        # Generate query embedding
-        embeddings = bedrock_client.generate_embeddings([query])
-        query_vector = embeddings[0]
+        # Generate query embedding using provider abstraction
+        embedding_response = embedding_provider.embed_text(query, task_type='retrieval_query')
+        query_vector = embedding_response.embedding
 
         # Search OpenSearch
         results = opensearch_client.search(
@@ -216,7 +222,7 @@ def vector_search_tool(query: str) -> str:
         return "\n".join(formatted_results)
 
     except Exception as e:
-        logger.error(f"Error in vector search tool: {e}")
+        logger.error(f"Error in vector search tool: {e}", exc_info=True)
         return f"Error searching knowledge base: {str(e)}"
 
 
@@ -232,9 +238,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         API Gateway response
     """
     try:
-        # Initialize clients on first invocation
-        global bedrock_client
-        if bedrock_client is None:
+        # Initialize clients on first invocation (cold start optimization)
+        global llm_provider
+        if llm_provider is None:
             initialize_clients()
 
         # Parse event
@@ -375,7 +381,7 @@ def health_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Health check handler"""
     try:
         # Check if clients are initialized
-        if bedrock_client is None:
+        if llm_provider is None:
             return create_response(503, {
                 'status': 'unhealthy',
                 'message': 'Clients not initialized'
@@ -385,17 +391,21 @@ def health_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         health_status = {
             'status': 'healthy',
             'version': '2.0.0',
+            'environment': settings.environment.value,
+            'llm_provider': settings.llm_provider,
             'checks': {
-                'bedrock': 'ok',
-                'opensearch': 'ok' if opensearch_client.health_check() else 'degraded',
-                'dynamodb': 'ok'
+                'llm': 'ok',
+                'embedding': 'ok',
+                'opensearch': 'ok' if opensearch_client and opensearch_client.health_check() else 'degraded',
+                'dynamodb': 'ok' if conversation_store else 'not_configured',
+                'langchain': 'available' if LANGCHAIN_AVAILABLE else 'unavailable'
             }
         }
 
         return create_response(200, health_status)
 
     except Exception as e:
-        logger.error(f"Health check failed: {e}")
+        logger.error(f"Health check failed: {e}", exc_info=True)
         return create_response(503, {
             'status': 'unhealthy',
             'error': str(e)

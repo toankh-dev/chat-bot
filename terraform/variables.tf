@@ -329,12 +329,6 @@ variable "rds_backup_retention_period" {
 # Feature Flags
 # ============================================================================
 
-variable "enable_discord_integration" {
-  description = "Enable Discord bot integration"
-  type        = bool
-  default     = true
-}
-
 variable "enable_slack_integration" {
   description = "Enable Slack integration"
   type        = bool

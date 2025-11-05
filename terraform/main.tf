@@ -353,12 +353,6 @@ module "lambda" {
       timeout     = 120
       runtime     = "python3.11"
     }
-    discord_handler = {
-      handler     = "handler.lambda_handler"
-      memory_size = 512
-      timeout     = 30
-      runtime     = "python3.11"
-    }
   }
 
   # Lambda layers
@@ -496,19 +490,6 @@ module "eventbridge" {
             batch_mode = true
             source     = "scheduled"
           })
-        }
-      ]
-    }
-
-    discord_events = {
-      description   = "Handle Discord webhook events"
-      event_pattern = jsonencode({
-        source      = ["custom.discord"]
-        detail-type = ["Discord Message", "Discord Command"]
-      })
-      targets = [
-        {
-          arn = module.lambda.function_arns["discord_handler"]
         }
       ]
     }

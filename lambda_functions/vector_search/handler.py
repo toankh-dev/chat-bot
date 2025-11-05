@@ -1,48 +1,76 @@
 """
 Lambda Function: Vector Search Handler
 Performs vector similarity search in OpenSearch Serverless
+
+Updated to use environment-agnostic configuration (works with LocalStack and AWS)
 """
 
 import json
 import os
 import sys
 import logging
+import time
 from typing import Dict, List, Any, Optional
 
 # Add common directory to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'common'))
 
-from bedrock_client import BedrockClient
-from opensearch_client import OpenSearchVectorClient
+from config import get_settings
+from llm import get_embedding_provider
+from aws.opensearch_client import OpenSearchVectorClient
+from utils.lambda_utils import (
+    StructuredLogger,
+    lambda_handler_decorator,
+    measure_duration,
+    cold_start_tracker
+)
 
 # Configure logging
+settings = get_settings()
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger.setLevel(settings.log_level)
+structured_logger = StructuredLogger("vector-search")
 
 # Global clients (initialized once per Lambda container)
-bedrock_client = None
+embedding_provider = None
 opensearch_client = None
 
+@measure_duration("client_initialization")
 def initialize_clients():
-    """Initialize AWS clients (reused across invocations)"""
-    global bedrock_client, opensearch_client
+    """Initialize clients with environment-aware configuration (reused across invocations)"""
+    global embedding_provider, opensearch_client
+    init_start = time.time()
 
-    if bedrock_client is None:
-        logger.info("Initializing Bedrock client")
-        bedrock_client = BedrockClient(
-            region=os.getenv('AWS_REGION'),
-            embed_model_id=os.getenv('BEDROCK_EMBED_MODEL_ID')
+    if embedding_provider is None:
+        structured_logger.info(
+            f"Initializing embedding provider",
+            provider=settings.llm_provider
+        )
+        embedding_provider = get_embedding_provider()
+        structured_logger.info(
+            f"Embedding provider initialized",
+            model_id=embedding_provider.model_id,
+            dimension=embedding_provider.dimension
         )
 
     if opensearch_client is None:
-        logger.info("Initializing OpenSearch client")
-        opensearch_client = OpenSearchVectorClient(
-            collection_endpoint=os.getenv('OPENSEARCH_ENDPOINT'),
-            collection_id=os.getenv('OPENSEARCH_COLLECTION_ID'),
-            index_name=os.getenv('OPENSEARCH_INDEX_NAME', 'knowledge_base'),
-            region=os.getenv('AWS_REGION')
+        structured_logger.info("Initializing OpenSearch client")
+        opensearch_client = OpenSearchVectorClient()
+        structured_logger.info(
+            "OpenSearch client initialized",
+            endpoint=settings.opensearch_endpoint
         )
 
+    # Track cold start
+    init_duration = (time.time() - init_start) * 1000
+    cold_start_tracker.record_cold_start(init_duration)
+
+@lambda_handler_decorator(
+    service_name="vector-search",
+    log_event=False,
+    log_response=False,
+    capture_errors=False
+)
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Lambda handler for vector search
@@ -55,8 +83,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         API Gateway proxy response or search results
     """
     try:
+        cold_start_tracker.increment_warm_invocation()
         # Initialize clients on cold start
-        if bedrock_client is None or opensearch_client is None:
+        if embedding_provider is None or opensearch_client is None:
             initialize_clients()
 
         # Parse input
@@ -83,15 +112,15 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         logger.info(f"Search request: query='{query[:50]}...', k={k}, type={search_type}")
 
-        # Generate query embedding
+        # Generate query embedding using provider abstraction
         logger.info("Generating query embedding")
-        embeddings = bedrock_client.generate_embeddings([query])
-        if not embeddings or len(embeddings) == 0:
-            logger.error("Failed to generate embedding")
+        try:
+            embedding_response = embedding_provider.embed_text(query, task_type='retrieval_query')
+            query_embedding = embedding_response.embedding
+            logger.info(f"Generated embedding with dimension: {len(query_embedding)}")
+        except Exception as e:
+            logger.error(f"Failed to generate embedding: {e}")
             return create_response(500, {'error': 'Failed to generate query embedding'})
-
-        query_embedding = embeddings[0]
-        logger.info(f"Generated embedding with dimension: {len(query_embedding)}")
 
         # Perform search based on type
         if search_type == 'vector':

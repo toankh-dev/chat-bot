@@ -1,0 +1,19 @@
+# FastAPI and ASGI
+fastapi==0.109.0
+mangum==0.17.0
+uvicorn==0.27.0
+
+# Data validation
+pydantic==2.5.0
+pydantic[email]
+
+# Database
+psycopg2-binary==2.9.9
+
+# Authentication
+PyJWT==2.8.0
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# AWS SDK
+boto3==1.34.34

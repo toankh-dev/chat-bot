@@ -8,6 +8,7 @@ import os
 import sys
 import logging
 import hashlib
+import time
 from typing import Dict, List, Any, Optional
 from urllib.parse import unquote_plus
 import re
@@ -15,16 +16,18 @@ import re
 # Add common directory to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'common'))
 
-from bedrock_client import BedrockClient
-from opensearch_client import OpenSearchVectorClient
-from s3_client import S3Client
+from config import get_settings
+from llm import get_embedding_provider
+from aws.opensearch_client import OpenSearchVectorClient
+from aws.s3_client import S3Client
 
 # Configure logging
+settings = get_settings()
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger.setLevel(settings.log_level)
 
 # Global clients (initialized once per Lambda container)
-bedrock_client = None
+embedding_provider = None
 opensearch_client = None
 s3_client = None
 
@@ -32,32 +35,27 @@ s3_client = None
 CHUNK_SIZE = int(os.getenv('CHUNK_SIZE', '1000'))
 CHUNK_OVERLAP = int(os.getenv('CHUNK_OVERLAP', '200'))
 MAX_DOCUMENT_SIZE_MB = int(os.getenv('MAX_DOCUMENT_SIZE_MB', '10'))
+MAX_RETRIES = int(os.getenv('MAX_RETRIES', '3'))
+RETRY_DELAY_SECONDS = int(os.getenv('RETRY_DELAY_SECONDS', '2'))
 
 def initialize_clients():
     """Initialize AWS clients (reused across invocations)"""
-    global bedrock_client, opensearch_client, s3_client
+    global embedding_provider, opensearch_client, s3_client
 
-    if bedrock_client is None:
-        logger.info("Initializing Bedrock client")
-        bedrock_client = BedrockClient(
-            region=os.getenv('AWS_REGION'),
-            embed_model_id=os.getenv('BEDROCK_EMBED_MODEL_ID')
-        )
+    if embedding_provider is None:
+        logger.info(f"Initializing embedding provider: {settings.llm_provider}")
+        embedding_provider = get_embedding_provider()
+        logger.info(f"Embedding model: {embedding_provider.model_id} (dimension: {embedding_provider.dimension})")
 
     if opensearch_client is None:
         logger.info("Initializing OpenSearch client")
-        opensearch_client = OpenSearchVectorClient(
-            collection_endpoint=os.getenv('OPENSEARCH_ENDPOINT'),
-            collection_id=os.getenv('OPENSEARCH_COLLECTION_ID'),
-            index_name=os.getenv('OPENSEARCH_INDEX_NAME', 'knowledge_base'),
-            region=os.getenv('AWS_REGION')
-        )
+        opensearch_client = OpenSearchVectorClient()
+        logger.info(f"OpenSearch endpoint: {settings.opensearch_endpoint}")
 
     if s3_client is None:
         logger.info("Initializing S3 client")
-        s3_client = S3Client(
-            region=os.getenv('AWS_REGION')
-        )
+        s3_client = S3Client()
+        logger.info(f"Documents bucket: {settings.documents_bucket}")
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
@@ -72,7 +70,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     try:
         # Initialize clients on cold start
-        if bedrock_client is None or opensearch_client is None or s3_client is None:
+        if embedding_provider is None or opensearch_client is None or s3_client is None:
             initialize_clients()
 
         # Parse S3 event
@@ -204,9 +202,32 @@ def process_document(bucket: str, key: str) -> Dict[str, Any]:
         chunks = chunk_text(text, chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP)
         logger.info(f"Created {len(chunks)} chunks")
 
-        # Generate embeddings for all chunks
+        # Generate embeddings for all chunks with retry logic
         logger.info("Generating embeddings")
-        embeddings = bedrock_client.generate_embeddings(chunks)
+        embeddings = []
+
+        # Process in batches to avoid API limits
+        batch_size = 25  # Adjust based on provider limits
+        for i in range(0, len(chunks), batch_size):
+            batch_chunks = chunks[i:i + batch_size]
+            logger.info(f"Processing batch {i // batch_size + 1}: {len(batch_chunks)} chunks")
+
+            # Retry logic for embedding generation
+            for attempt in range(MAX_RETRIES):
+                try:
+                    batch_embeddings = [
+                        embedding_provider.embed_text(chunk, task_type='retrieval_document').embedding
+                        for chunk in batch_chunks
+                    ]
+                    embeddings.extend(batch_embeddings)
+                    break
+                except Exception as e:
+                    if attempt < MAX_RETRIES - 1:
+                        logger.warning(f"Embedding batch {i // batch_size + 1} failed (attempt {attempt + 1}), retrying: {e}")
+                        time.sleep(RETRY_DELAY_SECONDS * (attempt + 1))  # Exponential backoff
+                    else:
+                        logger.error(f"Embedding batch {i // batch_size + 1} failed after {MAX_RETRIES} attempts: {e}")
+                        raise
 
         if not embeddings or len(embeddings) != len(chunks):
             logger.error(f"Embedding generation failed: expected {len(chunks)}, got {len(embeddings)}")
@@ -214,7 +235,7 @@ def process_document(bucket: str, key: str) -> Dict[str, Any]:
                 'bucket': bucket,
                 'key': key,
                 'status': 'error',
-                'error': 'Failed to generate embeddings'
+                'error': f'Failed to generate embeddings: expected {len(chunks)}, got {len(embeddings)}'
             }
 
         logger.info(f"Generated {len(embeddings)} embeddings")
