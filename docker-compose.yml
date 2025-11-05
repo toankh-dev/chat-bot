@@ -29,9 +29,9 @@ services:
       - OPENSEARCH_CUSTOM_BACKEND=http://opensearch:9200
 
     volumes:
-      - "./localstack-data:/var/lib/localstack"
+      - "./docker/localstack-data:/var/lib/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
-      - "../lambda_functions:/lambda_functions:ro"
+      - "./lambda_functions:/lambda_functions:ro"
     networks:
       - chatbot-network
     healthcheck:
@@ -45,7 +45,7 @@ services:
   # OpenSearch - For LocalStack OpenSearch backend
   # ==========================================================================
   opensearch:
-    image: opensearchproject/opensearch:2.11.0
+    image: opensearchproject/opensearch:3
     container_name: chatbot-opensearch
     ports:
       - "9200:9200"
@@ -64,7 +64,7 @@ services:
         soft: 65536
         hard: 65536
     volumes:
-      - "./opensearch-data:/usr/share/opensearch/data"
+      - "./docker/opensearch-data:/usr/share/opensearch/data"
     networks:
       - chatbot-network
     healthcheck:
@@ -85,7 +85,7 @@ services:
       - IS_PERSISTENT=TRUE
       - ANONYMIZED_TELEMETRY=FALSE
     volumes:
-      - "./chromadb-data:/chroma/chroma"
+      - "./docker/chromadb-data:/chroma/chroma"
     networks:
       - chatbot-network
     healthcheck:
@@ -107,7 +107,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chatbot123}
       POSTGRES_DB: ${POSTGRES_DB:-chatbot}
     volumes:
-      - "./postgres-data:/var/lib/postgresql/data"
+      - "./docker/postgres-data:/var/lib/postgresql/data"
       - "./docker/init.sql:/docker-entrypoint-initdb.d/init.sql"
     networks:
       - chatbot-network
@@ -127,7 +127,7 @@ services:
       - "6379:6379"
     command: redis-server --appendonly yes
     volumes:
-      - "./redis-data:/data"
+      - "./docker/redis-data:/data"
     networks:
       - chatbot-network
     healthcheck:
@@ -141,8 +141,8 @@ services:
   # ==========================================================================
   api:
     build:
-      context: ..
-      dockerfile: docker/Dockerfile.api
+      context: .
+      dockerfile: docker/Dockerfile
     container_name: chatbot-api
     ports:
       - "8000:8000"
@@ -204,7 +204,7 @@ services:
       - ENABLE_AUTHENTICATION=${ENABLE_AUTHENTICATION}
 
     volumes:
-      - ..:/app
+      - .:/app
       - /app/.venv  # Exclude virtual environment
     depends_on:
       localstack:
