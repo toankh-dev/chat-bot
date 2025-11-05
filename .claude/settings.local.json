@@ -2,7 +2,20 @@
   "permissions": {
     "allow": [
       "Bash(mkdir:*)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(for dir in src/core src/domain src/domain/entities src/domain/value_objects src/infrastructure src/infrastructure/dynamodb src/infrastructure/postgresql src/infrastructure/bedrock src/infrastructure/auth src/api src/api/controllers src/application src/application/services src/schemas src/helpers src/ingestion src/lambda_handlers)",
+      "Bash(do touch \"$dir/__init__.py\")",
+      "Bash(done)",
+      "Bash(docker-compose down:*)",
+      "Bash(chmod:*)",
+      "Bash(docker-compose pull:*)",
+      "Bash(docker-compose up:*)",
+      "Bash(docker-compose ps:*)",
+      "Bash(alembic upgrade:*)",
+      "Bash(pip --version:*)",
+      "Bash(pip install alembic)",
+      "Bash(python -m alembic:*)",
+      "Bash(pip install:*)"
     ],
     "deny": [],
     "ask": []

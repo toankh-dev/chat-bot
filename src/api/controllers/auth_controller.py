@@ -1,0 +1,40 @@
+"""Authentication controller."""
+
+from fastapi import Depends, status
+from src.schemas.auth_schema import LoginRequest, LoginResponse, RegisterRequest
+from src.usecases.auth_use_cases import LoginUseCase, RegisterUseCase
+from src.core.dependencies import get_login_use_case, get_register_use_case
+
+
+async def login(
+    request: LoginRequest,
+    use_case: LoginUseCase = Depends(get_login_use_case)
+) -> LoginResponse:
+    """
+    Authenticate user and return JWT tokens.
+
+    Args:
+        request: Login credentials
+        use_case: Login use case instance
+
+    Returns:
+        LoginResponse: Access and refresh tokens
+    """
+    return await use_case.execute(request)
+
+
+async def register(
+    request: RegisterRequest,
+    use_case: RegisterUseCase = Depends(get_register_use_case)
+) -> LoginResponse:
+    """
+    Register a new user.
+
+    Args:
+        request: Registration data
+        use_case: Register use case instance
+
+    Returns:
+        LoginResponse: Access and refresh tokens for new user
+    """
+    return await use_case.execute(request)
