@@ -9,10 +9,11 @@ from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from src.infrastructure.postgresql.models import Conversation, Message
-from src.shared.repositories.base_repository import BaseRepository
+from src.shared.repositories.conversation_repository import ConversationRepository
+from src.shared.repositories.message_repository import MessageRepository
 
 
-class ConversationRepositoryImpl(BaseRepository[Conversation, int]):
+class ConversationRepositoryImpl(ConversationRepository):
     """
     Conversation repository implementation with PostgreSQL.
     """
@@ -97,7 +98,7 @@ class ConversationRepositoryImpl(BaseRepository[Conversation, int]):
         return list(result.scalars().all())
 
 
-class MessageRepositoryImpl(BaseRepository[Message, int]):
+class MessageRepositoryImpl(MessageRepository):
     """
     Message repository implementation with PostgreSQL.
     """

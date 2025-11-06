@@ -6,10 +6,8 @@ Handles conversation and message management business logic.
 
 from typing import List, Optional
 from datetime import datetime
-from src.infrastructure.postgresql.conversation_repository_impl import (
-    ConversationRepositoryImpl,
-    MessageRepositoryImpl
-)
+from src.shared.repositories.conversation_repository import ConversationRepository
+from src.shared.repositories.message_repository import MessageRepository
 from src.infrastructure.postgresql.models import Conversation, Message
 from src.core.errors import NotFoundError, ValidationError, PermissionDeniedError
 
@@ -21,8 +19,8 @@ class ConversationService:
 
     def __init__(
         self,
-        conversation_repository: ConversationRepositoryImpl,
-        message_repository: MessageRepositoryImpl
+        conversation_repository: ConversationRepository,
+        message_repository: MessageRepository
     ):
         self.conversation_repository = conversation_repository
         self.message_repository = message_repository

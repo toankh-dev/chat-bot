@@ -7,72 +7,111 @@ Implements user data access using SQLAlchemy.
 from typing import Optional, List
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from src.infrastructure.postgresql.models import User
-from src.shared.repositories.base_repository import BaseRepository
+from src.domain.entities.user import User as UserEntity
+from src.infrastructure.postgresql.models import User as UserModel
+from src.infrastructure.postgresql.mappers.user_mapper import UserMapper
+from src.shared.repositories.user_repository import UserRepository
 
 
-class UserRepositoryImpl(BaseRepository[User, int]):
+class UserRepositoryImpl(UserRepository):
     """
     User repository implementation with PostgreSQL.
+
+    This implementation uses mappers to convert between domain entities and ORM models,
+    maintaining clean separation between domain and infrastructure layers.
     """
 
     def __init__(self, session: AsyncSession):
         self.session = session
+        self.mapper = UserMapper
 
-    async def find_by_id(self, id: int) -> Optional[User]:
-        """Find user by ID."""
+    async def find_by_id(self, id: str) -> Optional[UserEntity]:
+        """Find user by ID and return domain entity."""
+        # Convert string ID to int for ORM query
+        try:
+            user_id = int(id) if id.isdigit() else int(id.replace('-', '')[:8], 16) % 2147483647
+        except:
+            return None
+
         result = await self.session.execute(
-            select(User).where(User.id == id)
+            select(UserModel).where(UserModel.id == user_id)
         )
-        return result.scalar_one_or_none()
+        model = result.scalar_one_or_none()
+        return self.mapper.to_entity(model) if model else None
 
-    async def find_all(self, skip: int = 0, limit: int = 100) -> List[User]:
-        """Find all users with pagination."""
+    async def find_all(self, skip: int = 0, limit: int = 100) -> List[UserEntity]:
+        """Find all users with pagination and return domain entities."""
         result = await self.session.execute(
-            select(User).offset(skip).limit(limit)
+            select(UserModel).offset(skip).limit(limit)
         )
-        return list(result.scalars().all())
+        models = result.scalars().all()
+        return [self.mapper.to_entity(model) for model in models]
 
-    async def create(self, entity: User) -> User:
-        """Create new user."""
-        self.session.add(entity)
+    async def create(self, entity: UserEntity) -> UserEntity:
+        """Create new user from domain entity."""
+        model = self.mapper.to_model(entity)
+        self.session.add(model)
         await self.session.flush()
-        await self.session.refresh(entity)
-        return entity
+        await self.session.refresh(model)
+        return self.mapper.to_entity(model)
 
-    async def update(self, entity: User) -> User:
-        """Update existing user."""
-        await self.session.merge(entity)
-        await self.session.flush()
-        await self.session.refresh(entity)
-        return entity
+    async def update(self, entity: UserEntity) -> UserEntity:
+        """Update existing user from domain entity."""
+        # Find existing model
+        user_id = int(str(entity.id).replace('-', '')[:8], 16) % 2147483647
+        result = await self.session.execute(
+            select(UserModel).where(UserModel.id == user_id)
+        )
+        existing_model = result.scalar_one_or_none()
 
-    async def delete(self, id: int) -> bool:
-        """Delete user by ID."""
-        user = await self.find_by_id(id)
-        if user:
-            await self.session.delete(user)
+        if existing_model:
+            updated_model = self.mapper.to_model(entity, existing_model)
             await self.session.flush()
-            return True
+            await self.session.refresh(updated_model)
+            return self.mapper.to_entity(updated_model)
+        else:
+            # Create new if doesn't exist
+            return await self.create(entity)
+
+    async def delete(self, id: str) -> bool:
+        """Delete user by ID."""
+        user_entity = await self.find_by_id(id)
+        if user_entity:
+            user_id = int(id) if id.isdigit() else int(id.replace('-', '')[:8], 16) % 2147483647
+            result = await self.session.execute(
+                select(UserModel).where(UserModel.id == user_id)
+            )
+            model = result.scalar_one_or_none()
+            if model:
+                await self.session.delete(model)
+                await self.session.flush()
+                return True
         return False
 
-    async def exists(self, id: int) -> bool:
+    async def exists(self, id: str) -> bool:
         """Check if user exists."""
+        try:
+            user_id = int(id) if id.isdigit() else int(id.replace('-', '')[:8], 16) % 2147483647
+        except:
+            return False
+
         result = await self.session.execute(
-            select(User.id).where(User.id == id)
+            select(UserModel.id).where(UserModel.id == user_id)
         )
         return result.scalar_one_or_none() is not None
 
-    async def find_by_email(self, email: str) -> Optional[User]:
-        """Find user by email."""
+    async def find_by_email(self, email: str) -> Optional[UserEntity]:
+        """Find user by email and return domain entity."""
         result = await self.session.execute(
-            select(User).where(User.email == email)
+            select(UserModel).where(UserModel.email == email)
         )
-        return result.scalar_one_or_none()
+        model = result.scalar_one_or_none()
+        return self.mapper.to_entity(model) if model else None
 
-    async def find_active_users(self, skip: int = 0, limit: int = 100) -> List[User]:
-        """Find all active users."""
+    async def find_active_users(self, skip: int = 0, limit: int = 100) -> List[UserEntity]:
+        """Find all active users and return domain entities."""
         result = await self.session.execute(
-            select(User).where(User.status == "active").offset(skip).limit(limit)
+            select(UserModel).where(UserModel.status == "active").offset(skip).limit(limit)
         )
-        return list(result.scalars().all())
+        models = result.scalars().all()
+        return [self.mapper.to_entity(model) for model in models]

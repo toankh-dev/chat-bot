@@ -7,72 +7,109 @@ Implements chatbot data access using SQLAlchemy.
 from typing import Optional, List
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from src.infrastructure.postgresql.models import Chatbot
-from src.shared.repositories.base_repository import BaseRepository
+from src.domain.entities.chatbot import Chatbot as ChatbotEntity
+from src.infrastructure.postgresql.models import Chatbot as ChatbotModel
+from src.infrastructure.postgresql.mappers.chatbot_mapper import ChatbotMapper
+from src.shared.repositories.chatbot_repository import ChatbotRepository
 
 
-class ChatbotRepositoryImpl(BaseRepository[Chatbot, int]):
+class ChatbotRepositoryImpl(ChatbotRepository):
     """
     Chatbot repository implementation with PostgreSQL.
     """
 
     def __init__(self, session: AsyncSession):
         self.session = session
+        self.mapper = ChatbotMapper
 
-    async def find_by_id(self, id: int) -> Optional[Chatbot]:
+    async def find_by_id(self, id: int) -> Optional[ChatbotEntity]:
         """Find chatbot by ID."""
-        result = await self.session.execute(
-            select(Chatbot).where(Chatbot.id == id)
-        )
-        return result.scalar_one_or_none()
+        # Convert string ID to int for ORM query
+        try:
+            chatbot_id = int(id) if id.isdigit() else int(id.replace('-', '')[:8], 16) % 2147483647
+        except:
+            return None
 
-    async def find_all(self, skip: int = 0, limit: int = 100) -> List[Chatbot]:
+        result = await self.session.execute(
+            select(ChatbotModel).where(ChatbotModel.id == chatbot_id)
+        )
+        model = result.scalar_one_or_none()
+        return self.mapper.to_entity(model) if model else None
+
+    async def find_all(self, skip: int = 0, limit: int = 100) -> List[ChatbotEntity]:
         """Find all chatbots with pagination."""
         result = await self.session.execute(
-            select(Chatbot).offset(skip).limit(limit)
+            select(ChatbotModel).offset(skip).limit(limit)
         )
-        return list(result.scalars().all())
+        models = result.scalars().all()
+        return [self.mapper.to_entity(model) for model in models]
 
-    async def create(self, entity: Chatbot) -> Chatbot:
+    async def create(self, entity: ChatbotEntity) -> ChatbotEntity:
         """Create new chatbot."""
-        self.session.add(entity)
+        model = self.mapper.to_model(entity)
+        self.session.add(model)
         await self.session.flush()
-        await self.session.refresh(entity)
-        return entity
+        await self.session.refresh(model)
+        return self.mapper.to_entity(model)
 
-    async def update(self, entity: Chatbot) -> Chatbot:
+    async def update(self, entity: ChatbotEntity) -> ChatbotEntity:
         """Update existing chatbot."""
-        await self.session.merge(entity)
-        await self.session.flush()
-        await self.session.refresh(entity)
-        return entity
+        # Find existing model
+        chatbot_id = int(str(entity.id).replace('-', '')[:8], 16) % 2147483647
+        result = await self.session.execute(
+            select(ChatbotModel).where(ChatbotModel.id == chatbot_id)
+        )
+        existing_model = result.scalar_one_or_none()
+
+        if existing_model:
+            updated_model = self.mapper.to_model(entity, existing_model)
+            await self.session.flush()
+            await self.session.refresh(updated_model)
+            return self.mapper.to_entity(updated_model)
+        else:
+            # Create new if doesn't exist
+            return await self.create(entity)
 
     async def delete(self, id: int) -> bool:
         """Delete chatbot by ID."""
-        chatbot = await self.find_by_id(id)
-        if chatbot:
-            await self.session.delete(chatbot)
-            await self.session.flush()
-            return True
+        chatbot_entity = await self.find_by_id(id)
+        if chatbot_entity:
+            chatbot_id = int(id) if id.isdigit() else int(id.replace('-', '')[:8], 16) % 2147483647
+            result = await self.session.execute(
+                select(ChatbotModel).where(ChatbotModel.id == chatbot_id)
+            )
+            model = result.scalar_one_or_none()
+            if model:
+                await self.session.delete(model)
+                await self.session.flush()
+                return True
         return False
 
     async def exists(self, id: int) -> bool:
         """Check if chatbot exists."""
+        try:
+            chatbot_id = int(id) if id.isdigit() else int(id.replace('-', '')[:8], 16) % 2147483647
+        except:
+            return False
+
         result = await self.session.execute(
-            select(Chatbot.id).where(Chatbot.id == id)
+            select(ChatbotModel.id).where(ChatbotModel.id == chatbot_id)
         )
         return result.scalar_one_or_none() is not None
 
-    async def find_active_chatbots(self, skip: int = 0, limit: int = 100) -> List[Chatbot]:
+    async def find_active_chatbots(self, skip: int = 0, limit: int = 100) -> List[ChatbotEntity]:
         """Find all active chatbots."""
         result = await self.session.execute(
-            select(Chatbot).where(Chatbot.status == "active").offset(skip).limit(limit)
+            select(ChatbotModel).where(ChatbotModel.status == "active").offset(skip).limit(limit)
         )
-        return list(result.scalars().all())
+        models = result.scalars().all()
+        return [self.mapper.to_entity(model) for model in models]
 
-    async def find_by_creator(self, creator_id: int, skip: int = 0, limit: int = 100) -> List[Chatbot]:
-        """Find chatbots created by specific user."""
+    async def find_by_workspace(self, workspace_id: str, skip: int = 0, limit: int = 100) -> List[ChatbotEntity]:
+        """Find chatbots in a specific workspace."""
+        # Note: Using created_by as workspace for now - update when workspace model is ready
         result = await self.session.execute(
-            select(Chatbot).where(Chatbot.created_by == creator_id).offset(skip).limit(limit)
+            select(ChatbotModel).where(ChatbotModel.created_by == int(workspace_id)).offset(skip).limit(limit)
         )
-        return list(result.scalars().all())
+        models = result.scalars().all()
+        return [self.mapper.to_entity(model) for model in models]

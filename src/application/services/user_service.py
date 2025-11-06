@@ -6,8 +6,10 @@ Handles user management business logic.
 
 from typing import List, Optional
 from passlib.context import CryptContext
-from src.infrastructure.postgresql.user_repository_impl import UserRepositoryImpl
-from src.infrastructure.postgresql.models import User
+from src.shared.repositories.user_repository import UserRepository
+from src.domain.entities.user import User
+from src.domain.value_objects.email import Email
+from src.domain.value_objects.uuid_vo import UUID
 from src.core.errors import NotFoundError, ValidationError
 
 
@@ -17,12 +19,14 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 class UserService:
     """
     Service for user management operations.
+
+    Works exclusively with domain entities, not ORM models.
     """
 
-    def __init__(self, user_repository: UserRepositoryImpl):
+    def __init__(self, user_repository: UserRepository):
         self.user_repository = user_repository
 
-    async def get_user_by_id(self, user_id: int) -> User:
+    async def get_user_by_id(self, user_id: str) -> User:
         """
         Get user by ID.
 
@@ -81,21 +85,24 @@ class UserService:
 
         hashed_password = pwd_context.hash(password)
 
+        # Create domain entity
         user = User(
-            email=email,
-            password_hash=hashed_password,
-            name=name,
-            is_admin=is_admin,
-            status="active"
+            id=UUID.generate(),
+            email=Email(email),
+            username=email.split('@')[0],  # Derive username from email
+            full_name=name,
+            hashed_password=hashed_password,
+            is_active=True,
+            is_superuser=is_admin
         )
 
         return await self.user_repository.create(user)
 
     async def update_user(
         self,
-        user_id: int,
+        user_id: str,
         name: Optional[str] = None,
-        status: Optional[str] = None
+        is_active: Optional[bool] = None
     ) -> User:
         """
         Update user information.
@@ -103,26 +110,39 @@ class UserService:
         Args:
             user_id: User ID
             name: New name (optional)
-            status: New status (optional)
+            is_active: Active status (optional)
 
         Returns:
-            User: Updated user
+            User: Updated user domain entity
 
         Raises:
             NotFoundError: If user not found
         """
         user = await self.get_user_by_id(user_id)
 
+        # Update domain entity using its methods
         if name is not None:
-            user.name = name
-        if status is not None:
-            if status not in ["active", "disabled", "suspended"]:
-                raise ValidationError(f"Invalid status: {status}")
-            user.status = status
+            # Update the full_name attribute directly (domain entity doesn't have .name)
+            user = User(
+                id=user.id,
+                email=user.email,
+                username=user.username,
+                full_name=name,
+                hashed_password=user.hashed_password,
+                is_active=user.is_active if is_active is None else is_active,
+                is_superuser=user.is_superuser,
+                created_at=user.created_at,
+                last_login_at=user.last_login_at
+            )
+        elif is_active is not None:
+            if is_active:
+                user.activate()
+            else:
+                user.deactivate()
 
         return await self.user_repository.update(user)
 
-    async def delete_user(self, user_id: int) -> bool:
+    async def delete_user(self, user_id: str) -> bool:
         """
         Delete user.
 
@@ -140,7 +160,7 @@ class UserService:
 
         return await self.user_repository.delete(user_id)
 
-    async def change_password(self, user_id: int, new_password: str) -> User:
+    async def change_password(self, user_id: str, new_password: str) -> User:
         """
         Change user password.
 
@@ -149,11 +169,12 @@ class UserService:
             new_password: New plain password
 
         Returns:
-            User: Updated user
+            User: Updated user domain entity
 
         Raises:
             NotFoundError: If user not found
         """
         user = await self.get_user_by_id(user_id)
-        user.password_hash = pwd_context.hash(new_password)
+        new_hash = pwd_context.hash(new_password)
+        user.update_password(new_hash)
         return await self.user_repository.update(user)

@@ -10,7 +10,13 @@ from src.infrastructure.postgresql.pg_client import get_db_session
 from src.infrastructure.auth.jwt_handler import JWTHandler
 from src.core.config import settings
 
-# Repositories
+# Repository Interfaces
+from src.shared.repositories.user_repository import UserRepository
+from src.shared.repositories.chatbot_repository import ChatbotRepository
+from src.shared.repositories.conversation_repository import ConversationRepository
+from src.shared.repositories.message_repository import MessageRepository
+
+# Repository Implementations
 from src.infrastructure.postgresql.user_repository_impl import UserRepositoryImpl
 from src.infrastructure.postgresql.chatbot_repository_impl import ChatbotRepositoryImpl
 from src.infrastructure.postgresql.conversation_repository_impl import (
@@ -61,38 +67,38 @@ def get_jwt_handler() -> JWTHandler:
     )
 
 
-# Repository dependencies
+# Repository dependencies (return interfaces, not implementations)
 def get_user_repository(
     session: AsyncSession = Depends(get_db_session)
-) -> UserRepositoryImpl:
+) -> UserRepository:
     """Get user repository instance."""
     return UserRepositoryImpl(session)
 
 
 def get_chatbot_repository(
     session: AsyncSession = Depends(get_db_session)
-) -> ChatbotRepositoryImpl:
+) -> ChatbotRepository:
     """Get chatbot repository instance."""
     return ChatbotRepositoryImpl(session)
 
 
 def get_conversation_repository(
     session: AsyncSession = Depends(get_db_session)
-) -> ConversationRepositoryImpl:
+) -> ConversationRepository:
     """Get conversation repository instance."""
     return ConversationRepositoryImpl(session)
 
 
 def get_message_repository(
     session: AsyncSession = Depends(get_db_session)
-) -> MessageRepositoryImpl:
+) -> MessageRepository:
     """Get message repository instance."""
     return MessageRepositoryImpl(session)
 
 
-# Service dependencies
+# Service dependencies (use interfaces)
 def get_auth_service(
-    user_repository: UserRepositoryImpl = Depends(get_user_repository),
+    user_repository: UserRepository = Depends(get_user_repository),
     jwt_handler: JWTHandler = Depends(get_jwt_handler)
 ) -> AuthService:
     """Get auth service instance."""
@@ -100,22 +106,22 @@ def get_auth_service(
 
 
 def get_user_service(
-    user_repository: UserRepositoryImpl = Depends(get_user_repository)
+    user_repository: UserRepository = Depends(get_user_repository)
 ) -> UserService:
     """Get user service instance."""
     return UserService(user_repository)
 
 
 def get_chatbot_service(
-    chatbot_repository: ChatbotRepositoryImpl = Depends(get_chatbot_repository)
+    chatbot_repository: ChatbotRepository = Depends(get_chatbot_repository)
 ) -> ChatbotService:
     """Get chatbot service instance."""
     return ChatbotService(chatbot_repository)
 
 
 def get_conversation_service(
-    conversation_repository: ConversationRepositoryImpl = Depends(get_conversation_repository),
-    message_repository: MessageRepositoryImpl = Depends(get_message_repository)
+    conversation_repository: ConversationRepository = Depends(get_conversation_repository),
+    message_repository: MessageRepository = Depends(get_message_repository)
 ) -> ConversationService:
     """Get conversation service instance."""
     return ConversationService(conversation_repository, message_repository)

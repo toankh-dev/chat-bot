@@ -6,7 +6,7 @@ Handles user authentication and token management.
 
 from typing import Optional
 from passlib.context import CryptContext
-from src.infrastructure.postgresql.user_repository_impl import UserRepositoryImpl
+from src.shared.repositories.user_repository import UserRepository
 from src.infrastructure.auth.jwt_handler import JWTHandler
 from src.infrastructure.postgresql.models import User
 from src.core.errors import AuthenticationError, ValidationError
@@ -20,7 +20,7 @@ class AuthService:
     Service for authentication operations.
     """
 
-    def __init__(self, user_repository: UserRepositoryImpl, jwt_handler: JWTHandler):
+    def __init__(self, user_repository: UserRepository, jwt_handler: JWTHandler):
         self.user_repository = user_repository
         self.jwt_handler = jwt_handler
 

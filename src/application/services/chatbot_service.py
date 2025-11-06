@@ -1,25 +1,27 @@
 """
-Chatbot service.
+ChatbotEntity service.
 
 Handles chatbot management business logic.
 """
 
 from typing import List, Optional
 from decimal import Decimal
-from src.infrastructure.postgresql.chatbot_repository_impl import ChatbotRepositoryImpl
-from src.infrastructure.postgresql.models import Chatbot
-from src.core.errors import NotFoundError, ValidationError
+from src.shared.repositories.chatbot_repository import ChatbotRepository
+from src.domain.entities.chatbot import Chatbot
+from src.domain.value_objects.uuid_vo import UUID
+from src.core.errors import NotFoundError
 
 
 class ChatbotService:
     """
     Service for chatbot management operations.
+    Works exclusively with domain entities, not ORM models.
     """
 
-    def __init__(self, chatbot_repository: ChatbotRepositoryImpl):
+    def __init__(self, chatbot_repository: ChatbotRepository):
         self.chatbot_repository = chatbot_repository
 
-    async def get_chatbot_by_id(self, chatbot_id: int) -> Chatbot:
+    async def get_chatbot_by_id(self, chatbot_id: str) -> Chatbot:
         """
         Get chatbot by ID.
 
@@ -65,86 +67,57 @@ class ChatbotService:
 
     async def create_chatbot(
         self,
+        workspace_id: str,
         name: str,
-        provider: str,
-        model: str,
-        api_key_encrypted: str,
-        created_by: int,
+        model_id: str,
         description: Optional[str] = None,
+        system_prompt: Optional[str] = None,
         temperature: Decimal = Decimal("0.7"),
         max_tokens: int = 2048,
-        top_p: Decimal = Decimal("1.0"),
-        system_prompt: Optional[str] = None,
-        welcome_message: Optional[str] = None,
-        fallback_message: Optional[str] = None,
-        max_conversation_length: int = 50,
-        enable_function_calling: bool = True,
-        api_base_url: Optional[str] = None
+        tools: List[str] = [],
     ) -> Chatbot:
         """
         Create new chatbot.
 
         Args:
             name: Chatbot name
-            provider: LLM provider (openai, anthropic, google)
-            model: Model identifier
-            api_key_encrypted: Encrypted API key
-            created_by: User ID who creates the chatbot
+            model_id: Model identifier
             description: Chatbot description
             temperature: Sampling temperature (0.0-2.0)
             max_tokens: Maximum response tokens
-            top_p: Nucleus sampling parameter
             system_prompt: System instructions
-            welcome_message: Initial message
-            fallback_message: Error fallback message
-            max_conversation_length: Context window size
-            enable_function_calling: Enable tool use
-            api_base_url: Custom API endpoint
 
         Returns:
             Chatbot: Created chatbot
 
-        Raises:
-            ValidationError: If validation fails
         """
-        if provider not in ["openai", "anthropic", "google"]:
-            raise ValidationError(f"Invalid provider: {provider}")
-
         chatbot = Chatbot(
+            id=UUID.generate(),
+            workspace_id=workspace_id,
             name=name,
             description=description,
-            provider=provider,
-            model=model,
+            system_prompt=system_prompt,
+            model_id=model_id,
             temperature=temperature,
             max_tokens=max_tokens,
-            top_p=top_p,
-            system_prompt=system_prompt,
-            welcome_message=welcome_message,
-            fallback_message=fallback_message,
-            max_conversation_length=max_conversation_length,
-            enable_function_calling=enable_function_calling,
-            api_key_encrypted=api_key_encrypted,
-            api_base_url=api_base_url,
-            created_by=created_by,
-            status="active"
+            tools=tools,
+            is_active=True,
         )
 
         return await self.chatbot_repository.create(chatbot)
 
     async def update_chatbot(
         self,
-        chatbot_id: int,
-        name: Optional[str] = None,
+        chatbot_id: str,
+        workspace_id: str,
+        name: str,
+        model_id: str,
         description: Optional[str] = None,
-        temperature: Optional[Decimal] = None,
-        max_tokens: Optional[int] = None,
-        top_p: Optional[Decimal] = None,
         system_prompt: Optional[str] = None,
-        welcome_message: Optional[str] = None,
-        fallback_message: Optional[str] = None,
-        max_conversation_length: Optional[int] = None,
-        enable_function_calling: Optional[bool] = None,
-        status: Optional[str] = None
+        temperature: Decimal = Decimal("0.7"),
+        max_tokens: int = 2048,
+        tools: List[str] = [],
+        is_active: Optional[bool] = None
     ) -> Chatbot:
         """
         Update chatbot configuration.
@@ -155,50 +128,42 @@ class ChatbotService:
             description: New description (optional)
             temperature: New temperature (optional)
             max_tokens: New max tokens (optional)
-            top_p: New top_p (optional)
             system_prompt: New system prompt (optional)
-            welcome_message: New welcome message (optional)
-            fallback_message: New fallback message (optional)
-            max_conversation_length: New context window (optional)
-            enable_function_calling: Enable/disable tools (optional)
-            status: New status (optional)
+            is_active: Active status (optional)
 
         Returns:
-            Chatbot: Updated chatbot
+            Chatbot: Updated chatbot domain entity
 
         Raises:
             NotFoundError: If chatbot not found
         """
         chatbot = await self.get_chatbot_by_id(chatbot_id)
 
+        if workspace_id is not None:
+            chatbot.workspace_id = workspace_id
         if name is not None:
             chatbot.name = name
+        if model_id is not None:
+            chatbot.model_id = model_id
         if description is not None:
             chatbot.description = description
         if temperature is not None:
             chatbot.temperature = temperature
         if max_tokens is not None:
             chatbot.max_tokens = max_tokens
-        if top_p is not None:
-            chatbot.top_p = top_p
         if system_prompt is not None:
             chatbot.system_prompt = system_prompt
-        if welcome_message is not None:
-            chatbot.welcome_message = welcome_message
-        if fallback_message is not None:
-            chatbot.fallback_message = fallback_message
-        if max_conversation_length is not None:
-            chatbot.max_conversation_length = max_conversation_length
-        if enable_function_calling is not None:
-            chatbot.enable_function_calling = enable_function_calling
-        if status is not None:
-            if status not in ["active", "disabled", "archived"]:
-                raise ValidationError(f"Invalid status: {status}")
-            chatbot.status = status
+        if len(tools) > 0:
+            chatbot.tools = tools
+        if is_active is not None:
+            if is_active:
+                chatbot.activate()
+            else:
+                chatbot.deactivate()
 
         return await self.chatbot_repository.update(chatbot)
 
-    async def delete_chatbot(self, chatbot_id: int) -> bool:
+    async def delete_chatbot(self, chatbot_id: str) -> bool:
         """
         Delete chatbot.
 
