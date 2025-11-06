@@ -32,13 +32,13 @@ This AI Backend System is a production-ready, scalable solution for building int
 - **Multi-tenant workspaces** with fine-grained RBAC
 - **Event-driven data ingestion** from Slack, GitLab, Backlog
 - **Tool calling capabilities** for extended AI functionality
-- **Polyglot persistence** using PostgreSQL + DynamoDB
+- **Reliable persistence** using PostgreSQL (RDS)
 - **Serverless deployment** on AWS Lambda
 
 ### Key Design Principles
 
 ✅ **Clean Architecture** - Domain-centric, testable, maintainable
-✅ **Polyglot Persistence** - Right database for the right data
+✅ **Reliable Persistence** - ACID-compliant relational storage
 ✅ **Event-Driven** - Decoupled, scalable ingestion pipeline
 ✅ **Security First** - JWT authentication, RBAC, workspace isolation
 ✅ **Cloud Native** - Serverless, auto-scaling, cost-optimized
@@ -53,7 +53,7 @@ This AI Backend System is a production-ready, scalable solution for building int
 - **User Management** - Complete user lifecycle with authentication and authorization
 - **Workspace Isolation** - Multi-tenant architecture with workspace-scoped data access
 - **Chatbot Configuration** - Customizable AI assistants with model parameters and system prompts
-- **Conversation History** - Persistent chat sessions stored in DynamoDB
+- **Conversation History** - Persistent chat sessions stored in PostgreSQL
 - **Feedback System** - User ratings and feedback collection for AI responses
 - **Tool Calling** - Extensible tool registry for AI-driven actions
 - **Data Ingestion** - Scheduled ingestion from external platforms (Slack, GitLab, Backlog)
@@ -97,13 +97,16 @@ This AI Backend System is a production-ready, scalable solution for building int
         │              │             │              │
         ▼              ▼             ▼              ▼
 ┌──────────────┐ ┌──────────┐ ┌─────────┐  ┌──────────────┐
-│ PostgreSQL   │ │ DynamoDB │ │   S3    │  │AWS Bedrock   │
-│    (RDS)     │ │          │ │ Buckets │  │(Claude 3)    │
-│              │ │          │ │         │  │              │
-│ Users, RBAC  │ │Messages  │ │Documents│  │AI Inference  │
-│ Workspaces   │ │Feedback  │ │Embeddings│  │              │
-│ Chatbots     │ │History   │ │         │  │              │
-└──────────────┘ └──────────┘ └─────────┘  └──────────────┘
+│ PostgreSQL   │ │   S3    │ │   S3    │  │AWS Bedrock   │
+│    (RDS)     │ │ Buckets │ │ Buckets │  │(Claude 3)    │
+│              │ │         │ │         │  │              │
+│ Users, RBAC  │ │Documents│ │Embeddings│  │AI Inference  │
+│ Workspaces   │ │         │ │         │  │              │
+│ Chatbots     │ │         │ │         │  │              │
+│ Conversations│ │         │ │         │  │              │
+│ Messages     │ │         │ │         │  │              │
+│ Feedback     │ │         │ │         │  │              │
+└──────────────┘ └─────────┘ └─────────┘  └──────────────┘
 ```
 
 ### Clean Architecture Layers
@@ -134,12 +137,9 @@ This AI Backend System is a production-ready, scalable solution for building int
 
 | Database | Purpose | Data Types |
 |----------|---------|------------|
-| **PostgreSQL (RDS)** | Relational data with ACID guarantees | Users, Roles, Workspaces, Chatbots, Sessions, Tools |
-| **DynamoDB** | High-throughput, scalable NoSQL | Conversation messages, Feedback logs, Embedding references, Ingestion jobs |
+| **PostgreSQL (RDS)** | Relational data with ACID guarantees | Users, Roles, Workspaces, Chatbots, Sessions, Tools, Conversations, Messages, Feedback, Embeddings, Ingestion jobs |
 
-**Rationale**: Polyglot persistence allows us to use the best database for each data type:
-- PostgreSQL for complex joins and transactional integrity
-- DynamoDB for high-volume chat messages and analytics
+**Rationale**: Using PostgreSQL provides strong consistency, transactional integrity, and powerful querying for all application data, including conversations and messages.
 
 ---
 
@@ -153,7 +153,6 @@ This AI Backend System is a production-ready, scalable solution for building int
 
 ### Databases
 - **PostgreSQL** (via SQLAlchemy + asyncpg) - Relational data
-- **DynamoDB** (via boto3) - NoSQL document store
 
 ### AWS Services
 - **Lambda** - Serverless compute
@@ -198,9 +197,6 @@ chat-bot/
 │   │   │   ├── chatbot_controller.py
 │   │   │   ├── conversation_controller.py
 │   │   │   └── feedback_controller.py
-│   │   ├── websocket/                # WebSocket handlers
-│   │   │   ├── chat_ws_handler.py    # Real-time chat
-│   │   │   └── connections_manager.py
 │   │   └── middlewares/              # Route-level middleware
 │   │       ├── jwt_middleware.py     # JWT validation
 │   │       └── rbac_middleware.py    # Permission checks
@@ -245,10 +241,6 @@ chat-bot/
 │   │   │   └── feedback_repository.py
 │   │
 │   ├── infrastructure/               # Infrastructure Layer
-│   │   ├── dynamodb/                 # DynamoDB clients
-│   │   │   ├── dynamo_client.py      # Generic DynamoDB client
-│   │   │   ├── conversation_repo.py  # Message repository
-│   │   │   └── feedback_repo.py      # Feedback repository
 │   │   ├── postgresql/               # PostgreSQL clients
 │   │   │   ├── pg_client.py          # SQLAlchemy setup
 │   │   │   ├── user_repo.py          # User repository
@@ -307,7 +299,6 @@ chat-bot/
 │       ├── modules/
 │       │   ├── lambda/
 │       │   ├── api_gateway/
-│       │   ├── dynamodb/
 │       │   ├── rds/
 │       │   └── vpc/
 │       └── main.tf
@@ -331,7 +322,7 @@ chat-bot/
 
 - **Python 3.12+**
 - **PostgreSQL 14+**
-- **Docker** (for local DynamoDB)
+- **Docker** (for local PostgreSQL)
 - **AWS Account** (for production deployment)
 - **AWS CLI** configured with credentials
 
@@ -376,13 +367,6 @@ docker run --name postgres \
   -d postgres:14
 ```
 
-**DynamoDB Local** (using Docker):
-```bash
-docker run --name dynamodb-local \
-  -p 8000:8000 \
-  -d amazon/dynamodb-local
-```
-
 #### 6. Initialize Database
 
 ```bash
@@ -402,23 +386,7 @@ asyncio.run(init())
 "
 ```
 
-#### 7. Create DynamoDB Tables
-
-```bash
-# Use AWS CLI or Terraform to create tables
-aws dynamodb create-table \
-  --table-name Conversations \
-  --attribute-definitions \
-    AttributeName=convId,AttributeType=S \
-    AttributeName=timestamp,AttributeType=N \
-  --key-schema \
-    AttributeName=convId,KeyType=HASH \
-    AttributeName=timestamp,KeyType=RANGE \
-  --billing-mode PAY_PER_REQUEST \
-  --endpoint-url http://localhost:8000
-```
-
-#### 8. Run the Application
+#### 7. Run the Application
 
 ```bash
 # Development mode with auto-reload
@@ -517,20 +485,6 @@ alembic downgrade -1
 4. **Register router** in `src/main.py`
 5. **Write tests** in `tests/`
 
-Example:
-```python
-# src/api/controllers/example_controller.py
-from fastapi import APIRouter, Depends
-from src.schemas.example_schema import ExampleRequest, ExampleResponse
-
-router = APIRouter()
-
-@router.post("/example", response_model=ExampleResponse)
-async def create_example(request: ExampleRequest):
-    # Implementation
-    pass
-```
-
 ---
 
 ## 🚢 Deployment
@@ -589,79 +543,9 @@ terraform apply -var-file=environments/prod/terraform.tfvars
 
 ---
 
-## 📚 API Documentation
+## API Documentation
 
-### Authentication
-
-#### POST `/api/v1/auth/login`
-
-Authenticate user and receive JWT tokens.
-
-**Request:**
-```json
-{
-  "email": "user@example.com",
-  "password": "securepassword"
-}
-```
-
-**Response:**
-```json
-{
-  "access_token": "eyJ...",
-  "refresh_token": "eyJ...",
-  "token_type": "bearer"
-}
-```
-
-### Users
-
-#### GET `/api/v1/users/me`
-
-Get current user profile (requires authentication).
-
-**Headers:**
-```
-Authorization: Bearer <access_token>
-```
-
-**Response:**
-```json
-{
-  "id": "uuid",
-  "email": "user@example.com",
-  "username": "johndoe",
-  "full_name": "John Doe",
-  "is_active": true
-}
-```
-
-### WebSocket
-
-#### Connect: `wss://<api-gateway>/ws?token=<jwt_token>`
-
-Establish WebSocket connection for real-time chat.
-
-**Message Format:**
-```json
-{
-  "type": "chat",
-  "chatbot_id": "uuid",
-  "content": "Hello, how can you help me?"
-}
-```
-
-**Response Format:**
-```json
-{
-  "type": "assistant",
-  "content": "I can help you with...",
-  "message_id": "uuid",
-  "status": "completed"
-}
-```
-
-For complete API documentation, visit `/docs` when running the application.
+See `/docs` when running the application for full OpenAPI documentation.
 
 ---
 

@@ -48,8 +48,6 @@ class Settings(BaseSettings):
             f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         )
 
-    # DynamoDB
-    DYNAMODB_ENDPOINT: Optional[str] = None  # For local development
     CONVERSATIONS_TABLE: str = "Conversations"
     FEEDBACKS_TABLE: str = "Feedbacks"
     EMBED_INDEX_TABLE: str = "EmbedIndex"

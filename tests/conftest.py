@@ -12,7 +12,6 @@ from src.core.config import settings
 
 # Override settings for testing
 settings.POSTGRES_DB = "ai_backend_test"
-settings.DYNAMODB_ENDPOINT = "http://localhost:8000"
 settings.ENVIRONMENT = "testing"
 
 

@@ -1,3 +1,10 @@
+from src.infrastructure.vector_store.factory import VectorStoreFactory
+from src.application.services.vector_store_service import VectorStoreService
+# Vector store service dependency
+def get_vector_store_service() -> VectorStoreService:
+    """Get vector store service instance (injected via factory, config/env)."""
+    vector_store_instance = VectorStoreFactory.create()
+    return VectorStoreService(vector_store_instance)
 """
 Dependency injection container.
 

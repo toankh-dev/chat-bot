@@ -11,7 +11,6 @@ from src.core.dependencies import get_jwt_handler
 
 security = HTTPBearer()
 
-
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db_session),

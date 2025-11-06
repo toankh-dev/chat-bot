@@ -41,7 +41,6 @@ async def connect_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]
         # jwt_handler = get_jwt_handler()
         # user_id = jwt_handler.get_token_subject(token)
 
-        # Store connection in DynamoDB
         # await store_connection(connection_id, user_id)
 
         logger.info(f"WebSocket connection established: {connection_id}")
@@ -74,7 +73,6 @@ async def disconnect_handler(event: Dict[str, Any], context: Any) -> Dict[str, A
     logger.info(f"WebSocket disconnect request: {connection_id}")
 
     try:
-        # Remove connection from DynamoDB
         # await remove_connection(connection_id)
 
         logger.info(f"WebSocket connection closed: {connection_id}")

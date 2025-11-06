@@ -18,15 +18,14 @@ services:
       - POSTGRES_DB=ai_backend
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - DYNAMODB_ENDPOINT=http://dynamodb:8000
       - CORS_ORIGINS=http://localhost:3000,http://localhost:8000
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-      dynamodb:
-        condition: service_started
+      chromadb:
+        condition: service_healthy
     command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
     networks:
       - default
@@ -49,16 +48,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # DynamoDB Local
-  dynamodb:
-    image: amazon/dynamodb-local:latest
-    container_name: ai-backend-dynamodb
-    command: "-jar DynamoDBLocal.jar -sharedDb -dbPath ./data"
-    ports:
-      - "8001:8000"
-    volumes:
-      - dynamodb_data:/home/dynamodblocal/data
-
   # Redis (for caching/rate limiting)
   redis:
     image: redis:7-alpine
@@ -73,10 +62,28 @@ services:
       timeout: 5s
       retries: 5
 
+  # ChromaDB (Vector Database)
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: ai-backend-chromadb
+    ports:
+      - "8002:8000"
+    volumes:
+      - chromadb_data:/chroma/.chroma/index
+    environment:
+      - IS_PERSISTENT=TRUE
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - default
+
 volumes:
   postgres_data:
-  dynamodb_data:
   redis_data:
+  chromadb_data:
 
 networks:
   default:
