@@ -13,9 +13,13 @@ services:
       - ENVIRONMENT=development
       - DEBUG=true
       - LOG_LEVEL=INFO
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/ai_backend
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=ai_backend
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
       - DYNAMODB_ENDPOINT=http://dynamodb:8000
-      - REDIS_URL=redis://redis:6379
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:8000
     depends_on:
       postgres:
         condition: service_healthy

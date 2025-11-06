@@ -6,8 +6,10 @@ database connections, JWT secrets, and service endpoints.
 """
 
 import os
-from typing import Optional
-from pydantic_settings import BaseSettings
+import json
+from typing import Optional, Union
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
 from functools import lru_cache
 
 
@@ -79,7 +81,22 @@ class Settings(BaseSettings):
 
     # API Gateway
     API_GATEWAY_ENDPOINT: Optional[str] = None
-    CORS_ORIGINS: list[str] = ["http://localhost:3000"]
+    CORS_ORIGINS: Union[str, list[str]] = "http://localhost:3000"
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v):
+        """Parse CORS_ORIGINS from string or list."""
+        if isinstance(v, str):
+            # If it's a JSON string, parse it
+            if v.startswith("["):
+                try:
+                    return json.loads(v)
+                except json.JSONDecodeError:
+                    pass
+            # Otherwise split by comma
+            return [origin.strip() for origin in v.split(",")]
+        return v
 
     # External Integrations
     SLACK_BOT_TOKEN: Optional[str] = None
@@ -100,10 +117,12 @@ class Settings(BaseSettings):
     RATE_LIMIT_PER_USER: int = 100
     RATE_LIMIT_WINDOW_SECONDS: int = 60
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = True
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore"
+    )
 
 
 @lru_cache()

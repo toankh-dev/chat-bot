@@ -96,7 +96,7 @@ class SessionModel(Base):
     chatbot_id = Column(PGUUID(as_uuid=False), ForeignKey('chatbots.id'), nullable=False)
     title = Column(String(500), nullable=True)
     is_active = Column(Boolean, default=True)
-    metadata = Column(JSON, default=dict)
+    session_metadata = Column(JSON, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
