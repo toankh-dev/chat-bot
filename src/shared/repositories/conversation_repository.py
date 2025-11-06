@@ -5,11 +5,12 @@ Defines the contract for conversation data access operations.
 """
 
 from abc import abstractmethod
-from typing import Optional, List, TypeVar
+from typing import Optional, List
 from src.shared.repositories.base_repository import BaseRepository
 
-# Placeholder for Conversation entity - will be created in domain layer
-Conversation = TypeVar('Conversation')
+
+# Import the Conversation domain entity
+from src.domain.entities.conversation import Conversation
 
 
 class ConversationRepository(BaseRepository[Conversation, str]):
@@ -17,7 +18,7 @@ class ConversationRepository(BaseRepository[Conversation, str]):
     Conversation repository interface.
 
     Defines operations specific to conversation entities beyond the base CRUD operations.
-    Note: This interface uses TypeVar for Conversation until the domain entity is created.
+    Note: This interface uses the Conversation domain entity, decoupled from any ORM/DB model.
     """
 
     @abstractmethod

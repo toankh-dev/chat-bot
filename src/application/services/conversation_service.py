@@ -8,7 +8,8 @@ from typing import List, Optional
 from datetime import datetime
 from src.shared.repositories.conversation_repository import ConversationRepository
 from src.shared.repositories.message_repository import MessageRepository
-from src.infrastructure.postgresql.models import Conversation, Message
+from src.domain.entities.conversation import Conversation
+from src.infrastructure.postgresql.models import Message
 from src.core.errors import NotFoundError, ValidationError, PermissionDeniedError
 
 
