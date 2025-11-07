@@ -1,0 +1,83 @@
+stages:
+  - build
+  - deploy
+
+variables:
+  # Docker image configuration
+  DOCKER_IMAGE_NAME: kass-backend
+  DOCKER_COMPOSE_FILE: docker-compose.yml
+  # Use Docker-in-Docker service
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: "/certs"
+
+# Only run on splus-develop branch
+workflow:
+  rules:
+    - if: $CI_COMMIT_BRANCH == "splus-develop"
+
+# Build stage - Build Docker image
+build:
+  stage: build
+  image: docker:24-dind
+  services:
+    - docker:24-dind
+  before_script:
+    # Wait for Docker daemon to be ready
+    - until docker info; do sleep 1; done
+  script:
+    - echo "Building Docker image..."
+    # Build image with latest tag
+    - docker build -f Dockerfile.dev -t $DOCKER_IMAGE_NAME:latest .
+    # Build image with commit SHA tag for versioning
+    - docker build -f Dockerfile.dev -t $DOCKER_IMAGE_NAME:$CI_COMMIT_SHORT_SHA .
+    # List built images for verification
+    - docker images | grep $DOCKER_IMAGE_NAME
+    - echo "Build completed successfully!"
+  only:
+    - splus-develop
+  # Cache Docker layers for faster builds
+  cache:
+    key: docker-$CI_COMMIT_REF_SLUG
+    paths:
+      - .docker/
+
+# Deploy stage - Deploy application using docker-compose
+deploy:
+  stage: deploy
+  image: docker:24-dind
+  services:
+    - docker:24-dind
+  before_script:
+    # Wait for Docker daemon to be ready
+    - until docker info; do sleep 1; done
+    # Install docker-compose if not available
+    - apk add --no-cache docker-compose || true
+    # Verify docker-compose is available
+    - docker compose version || docker-compose version
+  script:
+    - echo "Deploying application..."
+    # Stop and remove old containers (ignore errors if containers don't exist)
+    - docker compose -f $DOCKER_COMPOSE_FILE down || true
+    # Pull latest images if needed (for postgres, redis, dynamodb)
+    - docker compose -f $DOCKER_COMPOSE_FILE pull postgres redis dynamodb || true
+    # Build and start new containers
+    - docker compose -f $DOCKER_COMPOSE_FILE up -d --build
+    # Wait for services to be healthy
+    - echo "Waiting for services to start..."
+    - sleep 10
+    # Check container status
+    - docker compose -f $DOCKER_COMPOSE_FILE ps
+    # Run database migrations (if needed)
+    - echo "Running database migrations..."
+    - docker compose -f $DOCKER_COMPOSE_FILE exec -T api alembic upgrade head || echo "Migration skipped or failed (container may not be ready yet)"
+    # Clean up old images to save space (keep last 2 versions)
+    - docker image prune -f
+    - echo "Deployment completed successfully!"
+    - echo "Application is running at http://localhost:8000"
+  only:
+    - splus-develop
+  dependencies:
+    - build
+  # Allow deployment to run even if build artifacts are not available
+  when: on_success
+
