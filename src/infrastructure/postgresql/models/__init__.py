@@ -2,6 +2,7 @@
 PostgreSQL database models.
 """
 
+from ..connection.base import Base
 from .document_model import DocumentModel
 from .user_model import User
 from .chatbot_model import Chatbot
@@ -12,6 +13,7 @@ from .user_chatbot import UserChatbot
 from .group_chatbot import GroupChatbot
 
 __all__ = [
+    "Base",
     "DocumentModel",
     "User", 
     "Chatbot",
