@@ -1,9 +1,9 @@
 """Authentication controller."""
 
 from fastapi import Depends, status
-from src.schemas.auth_schema import LoginRequest, LoginResponse, RegisterRequest
-from src.usecases.auth_use_cases import LoginUseCase, RegisterUseCase
-from src.core.dependencies import get_login_use_case, get_register_use_case
+from schemas.auth_schema import LoginRequest, LoginResponse, RegisterRequest
+from usecases.auth_use_cases import LoginUseCase, RegisterUseCase
+from core.dependencies import get_login_use_case, get_register_use_case
 
 
 async def login(

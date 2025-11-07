@@ -2,23 +2,23 @@
 
 from fastapi import Depends, status
 from typing import List
-from src.schemas.conversation_schema import (
+from schemas.conversation_schema import (
     ConversationResponse,
     ConversationCreate,
     ConversationWithMessages,
     MessageCreate,
     MessageResponse
 )
-from src.infrastructure.postgresql.models import User
-from src.api.middlewares.jwt_middleware import get_current_user
-from src.usecases.conversation_use_cases import (
+from infrastructure.postgresql.models import User
+from api.middlewares.jwt_middleware import get_current_user
+from usecases.conversation_use_cases import (
     ListConversationsUseCase,
     GetConversationUseCase,
     CreateConversationUseCase,
     CreateMessageUseCase,
     DeleteConversationUseCase
 )
-from src.core.dependencies import (
+from core.dependencies import (
     get_list_conversations_use_case,
     get_conversation_use_case,
     get_create_conversation_use_case,

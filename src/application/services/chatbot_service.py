@@ -6,10 +6,10 @@ Handles chatbot management business logic.
 
 from typing import List, Optional
 from decimal import Decimal
-from src.shared.repositories.chatbot_repository import ChatbotRepository
-from src.domain.entities.chatbot import Chatbot
-from src.domain.value_objects.uuid_vo import UUID
-from src.core.errors import NotFoundError
+from shared.interfaces.repositories.chatbot_repository import ChatbotRepository
+from domain.entities.chatbot import Chatbot
+from domain.value_objects.uuid_vo import UUID
+from core.errors import NotFoundError
 
 
 class ChatbotService:

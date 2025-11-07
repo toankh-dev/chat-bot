@@ -2,14 +2,14 @@
 
 from fastapi import APIRouter, status
 from typing import List
-from src.api.controllers.conversation_controller import (
+from api.controllers.conversation_controller import (
     list_conversations,
     get_conversation,
     create_conversation,
     create_message,
     delete_conversation
 )
-from src.schemas.conversation_schema import (
+from schemas.conversation_schema import (
     ConversationResponse,
     ConversationWithMessages,
     MessageResponse

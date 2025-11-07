@@ -1,4 +1,4 @@
-from src.shared.vector_store_interface import IVectorStore
+from shared.interfaces.services.ai_services.vector_store_service import IVectorStore
 from typing import List, Any
 
 class VectorStoreService:

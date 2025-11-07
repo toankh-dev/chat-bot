@@ -2,10 +2,10 @@
 
 from fastapi import Depends, status
 from typing import List
-from src.schemas.user_schema import UserResponse, UserCreate, UserUpdate
-from src.infrastructure.postgresql.models import User
-from src.api.middlewares.jwt_middleware import get_current_user, require_admin
-from src.usecases.user_use_cases import (
+from schemas.user_schema import UserResponse, UserCreate, UserUpdate
+from infrastructure.postgresql.models import User
+from api.middlewares.jwt_middleware import get_current_user, require_admin
+from usecases.user_use_cases import (
     GetCurrentUserUseCase,
     ListUsersUseCase,
     GetUserUseCase,
@@ -13,7 +13,7 @@ from src.usecases.user_use_cases import (
     UpdateUserUseCase,
     DeleteUserUseCase
 )
-from src.core.dependencies import (
+from core.dependencies import (
     get_current_user_use_case,
     get_list_users_use_case,
     get_user_use_case,

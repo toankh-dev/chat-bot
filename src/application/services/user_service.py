@@ -6,11 +6,11 @@ Handles user management business logic.
 
 from typing import List, Optional
 from passlib.context import CryptContext
-from src.shared.repositories.user_repository import UserRepository
-from src.domain.entities.user import User
-from src.domain.value_objects.email import Email
-from src.domain.value_objects.uuid_vo import UUID
-from src.core.errors import NotFoundError, ValidationError
+from shared.interfaces.repositories.user_repository import UserRepository
+from domain.entities.user import User
+from domain.value_objects.email import Email
+from domain.value_objects.uuid_vo import UUID
+from core.errors import NotFoundError, ValidationError
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

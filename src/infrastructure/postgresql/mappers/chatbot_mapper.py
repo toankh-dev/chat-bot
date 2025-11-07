@@ -6,9 +6,9 @@ Handles conversion between domain Chatbot entity and SQLAlchemy Chatbot model.
 
 from typing import Optional
 from decimal import Decimal
-from src.domain.entities.chatbot import Chatbot as ChatbotEntity
-from src.domain.value_objects.uuid_vo import UUID as UUIDValue
-from src.infrastructure.postgresql.models import Chatbot as ChatbotModel
+from domain.entities.chatbot import Chatbot as ChatbotEntity
+from domain.value_objects.uuid_vo import UUID as UUIDValue
+from infrastructure.postgresql.models import Chatbot as ChatbotModel
 
 
 class ChatbotMapper:

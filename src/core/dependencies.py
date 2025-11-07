@@ -1,10 +1,3 @@
-from src.infrastructure.vector_store.factory import VectorStoreFactory
-from src.application.services.vector_store_service import VectorStoreService
-# Vector store service dependency
-def get_vector_store_service() -> VectorStoreService:
-    """Get vector store service instance (injected via factory, config/env)."""
-    vector_store_instance = VectorStoreFactory.create()
-    return VectorStoreService(vector_store_instance)
 """
 Dependency injection container.
 
@@ -13,33 +6,44 @@ Provides dependencies for controllers and use cases following Clean Architecture
 
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from src.infrastructure.postgresql.pg_client import get_db_session
-from src.infrastructure.auth.jwt_handler import JWTHandler
-from src.core.config import settings
+from infrastructure.postgresql.connection import get_db_session
+from infrastructure.auth.jwt_handler import JWTHandler
+from core.config import settings
+
+# Vector Store & RAG dependencies
+from infrastructure.vector_store.factory import VectorStoreFactory
+from application.services.vector_store_service import VectorStoreService
+from infrastructure.ai_services.providers.bedrock import BedrockClient
+from infrastructure.ai_services.services.knowledge_base import BedrockKnowledgeBaseService
+from application.services.rag_service import RAGService
+from shared.interfaces.services.ai_services.knowledge_base_service import IKnowledgeBaseService
+from shared.interfaces.services.ai_services.rag_service import IRAGService
+
+
 
 # Repository Interfaces
-from src.shared.repositories.user_repository import UserRepository
-from src.shared.repositories.chatbot_repository import ChatbotRepository
-from src.shared.repositories.conversation_repository import ConversationRepository
-from src.shared.repositories.message_repository import MessageRepository
+from shared.interfaces.repositories.user_repository import UserRepository
+from shared.interfaces.repositories.chatbot_repository import ChatbotRepository
+from shared.interfaces.repositories.conversation_repository import ConversationRepository
+from shared.interfaces.repositories.message_repository import MessageRepository
 
 # Repository Implementations
-from src.infrastructure.postgresql.user_repository_impl import UserRepositoryImpl
-from src.infrastructure.postgresql.chatbot_repository_impl import ChatbotRepositoryImpl
-from src.infrastructure.postgresql.conversation_repository_impl import (
+from infrastructure.postgresql.repositories import (
+    UserRepositoryImpl,
+    ChatbotRepositoryImpl,
     ConversationRepositoryImpl,
     MessageRepositoryImpl
 )
 
 # Services
-from src.application.services.auth_service import AuthService
-from src.application.services.user_service import UserService
-from src.application.services.chatbot_service import ChatbotService
-from src.application.services.conversation_service import ConversationService
+from application.services.auth_service import AuthService
+from application.services.user_service import UserService
+from application.services.chatbot_service import ChatbotService
+from application.services.conversation_service import ConversationService
 
 # Use Cases
-from src.usecases.auth_use_cases import LoginUseCase, RegisterUseCase
-from src.usecases.user_use_cases import (
+from usecases.auth_use_cases import LoginUseCase, RegisterUseCase
+from usecases.user_use_cases import (
     GetCurrentUserUseCase,
     ListUsersUseCase,
     GetUserUseCase,
@@ -47,14 +51,14 @@ from src.usecases.user_use_cases import (
     UpdateUserUseCase,
     DeleteUserUseCase
 )
-from src.usecases.chatbot_use_cases import (
+from usecases.chatbot_use_cases import (
     ListChatbotsUseCase,
     GetChatbotUseCase,
     CreateChatbotUseCase,
     UpdateChatbotUseCase,
     DeleteChatbotUseCase
 )
-from src.usecases.conversation_use_cases import (
+from usecases.conversation_use_cases import (
     ListConversationsUseCase,
     GetConversationUseCase,
     CreateConversationUseCase,
@@ -262,3 +266,97 @@ def get_delete_conversation_use_case(
 ) -> DeleteConversationUseCase:
     """Get delete conversation use case instance."""
     return DeleteConversationUseCase(conversation_service)
+
+
+def get_bedrock_client() -> BedrockClient:
+    """Get Bedrock client instance."""
+    return BedrockClient()
+
+def get_vector_store_service() -> VectorStoreService:
+    """Get vector store service instance."""
+    vector_store_instance = VectorStoreFactory.create()
+    return VectorStoreService(vector_store_instance)
+
+def get_knowledge_base_service(
+    bedrock_client: BedrockClient = Depends(get_bedrock_client)
+) -> IKnowledgeBaseService:
+    """Get Knowledge Base service instance."""
+    return BedrockKnowledgeBaseService(bedrock_client)
+
+
+def get_rag_service(
+    knowledge_base_service: IKnowledgeBaseService = Depends(get_knowledge_base_service)
+) -> IRAGService:
+    """Get RAG service instance with direct LLM provider."""
+    from infrastructure.ai_services.factory import LLMFactory
+    llm_provider = LLMFactory.create()  # Direct provider
+    return RAGService(knowledge_base_service, llm_provider)
+
+# Document services and repositories
+from shared.interfaces.repositories.document_repository import DocumentRepository
+from infrastructure.postgresql.repositories import DocumentRepositoryImpl
+from shared.interfaces.services.storage.file_storage_service import IFileStorageService
+from infrastructure.s3.s3_file_storage_service import S3FileStorageService
+from shared.interfaces.services.upload.document_upload_service import IDocumentUploadService
+from application.services.document_upload_service import DocumentUploadService
+
+def get_document_repository(
+    session: AsyncSession = Depends(get_db_session)
+) -> DocumentRepository:
+    """Get document repository instance."""
+    return DocumentRepositoryImpl(session)
+
+def get_file_storage_service() -> IFileStorageService:
+    """Get file storage service instance."""
+    return S3FileStorageService()
+
+def get_document_upload_service(
+    file_storage: IFileStorageService = Depends(get_file_storage_service),
+    document_repository: DocumentRepository = Depends(get_document_repository)
+) -> IDocumentUploadService:
+    """Get document upload service instance."""
+    return DocumentUploadService(file_storage, document_repository)
+
+# Document use cases
+def get_upload_document_use_case(
+    upload_service: IDocumentUploadService = Depends(get_document_upload_service)
+):
+    """Get upload document use case."""
+    from usecases.document_use_cases import UploadDocumentUseCase
+    return UploadDocumentUseCase(upload_service)
+
+def get_delete_document_use_case(
+    upload_service: IDocumentUploadService = Depends(get_document_upload_service)
+):
+    """Get delete document use case."""
+    from usecases.document_use_cases import DeleteDocumentUseCase
+    return DeleteDocumentUseCase(upload_service)
+
+def get_list_user_documents_use_case(
+    document_repository: DocumentRepository = Depends(get_document_repository)
+):
+    """Get list user documents use case."""
+    from usecases.document_use_cases import ListUserDocumentsUseCase
+    return ListUserDocumentsUseCase(document_repository)
+
+# RAG Use Cases
+def get_chat_with_documents_use_case(
+    rag_service: IRAGService = Depends(get_rag_service)
+):
+    """Get chat with documents use case."""
+    from usecases.rag_use_cases import ChatWithDocumentsUseCase
+    return ChatWithDocumentsUseCase(rag_service)
+
+def get_semantic_search_use_case(
+    rag_service: IRAGService = Depends(get_rag_service)
+):
+    """Get semantic search use case."""
+    from usecases.rag_use_cases import SemanticSearchUseCase
+    return SemanticSearchUseCase(rag_service)
+
+def get_retrieve_contexts_use_case(
+    rag_service: IRAGService = Depends(get_rag_service)
+):
+    """Get retrieve contexts use case."""
+    from usecases.rag_use_cases import RetrieveContextsUseCase
+    return RetrieveContextsUseCase(rag_service)

@@ -6,11 +6,11 @@ Handles conversation and message management business logic.
 
 from typing import List, Optional
 from datetime import datetime
-from src.shared.repositories.conversation_repository import ConversationRepository
-from src.shared.repositories.message_repository import MessageRepository
-from src.domain.entities.conversation import Conversation
-from src.infrastructure.postgresql.models import Message
-from src.core.errors import NotFoundError, ValidationError, PermissionDeniedError
+from shared.interfaces.repositories.conversation_repository import ConversationRepository
+from shared.interfaces.repositories.message_repository import MessageRepository
+from domain.entities.conversation import Conversation
+from infrastructure.postgresql.models import Message
+from core.errors import NotFoundError, ValidationError, PermissionDeniedError
 
 
 class ConversationService:

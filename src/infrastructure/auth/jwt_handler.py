@@ -6,9 +6,9 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from src.core.config import settings
-from src.core.logger import logger
-from src.core.errors import TokenExpiredError, InvalidTokenError
+from core.config import settings
+from core.logger import logger
+from core.errors import TokenExpiredError, InvalidTokenError
 
 
 class JWTHandler:

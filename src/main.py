@@ -5,13 +5,21 @@ This module initializes the FastAPI application with all necessary configuration
 middleware, and routers for local development and Lambda deployment.
 """
 
+import sys
+import os
+
+# Add src directory to Python path for direct imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
-from src.core.config import settings
-from src.core.logger import logger
-from src.core.errors import BaseAppException
+from core.config import settings
+from core.logger import logger
+from core.errors import BaseAppException
 import time
 
 # Create FastAPI application
@@ -156,7 +164,7 @@ async def startup_event():
     logger.info(f"Environment: {settings.ENVIRONMENT}")
 
     # Initialize database connections
-    # from src.infrastructure.postgresql.pg_client import get_postgresql_client
+    # from infrastructure.postgresql.pg_client import get_postgresql_client
     # pg_client = get_postgresql_client()
     # await pg_client.create_tables()  # Create tables if they don't exist
 
@@ -170,7 +178,7 @@ async def shutdown_event():
     logger.info(f"{settings.APP_NAME} shutting down...")
 
     # Close database connections
-    # from src.infrastructure.postgresql.pg_client import get_postgresql_client
+    # from infrastructure.postgresql.pg_client import get_postgresql_client
     # pg_client = get_postgresql_client()
     # await pg_client.close()
 
@@ -178,22 +186,26 @@ async def shutdown_event():
 
 
 # Import and include routers
-from src.api.routers.auth_routes import router as auth_router
-from src.api.routers.user_routes import router as user_router
-from src.api.routers.chatbot_routes import router as chatbot_router
-from src.api.routers.conversation_routes import router as conversation_router
+from api.routers.auth_routes import router as auth_router
+from api.routers.user_routes import router as user_router
+from api.routers.chatbot_routes import router as chatbot_router
+from api.routers.conversation_routes import router as conversation_router
+from api.routers.document_routes import router as document_router
+from api.routers.ai_routes import create_ai_routes
 
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(user_router, prefix="/api/v1/users", tags=["Users"])
 app.include_router(chatbot_router, prefix="/api/v1/chatbots", tags=["Chatbots"])
 app.include_router(conversation_router, prefix="/api/v1/conversations", tags=["Conversations"])
+app.include_router(document_router, prefix="/api/v1", tags=["Documents"])
+app.include_router(create_ai_routes(), prefix="/api/v1", tags=["AI Services"])
 
 
 if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(
-        "src.main:app",
+        "main:app",  # Changed from "src.main:app"
         host="0.0.0.0",
         port=8000,
         reload=settings.DEBUG,

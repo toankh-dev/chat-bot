@@ -4,8 +4,8 @@ Authentication use cases.
 Defines application-level use cases for authentication operations.
 """
 
-from src.application.services.auth_service import AuthService
-from src.schemas.auth_schema import LoginRequest, RegisterRequest, LoginResponse
+from application.services.auth_service import AuthService
+from schemas.auth_schema import LoginRequest, RegisterRequest, LoginResponse
 
 
 class LoginUseCase:

@@ -2,17 +2,17 @@
 
 from fastapi import Depends, status
 from typing import List
-from src.schemas.chatbot_schema import ChatbotResponse, ChatbotCreate, ChatbotUpdate
-from src.infrastructure.postgresql.models import User
-from src.api.middlewares.jwt_middleware import get_current_user, require_admin
-from src.usecases.chatbot_use_cases import (
+from schemas.chatbot_schema import ChatbotResponse, ChatbotCreate, ChatbotUpdate
+from infrastructure.postgresql.models import User
+from api.middlewares.jwt_middleware import get_current_user, require_admin
+from usecases.chatbot_use_cases import (
     ListChatbotsUseCase,
     GetChatbotUseCase,
     CreateChatbotUseCase,
     UpdateChatbotUseCase,
     DeleteChatbotUseCase
 )
-from src.core.dependencies import (
+from core.dependencies import (
     get_list_chatbots_use_case,
     get_chatbot_use_case,
     get_create_chatbot_use_case,

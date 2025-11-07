@@ -1,15 +1,51 @@
-"""PostgreSQL infrastructure package."""
+"""
+PostgreSQL infrastructure components.
 
-from src.infrastructure.postgresql.user_repository_impl import UserRepositoryImpl
-from src.infrastructure.postgresql.chatbot_repository_impl import ChatbotRepositoryImpl
-from src.infrastructure.postgresql.conversation_repository_impl import (
+Clean architecture implementation for database access.
+"""
+
+# Connection management
+from .connection import db_manager, get_db_session, Base
+
+# Models
+from .models import (
+    User, Chatbot, Conversation, Message, DocumentModel
+)
+
+# Repositories  
+from .repositories import (
+    UserRepositoryImpl,
+    ChatbotRepositoryImpl,
     ConversationRepositoryImpl,
-    MessageRepositoryImpl
+    MessageRepositoryImpl,
+    DocumentRepositoryImpl,
+    EmbeddingIndexRepositoryImpl,
+    IngestionJobRepositoryImpl
+)
+
+# Mappers
+from .mappers import (
+    UserMapper,
+    ChatbotMapper, 
+    ConversationMapper,
+    MessageMapper,
+    DocumentMapper
 )
 
 __all__ = [
-    "UserRepositoryImpl",
-    "ChatbotRepositoryImpl",
-    "ConversationRepositoryImpl",
-    "MessageRepositoryImpl"
+    # Connection
+    "db_manager", "get_db_session", "Base",
+    
+    # Models
+    "User", "Chatbot", "Conversation", "Message", "DocumentModel",
+    
+    # Repositories
+    "UserRepositoryImpl", "ChatbotRepositoryImpl", 
+    "ConversationRepositoryImpl", "MessageRepositoryImpl",
+    "DocumentRepositoryImpl", "EmbeddingIndexRepositoryImpl", 
+    "IngestionJobRepositoryImpl",
+    
+    # Mappers
+    "UserMapper", "ChatbotMapper", "ConversationMapper",
+    "MessageMapper", "DocumentMapper"
 ]

@@ -5,7 +5,7 @@ Represents a conversation in the core business logic, decoupled from persistence
 """
 from dataclasses import dataclass, field
 from typing import List, Optional
-from src.domain.entities.message import Message
+from domain.entities.message import Message
 
 @dataclass
 class Conversation:

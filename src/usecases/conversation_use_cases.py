@@ -5,8 +5,8 @@ Defines application-level use cases for conversation operations.
 """
 
 from typing import List
-from src.application.services.conversation_service import ConversationService
-from src.schemas.conversation_schema import (
+from application.services.conversation_service import ConversationService
+from schemas.conversation_schema import (
     ConversationCreate,
     ConversationResponse,
     ConversationWithMessages,

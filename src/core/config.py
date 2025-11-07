@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     # AWS Configuration
     AWS_REGION: str = "us-east-1"
     AWS_ACCOUNT_ID: Optional[str] = None
+    AWS_ACCESS_KEY_ID: Optional[str] = None
+    AWS_SECRET_ACCESS_KEY: Optional[str] = None
 
     # PostgreSQL (RDS)
     POSTGRES_HOST: str = "localhost"
@@ -65,7 +67,15 @@ class Settings(BaseSettings):
     BEDROCK_MAX_TOKENS: int = 4096
     BEDROCK_TEMPERATURE: float = 0.7
 
+    # LLM Configuration
+    LLM_PROVIDER: str = "bedrock"  # bedrock or gemini
+    
+    # Google Gemini
+    GEMINI_API_KEY: Optional[str] = None
+    GEMINI_MODEL_NAME: str = "gemini-1.5-pro"
+
     # S3
+    S3_BUCKET_NAME: str = "ai-backend-documents"
     S3_BUCKET_EMBEDDINGS: str = "ai-backend-embeddings"
     S3_BUCKET_DOCUMENTS: str = "ai-backend-documents"
 

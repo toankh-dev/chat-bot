@@ -6,10 +6,10 @@ Handles user authentication and token management.
 
 from typing import Optional
 from passlib.context import CryptContext
-from src.shared.repositories.user_repository import UserRepository
-from src.infrastructure.auth.jwt_handler import JWTHandler
-from src.infrastructure.postgresql.models import User
-from src.core.errors import AuthenticationError, ValidationError
+from shared.interfaces.repositories.user_repository import UserRepository
+from infrastructure.auth.jwt_handler import JWTHandler
+from infrastructure.postgresql.models import User
+from core.errors import AuthenticationError, ValidationError
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
