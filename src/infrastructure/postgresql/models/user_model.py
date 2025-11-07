@@ -10,6 +10,7 @@ from infrastructure.postgresql.connection.base import Base
 class User(Base):
     """User account model."""
     __tablename__ = "users"
+    __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     is_admin = Column(Boolean, default=False)

@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.sql import table, column
 from sqlalchemy import String, Integer, Boolean, Text, Numeric
-from passlib.context import CryptContext
+import bcrypt
 
 # revision identifiers, used by Alembic.
 revision = '001'
@@ -18,7 +18,10 @@ down_revision = None
 branch_labels = None
 depends_on = None
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def hash_password(password: str) -> str:
+    """Hash password using bcrypt."""
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 
 def upgrade() -> None:
@@ -339,13 +342,13 @@ def _seed_data():
 
     op.bulk_insert(users_table, [
         {'id': 1, 'is_admin': True, 'email': 'admin@example.com',
-         'password_hash': pwd_context.hash('Admin@123'), 'name': 'System Administrator', 'status': 'active'},
+         'password_hash': hash_password('Admin@123'), 'name': 'System Administrator', 'status': 'active'},
         {'id': 2, 'is_admin': False, 'email': 'john.doe@example.com',
-         'password_hash': pwd_context.hash('User@123'), 'name': 'John Doe', 'status': 'active'},
+         'password_hash': hash_password('User@123'), 'name': 'John Doe', 'status': 'active'},
         {'id': 3, 'is_admin': False, 'email': 'jane.smith@example.com',
-         'password_hash': pwd_context.hash('User@123'), 'name': 'Jane Smith', 'status': 'active'},
+         'password_hash': hash_password('User@123'), 'name': 'Jane Smith', 'status': 'active'},
         {'id': 4, 'is_admin': False, 'email': 'bob.wilson@example.com',
-         'password_hash': pwd_context.hash('User@123'), 'name': 'Bob Wilson', 'status': 'active'},
+         'password_hash': hash_password('User@123'), 'name': 'Bob Wilson', 'status': 'active'},
     ])
 
     op.bulk_insert(groups_table, [

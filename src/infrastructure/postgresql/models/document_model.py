@@ -5,6 +5,7 @@ from infrastructure.postgresql.connection.base import Base
 
 class DocumentModel(Base):
     __tablename__ = "documents"
+    __table_args__ = {'extend_existing': True}
     
     id = Column(String, primary_key=True)
     filename = Column(String, nullable=False)

@@ -52,10 +52,32 @@ class GetChatbotUseCase:
             chatbot_id: Chatbot ID
 
         Returns:
-            ChatbotResponse: Chatbot data
+            ChatbotResponse: Chatbot data with assignments
         """
-        chatbot = await self.chatbot_service.get_chatbot_by_id(chatbot_id)
-        return ChatbotResponse.model_validate(chatbot)
+        chatbot = await self.chatbot_service.get_chatbot_by_id(chatbot_id, include_assignments=True)
+
+        # Build response with assignments
+        chatbot_dict = {
+            "id": chatbot.id,
+            "name": chatbot.name,
+            "description": chatbot.description,
+            "provider": chatbot.provider,
+            "model": chatbot.model,
+            "temperature": chatbot.temperature,
+            "max_tokens": chatbot.max_tokens,
+            "top_p": chatbot.top_p,
+            "system_prompt": chatbot.system_prompt,
+            "welcome_message": chatbot.welcome_message,
+            "fallback_message": chatbot.fallback_message,
+            "max_conversation_length": chatbot.max_conversation_length,
+            "enable_function_calling": chatbot.enable_function_calling,
+            "status": chatbot.status,
+            "created_at": chatbot.created_at,
+            "updated_at": chatbot.updated_at,
+            "assigned_groups": getattr(chatbot, 'assigned_groups', []),
+            "assigned_users": getattr(chatbot, 'assigned_users', [])
+        }
+        return ChatbotResponse.model_validate(chatbot_dict)
 
 
 class CreateChatbotUseCase:
@@ -75,8 +97,11 @@ class CreateChatbotUseCase:
             creator_id: ID of user creating the chatbot
 
         Returns:
-            ChatbotResponse: Created chatbot data
+            ChatbotResponse: Created chatbot data with assignments
         """
+        # For now, use simple "encryption" - in production, use proper encryption
+        api_key_encrypted = f"encrypted_{request.api_key}"
+
         chatbot = await self.chatbot_service.create_chatbot(
             name=request.name,
             description=request.description,
@@ -90,11 +115,38 @@ class CreateChatbotUseCase:
             fallback_message=request.fallback_message,
             max_conversation_length=request.max_conversation_length,
             enable_function_calling=request.enable_function_calling,
-            api_key_encrypted=request.api_key_encrypted,
+            api_key_encrypted=api_key_encrypted,
             api_base_url=request.api_base_url,
-            created_by=creator_id
+            created_by=creator_id,
+            group_ids=request.group_ids,
+            user_ids=request.user_ids,
+            assigned_by=creator_id
         )
-        return ChatbotResponse.model_validate(chatbot)
+
+        # Load chatbot with assignments for response
+        chatbot = await self.chatbot_service.get_chatbot_by_id(chatbot.id, include_assignments=True)
+
+        chatbot_dict = {
+            "id": chatbot.id,
+            "name": chatbot.name,
+            "description": chatbot.description,
+            "provider": chatbot.provider,
+            "model": chatbot.model,
+            "temperature": chatbot.temperature,
+            "max_tokens": chatbot.max_tokens,
+            "top_p": chatbot.top_p,
+            "system_prompt": chatbot.system_prompt,
+            "welcome_message": chatbot.welcome_message,
+            "fallback_message": chatbot.fallback_message,
+            "max_conversation_length": chatbot.max_conversation_length,
+            "enable_function_calling": chatbot.enable_function_calling,
+            "status": chatbot.status,
+            "created_at": chatbot.created_at,
+            "updated_at": chatbot.updated_at,
+            "assigned_groups": getattr(chatbot, 'assigned_groups', []),
+            "assigned_users": getattr(chatbot, 'assigned_users', [])
+        }
+        return ChatbotResponse.model_validate(chatbot_dict)
 
 
 class UpdateChatbotUseCase:
@@ -105,16 +157,17 @@ class UpdateChatbotUseCase:
     def __init__(self, chatbot_service: ChatbotService):
         self.chatbot_service = chatbot_service
 
-    async def execute(self, chatbot_id: int, request: ChatbotUpdate) -> ChatbotResponse:
+    async def execute(self, chatbot_id: int, request: ChatbotUpdate, admin_id: int) -> ChatbotResponse:
         """
         Execute update chatbot use case.
 
         Args:
             chatbot_id: Chatbot ID
             request: Chatbot update data
+            admin_id: ID of admin updating the chatbot
 
         Returns:
-            ChatbotResponse: Updated chatbot data
+            ChatbotResponse: Updated chatbot data with assignments
         """
         chatbot = await self.chatbot_service.update_chatbot(
             chatbot_id=chatbot_id,
@@ -128,9 +181,36 @@ class UpdateChatbotUseCase:
             fallback_message=request.fallback_message,
             max_conversation_length=request.max_conversation_length,
             enable_function_calling=request.enable_function_calling,
-            status=request.status
+            status=request.status,
+            group_ids=request.group_ids,
+            user_ids=request.user_ids,
+            assigned_by=admin_id
         )
-        return ChatbotResponse.model_validate(chatbot)
+
+        # Load chatbot with assignments for response
+        chatbot = await self.chatbot_service.get_chatbot_by_id(chatbot_id, include_assignments=True)
+
+        chatbot_dict = {
+            "id": chatbot.id,
+            "name": chatbot.name,
+            "description": chatbot.description,
+            "provider": chatbot.provider,
+            "model": chatbot.model,
+            "temperature": chatbot.temperature,
+            "max_tokens": chatbot.max_tokens,
+            "top_p": chatbot.top_p,
+            "system_prompt": chatbot.system_prompt,
+            "welcome_message": chatbot.welcome_message,
+            "fallback_message": chatbot.fallback_message,
+            "max_conversation_length": chatbot.max_conversation_length,
+            "enable_function_calling": chatbot.enable_function_calling,
+            "status": chatbot.status,
+            "created_at": chatbot.created_at,
+            "updated_at": chatbot.updated_at,
+            "assigned_groups": getattr(chatbot, 'assigned_groups', []),
+            "assigned_users": getattr(chatbot, 'assigned_users', [])
+        }
+        return ChatbotResponse.model_validate(chatbot_dict)
 
 
 class DeleteChatbotUseCase:
