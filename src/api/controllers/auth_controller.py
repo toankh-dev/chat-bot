@@ -4,6 +4,8 @@ from fastapi import Depends, status
 from src.schemas.auth_schema import LoginRequest, LoginResponse, RegisterRequest
 from src.usecases.auth_use_cases import LoginUseCase, RegisterUseCase
 from src.core.dependencies import get_login_use_case, get_register_use_case
+from src.api.middlewares.jwt_middleware import get_current_user
+from src.infrastructure.postgresql.models import User
 
 
 async def login(
@@ -38,3 +40,25 @@ async def register(
         LoginResponse: Access and refresh tokens for new user
     """
     return await use_case.execute(request)
+
+
+async def logout(
+    current_user: User = Depends(get_current_user)
+) -> dict:
+    """
+    Logout current user.
+
+    In a stateless JWT system, logout is handled client-side by removing the token.
+    This endpoint confirms the logout action and can be extended with token blacklisting
+    if needed in the future.
+
+    Args:
+        current_user: Authenticated user
+
+    Returns:
+        dict: Logout confirmation message
+    """
+    return {
+        "message": "Successfully logged out",
+        "user_id": current_user.id
+    }

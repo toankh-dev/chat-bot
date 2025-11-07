@@ -89,12 +89,13 @@ class CreateUserUseCase:
     def __init__(self, user_service: UserService):
         self.user_service = user_service
 
-    async def execute(self, request: UserCreate) -> UserResponse:
+    async def execute(self, request: UserCreate, admin_id: int) -> UserResponse:
         """
         Execute create user use case.
 
         Args:
             request: User creation data
+            admin_id: ID of admin creating the user
 
         Returns:
             UserResponse: Created user data
@@ -103,8 +104,13 @@ class CreateUserUseCase:
             email=request.email,
             password=request.password,
             name=request.name,
-            is_admin=request.is_admin
+            is_admin=request.is_admin,
+            group_ids=request.group_ids,
+            added_by=admin_id
         )
+
+        # Load groups for response
+        user = await self.user_service.get_user_by_id(user.id, include_groups=True)
         return UserResponse.model_validate(user)
 
 
@@ -116,13 +122,14 @@ class UpdateUserUseCase:
     def __init__(self, user_service: UserService):
         self.user_service = user_service
 
-    async def execute(self, user_id: int, request: UserUpdate) -> UserResponse:
+    async def execute(self, user_id: int, request: UserUpdate, admin_id: int) -> UserResponse:
         """
         Execute update user use case.
 
         Args:
             user_id: User ID
             request: User update data
+            admin_id: ID of admin updating the user
 
         Returns:
             UserResponse: Updated user data
@@ -130,8 +137,13 @@ class UpdateUserUseCase:
         user = await self.user_service.update_user(
             user_id=user_id,
             name=request.name,
-            status=request.status
+            status=request.status,
+            group_ids=request.group_ids,
+            updated_by=admin_id
         )
+
+        # Load groups for response
+        user = await self.user_service.get_user_by_id(user_id, include_groups=True)
         return UserResponse.model_validate(user)
 
 

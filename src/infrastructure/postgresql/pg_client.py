@@ -199,5 +199,5 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
             ...
     """
     client = get_postgresql_client()
-    async with client.get_session() as session:
+    async for session in client.get_session():
         yield session

@@ -1,9 +1,24 @@
 """Chatbot request/response schemas."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 from decimal import Decimal
+
+
+class GroupInChatbot(BaseModel):
+    """Group information in chatbot response."""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+
+
+class UserInChatbot(BaseModel):
+    """User information in chatbot response."""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    email: str
 
 
 class ChatbotCreate(BaseModel):
@@ -22,6 +37,8 @@ class ChatbotCreate(BaseModel):
     enable_function_calling: bool = True
     api_key: str = Field(..., min_length=1)
     api_base_url: Optional[str] = None
+    group_ids: Optional[List[int]] = Field(default=None, description="List of group IDs to assign chatbot to")
+    user_ids: Optional[List[int]] = Field(default=None, description="List of user IDs to assign chatbot to")
 
 
 class ChatbotUpdate(BaseModel):
@@ -30,13 +47,21 @@ class ChatbotUpdate(BaseModel):
     description: Optional[str] = None
     temperature: Optional[Decimal] = Field(None, ge=0, le=2)
     max_tokens: Optional[int] = Field(None, gt=0)
+    top_p: Optional[Decimal] = Field(None, ge=0, le=1)
     system_prompt: Optional[str] = None
     welcome_message: Optional[str] = None
+    fallback_message: Optional[str] = None
+    max_conversation_length: Optional[int] = Field(None, gt=0)
+    enable_function_calling: Optional[bool] = None
     status: Optional[str] = None
+    group_ids: Optional[List[int]] = Field(default=None, description="List of group IDs to assign chatbot to (replaces existing)")
+    user_ids: Optional[List[int]] = Field(default=None, description="List of user IDs to assign chatbot to (replaces existing)")
 
 
 class ChatbotResponse(BaseModel):
     """Chatbot response model."""
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     description: Optional[str]
@@ -53,9 +78,8 @@ class ChatbotResponse(BaseModel):
     status: str
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
+    assigned_groups: Optional[List[GroupInChatbot]] = Field(default=None, description="Groups that have access to this chatbot")
+    assigned_users: Optional[List[UserInChatbot]] = Field(default=None, description="Users that have individual access to this chatbot")
 
 
 class ChatbotListResponse(BaseModel):

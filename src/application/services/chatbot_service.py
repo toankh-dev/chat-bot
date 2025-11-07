@@ -7,7 +7,11 @@ Handles chatbot management business logic.
 from typing import List, Optional
 from decimal import Decimal
 from src.infrastructure.postgresql.chatbot_repository_impl import ChatbotRepositoryImpl
-from src.infrastructure.postgresql.models import Chatbot
+from src.infrastructure.postgresql.group_chatbot_repository_impl import GroupChatbotRepositoryImpl
+from src.infrastructure.postgresql.user_chatbot_repository_impl import UserChatbotRepositoryImpl
+from src.infrastructure.postgresql.group_repository_impl import GroupRepositoryImpl
+from src.infrastructure.postgresql.user_repository_impl import UserRepositoryImpl
+from src.infrastructure.postgresql.models import Chatbot, User
 from src.core.errors import NotFoundError, ValidationError
 
 
@@ -16,15 +20,46 @@ class ChatbotService:
     Service for chatbot management operations.
     """
 
-    def __init__(self, chatbot_repository: ChatbotRepositoryImpl):
+    def __init__(
+        self,
+        chatbot_repository: ChatbotRepositoryImpl,
+        group_chatbot_repository: Optional[GroupChatbotRepositoryImpl] = None,
+        user_chatbot_repository: Optional[UserChatbotRepositoryImpl] = None,
+        group_repository: Optional[GroupRepositoryImpl] = None,
+        user_repository: Optional[UserRepositoryImpl] = None
+    ):
         self.chatbot_repository = chatbot_repository
+        self.group_chatbot_repository = group_chatbot_repository
+        self.user_chatbot_repository = user_chatbot_repository
+        self.group_repository = group_repository
+        self.user_repository = user_repository
 
-    async def get_chatbot_by_id(self, chatbot_id: int) -> Chatbot:
+    async def get_chatbot_assigned_groups(self, chatbot_id: int):
+        """Get groups assigned to a chatbot."""
+        if not self.group_chatbot_repository:
+            return []
+        return await self.group_chatbot_repository.get_chatbot_groups(chatbot_id)
+
+    async def get_chatbot_assigned_users(self, chatbot_id: int) -> List[User]:
+        """Get users assigned to a chatbot."""
+        if not self.user_chatbot_repository or not self.user_repository:
+            return []
+
+        user_ids = await self.user_chatbot_repository.get_chatbot_users(chatbot_id)
+        users = []
+        for user_id in user_ids:
+            user = await self.user_repository.find_by_id(user_id)
+            if user:
+                users.append(user)
+        return users
+
+    async def get_chatbot_by_id(self, chatbot_id: int, include_assignments: bool = False) -> Chatbot:
         """
         Get chatbot by ID.
 
         Args:
             chatbot_id: Chatbot ID
+            include_assignments: Whether to load assigned groups and users
 
         Returns:
             Chatbot: Found chatbot
@@ -35,6 +70,12 @@ class ChatbotService:
         chatbot = await self.chatbot_repository.find_by_id(chatbot_id)
         if not chatbot:
             raise NotFoundError(f"Chatbot with ID {chatbot_id} not found")
+
+        # Load assignments if requested
+        if include_assignments:
+            chatbot.assigned_groups = await self.get_chatbot_assigned_groups(chatbot_id)
+            chatbot.assigned_users = await self.get_chatbot_assigned_users(chatbot_id)
+
         return chatbot
 
     async def list_chatbots(self, skip: int = 0, limit: int = 100) -> List[Chatbot]:
@@ -79,7 +120,10 @@ class ChatbotService:
         fallback_message: Optional[str] = None,
         max_conversation_length: int = 50,
         enable_function_calling: bool = True,
-        api_base_url: Optional[str] = None
+        api_base_url: Optional[str] = None,
+        group_ids: Optional[List[int]] = None,
+        user_ids: Optional[List[int]] = None,
+        assigned_by: Optional[int] = None
     ) -> Chatbot:
         """
         Create new chatbot.
@@ -100,6 +144,9 @@ class ChatbotService:
             max_conversation_length: Context window size
             enable_function_calling: Enable tool use
             api_base_url: Custom API endpoint
+            group_ids: Optional list of group IDs to assign chatbot to
+            user_ids: Optional list of user IDs to assign chatbot to
+            assigned_by: Admin ID who is making the assignments
 
         Returns:
             Chatbot: Created chatbot
@@ -109,6 +156,24 @@ class ChatbotService:
         """
         if provider not in ["openai", "anthropic", "google"]:
             raise ValidationError(f"Invalid provider: {provider}")
+
+        # Validate group IDs if provided
+        if group_ids:
+            if not assigned_by:
+                raise ValidationError("assigned_by is required when assigning to groups")
+            if self.group_repository:
+                for group_id in group_ids:
+                    if not await self.group_repository.exists(group_id):
+                        raise ValidationError(f"Group with ID {group_id} not found")
+
+        # Validate user IDs if provided
+        if user_ids:
+            if not assigned_by:
+                raise ValidationError("assigned_by is required when assigning to users")
+            if self.user_repository:
+                for user_id in user_ids:
+                    if not await self.user_repository.exists(user_id):
+                        raise ValidationError(f"User with ID {user_id} not found")
 
         chatbot = Chatbot(
             name=name,
@@ -129,7 +194,25 @@ class ChatbotService:
             status="active"
         )
 
-        return await self.chatbot_repository.create(chatbot)
+        created_chatbot = await self.chatbot_repository.create(chatbot)
+
+        # Assign to groups if provided
+        if group_ids and self.group_chatbot_repository:
+            await self.group_chatbot_repository.assign_chatbot_to_groups(
+                chatbot_id=created_chatbot.id,
+                group_ids=group_ids,
+                assigned_by=assigned_by  # type: ignore
+            )
+
+        # Assign to users if provided
+        if user_ids and self.user_chatbot_repository:
+            await self.user_chatbot_repository.assign_chatbot_to_users(
+                chatbot_id=created_chatbot.id,
+                user_ids=user_ids,
+                assigned_by=assigned_by  # type: ignore
+            )
+
+        return created_chatbot
 
     async def update_chatbot(
         self,
@@ -144,7 +227,10 @@ class ChatbotService:
         fallback_message: Optional[str] = None,
         max_conversation_length: Optional[int] = None,
         enable_function_calling: Optional[bool] = None,
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        group_ids: Optional[List[int]] = None,
+        user_ids: Optional[List[int]] = None,
+        assigned_by: Optional[int] = None
     ) -> Chatbot:
         """
         Update chatbot configuration.
@@ -162,6 +248,9 @@ class ChatbotService:
             max_conversation_length: New context window (optional)
             enable_function_calling: Enable/disable tools (optional)
             status: New status (optional)
+            group_ids: New list of group IDs (replaces existing, optional)
+            user_ids: New list of user IDs (replaces existing, optional)
+            assigned_by: Admin ID who is making the assignments
 
         Returns:
             Chatbot: Updated chatbot
@@ -196,7 +285,45 @@ class ChatbotService:
                 raise ValidationError(f"Invalid status: {status}")
             chatbot.status = status
 
-        return await self.chatbot_repository.update(chatbot)
+        updated_chatbot = await self.chatbot_repository.update(chatbot)
+
+        # Update group assignments if provided
+        if group_ids is not None:
+            if not assigned_by:
+                raise ValidationError("assigned_by is required when updating group assignments")
+
+            # Validate group IDs
+            if self.group_repository:
+                for group_id in group_ids:
+                    if not await self.group_repository.exists(group_id):
+                        raise ValidationError(f"Group with ID {group_id} not found")
+
+            if self.group_chatbot_repository:
+                await self.group_chatbot_repository.assign_chatbot_to_groups(
+                    chatbot_id=chatbot_id,
+                    group_ids=group_ids,
+                    assigned_by=assigned_by
+                )
+
+        # Update user assignments if provided
+        if user_ids is not None:
+            if not assigned_by:
+                raise ValidationError("assigned_by is required when updating user assignments")
+
+            # Validate user IDs
+            if self.user_repository:
+                for user_id in user_ids:
+                    if not await self.user_repository.exists(user_id):
+                        raise ValidationError(f"User with ID {user_id} not found")
+
+            if self.user_chatbot_repository:
+                await self.user_chatbot_repository.assign_chatbot_to_users(
+                    chatbot_id=chatbot_id,
+                    user_ids=user_ids,
+                    assigned_by=assigned_by
+                )
+
+        return updated_chatbot
 
     async def delete_chatbot(self, chatbot_id: int) -> bool:
         """

@@ -9,6 +9,7 @@ email-validator==2.1.0
 sqlalchemy[asyncio]==2.0.23
 asyncpg==0.29.0
 alembic==1.13.0
+psycopg2-binary==2.9.9  # Required for Alembic migrations
 
 # AWS
 # Note: aioboto3 manages boto3/botocore versions, so we let it handle the dependencies

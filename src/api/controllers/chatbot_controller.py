@@ -98,7 +98,7 @@ async def update_chatbot(
     Returns:
         ChatbotResponse: Updated chatbot data
     """
-    return await use_case.execute(chatbot_id, chatbot_data)
+    return await use_case.execute(chatbot_id, chatbot_data, current_user.id)
 
 
 async def delete_chatbot(

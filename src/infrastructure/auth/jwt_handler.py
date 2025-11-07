@@ -24,7 +24,11 @@ class JWTHandler:
         self.algorithm = settings.JWT_ALGORITHM
         self.access_token_expire_minutes = settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
         self.refresh_token_expire_days = settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS
-        self.pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+        self.pwd_context = CryptContext(
+            schemes=["bcrypt"],
+            deprecated="auto",
+            bcrypt__truncate_error=True
+        )
 
     def hash_password(self, password: str) -> str:
         """

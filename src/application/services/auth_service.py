@@ -5,14 +5,11 @@ Handles user authentication and token management.
 """
 
 from typing import Optional
-from passlib.context import CryptContext
+import bcrypt
 from src.infrastructure.postgresql.user_repository_impl import UserRepositoryImpl
 from src.infrastructure.auth.jwt_handler import JWTHandler
 from src.infrastructure.postgresql.models import User
 from src.core.errors import AuthenticationError, ValidationError
-
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 class AuthService:
@@ -26,11 +23,17 @@ class AuthService:
 
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
         """Verify password against hash."""
-        return pwd_context.verify(plain_password, hashed_password)
+        return bcrypt.checkpw(
+            plain_password.encode('utf-8'),
+            hashed_password.encode('utf-8')
+        )
 
     def hash_password(self, password: str) -> str:
         """Hash password."""
-        return pwd_context.hash(password)
+        return bcrypt.hashpw(
+            password.encode('utf-8'),
+            bcrypt.gensalt()
+        ).decode('utf-8')
 
     async def authenticate_user(self, email: str, password: str) -> User:
         """

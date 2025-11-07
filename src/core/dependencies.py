@@ -12,7 +12,11 @@ from src.core.config import settings
 
 # Repositories
 from src.infrastructure.postgresql.user_repository_impl import UserRepositoryImpl
+from src.infrastructure.postgresql.group_repository_impl import GroupRepositoryImpl
+from src.infrastructure.postgresql.user_group_repository_impl import UserGroupRepositoryImpl
 from src.infrastructure.postgresql.chatbot_repository_impl import ChatbotRepositoryImpl
+from src.infrastructure.postgresql.group_chatbot_repository_impl import GroupChatbotRepositoryImpl
+from src.infrastructure.postgresql.user_chatbot_repository_impl import UserChatbotRepositoryImpl
 from src.infrastructure.postgresql.conversation_repository_impl import (
     ConversationRepositoryImpl,
     MessageRepositoryImpl
@@ -21,6 +25,7 @@ from src.infrastructure.postgresql.conversation_repository_impl import (
 # Services
 from src.application.services.auth_service import AuthService
 from src.application.services.user_service import UserService
+from src.application.services.group_service import GroupService
 from src.application.services.chatbot_service import ChatbotService
 from src.application.services.conversation_service import ConversationService
 
@@ -33,6 +38,13 @@ from src.usecases.user_use_cases import (
     CreateUserUseCase,
     UpdateUserUseCase,
     DeleteUserUseCase
+)
+from src.usecases.group_use_cases import (
+    ListGroupsUseCase,
+    GetGroupUseCase,
+    CreateGroupUseCase,
+    UpdateGroupUseCase,
+    DeleteGroupUseCase
 )
 from src.usecases.chatbot_use_cases import (
     ListChatbotsUseCase,
@@ -53,12 +65,7 @@ from src.usecases.conversation_use_cases import (
 # Infrastructure dependencies
 def get_jwt_handler() -> JWTHandler:
     """Get JWT handler instance."""
-    return JWTHandler(
-        secret_key=settings.JWT_SECRET_KEY,
-        algorithm=settings.JWT_ALGORITHM,
-        access_token_expire_minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES,
-        refresh_token_expire_minutes=settings.JWT_REFRESH_TOKEN_EXPIRE_MINUTES
-    )
+    return JWTHandler()
 
 
 # Repository dependencies
@@ -90,6 +97,34 @@ def get_message_repository(
     return MessageRepositoryImpl(session)
 
 
+def get_group_repository(
+    session: AsyncSession = Depends(get_db_session)
+) -> GroupRepositoryImpl:
+    """Get group repository instance."""
+    return GroupRepositoryImpl(session)
+
+
+def get_user_group_repository(
+    session: AsyncSession = Depends(get_db_session)
+) -> UserGroupRepositoryImpl:
+    """Get user-group repository instance."""
+    return UserGroupRepositoryImpl(session)
+
+
+def get_group_chatbot_repository(
+    session: AsyncSession = Depends(get_db_session)
+) -> GroupChatbotRepositoryImpl:
+    """Get group-chatbot repository instance."""
+    return GroupChatbotRepositoryImpl(session)
+
+
+def get_user_chatbot_repository(
+    session: AsyncSession = Depends(get_db_session)
+) -> UserChatbotRepositoryImpl:
+    """Get user-chatbot repository instance."""
+    return UserChatbotRepositoryImpl(session)
+
+
 # Service dependencies
 def get_auth_service(
     user_repository: UserRepositoryImpl = Depends(get_user_repository),
@@ -100,17 +135,29 @@ def get_auth_service(
 
 
 def get_user_service(
-    user_repository: UserRepositoryImpl = Depends(get_user_repository)
+    user_repository: UserRepositoryImpl = Depends(get_user_repository),
+    user_group_repository: UserGroupRepositoryImpl = Depends(get_user_group_repository),
+    group_repository: GroupRepositoryImpl = Depends(get_group_repository)
 ) -> UserService:
     """Get user service instance."""
-    return UserService(user_repository)
+    return UserService(user_repository, user_group_repository, group_repository)
 
 
 def get_chatbot_service(
-    chatbot_repository: ChatbotRepositoryImpl = Depends(get_chatbot_repository)
+    chatbot_repository: ChatbotRepositoryImpl = Depends(get_chatbot_repository),
+    group_chatbot_repository: GroupChatbotRepositoryImpl = Depends(get_group_chatbot_repository),
+    user_chatbot_repository: UserChatbotRepositoryImpl = Depends(get_user_chatbot_repository),
+    group_repository: GroupRepositoryImpl = Depends(get_group_repository),
+    user_repository: UserRepositoryImpl = Depends(get_user_repository)
 ) -> ChatbotService:
     """Get chatbot service instance."""
-    return ChatbotService(chatbot_repository)
+    return ChatbotService(
+        chatbot_repository,
+        group_chatbot_repository,
+        user_chatbot_repository,
+        group_repository,
+        user_repository
+    )
 
 
 def get_conversation_service(
@@ -119,6 +166,14 @@ def get_conversation_service(
 ) -> ConversationService:
     """Get conversation service instance."""
     return ConversationService(conversation_repository, message_repository)
+
+
+def get_group_service(
+    group_repository: GroupRepositoryImpl = Depends(get_group_repository),
+    user_group_repository: UserGroupRepositoryImpl = Depends(get_user_group_repository)
+) -> GroupService:
+    """Get group service instance."""
+    return GroupService(group_repository, user_group_repository)
 
 
 # Auth use cases
@@ -177,6 +232,42 @@ def get_delete_user_use_case(
 ) -> DeleteUserUseCase:
     """Get delete user use case instance."""
     return DeleteUserUseCase(user_service)
+
+
+# Group use cases
+def get_list_groups_use_case(
+    group_service: GroupService = Depends(get_group_service)
+) -> ListGroupsUseCase:
+    """Get list groups use case instance."""
+    return ListGroupsUseCase(group_service)
+
+
+def get_group_use_case(
+    group_service: GroupService = Depends(get_group_service)
+) -> GetGroupUseCase:
+    """Get group use case instance."""
+    return GetGroupUseCase(group_service)
+
+
+def get_create_group_use_case(
+    group_service: GroupService = Depends(get_group_service)
+) -> CreateGroupUseCase:
+    """Get create group use case instance."""
+    return CreateGroupUseCase(group_service)
+
+
+def get_update_group_use_case(
+    group_service: GroupService = Depends(get_group_service)
+) -> UpdateGroupUseCase:
+    """Get update group use case instance."""
+    return UpdateGroupUseCase(group_service)
+
+
+def get_delete_group_use_case(
+    group_service: GroupService = Depends(get_group_service)
+) -> DeleteGroupUseCase:
+    """Get delete group use case instance."""
+    return DeleteGroupUseCase(group_service)
 
 
 # Chatbot use cases

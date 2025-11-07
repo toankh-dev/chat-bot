@@ -123,8 +123,8 @@ class Chatbot(Base):
 
     # Relationships
     creator = relationship("User", back_populates="created_chatbots", foreign_keys=[created_by])
-    group_chatbots = relationship("GroupChatbot", back_populates="chatbot")
-    user_chatbots = relationship("UserChatbot", back_populates="chatbot")
+    group_chatbots = relationship("GroupChatbot", back_populates="chatbot", cascade="all, delete-orphan")
+    user_chatbots = relationship("UserChatbot", back_populates="chatbot", cascade="all, delete-orphan")
     chatbot_tools = relationship("ChatbotTool", back_populates="chatbot")
     conversations = relationship("Conversation", back_populates="chatbot")
 
@@ -139,7 +139,8 @@ class GroupChatbot(Base):
     chatbot_id = Column(Integer, ForeignKey("chatbots.id", ondelete="CASCADE"), primary_key=True)
     assigned_by = Column(
         Integer,
-        ForeignKey("users.id", ondelete="SET NULL"),
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
         comment="Admin who assigned this chatbot to the group"
     )
     assigned_at = Column(DateTime, default=func.now())
@@ -161,7 +162,8 @@ class UserChatbot(Base):
     chatbot_id = Column(Integer, ForeignKey("chatbots.id", ondelete="CASCADE"), primary_key=True)
     assigned_by = Column(
         Integer,
-        ForeignKey("users.id", ondelete="SET NULL"),
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
         comment="Admin who assigned this chatbot to the user"
     )
     assigned_at = Column(DateTime, default=func.now())

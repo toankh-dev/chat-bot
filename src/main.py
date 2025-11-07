@@ -180,11 +180,13 @@ async def shutdown_event():
 # Import and include routers
 from src.api.routers.auth_routes import router as auth_router
 from src.api.routers.user_routes import router as user_router
+from src.api.routers.group_routes import router as group_router
 from src.api.routers.chatbot_routes import router as chatbot_router
 from src.api.routers.conversation_routes import router as conversation_router
 
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(user_router, prefix="/api/v1/users", tags=["Users"])
+app.include_router(group_router, prefix="/api/v1/groups", tags=["Groups"])
 app.include_router(chatbot_router, prefix="/api/v1/chatbots", tags=["Chatbots"])
 app.include_router(conversation_router, prefix="/api/v1/conversations", tags=["Conversations"])
 
