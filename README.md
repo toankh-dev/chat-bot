@@ -182,132 +182,169 @@ This AI Backend System is a production-ready, scalable solution for building int
 chat-bot/
 ├── src/
 │   ├── api/                          # Presentation Layer
-│   │   ├── routers/
-│   │   │   ├── auth_routes.py
-│   │   │   ├── user_routes.py
-│   │   │   ├── role_routes.py
-│   │   │   ├── workspace_routes.py
-│   │   │   ├── chatbot_routes.py
-│   │   │   ├── conversation_routes.py
-│   │   │   └── feedback_routes.py
 │   │   ├── controllers/              # REST API endpoints
+│   │   │   ├── ai_controller.py      # Unified AI endpoints (RAG + LLM)
 │   │   │   ├── auth_controller.py    # Authentication endpoints
-│   │   │   ├── user_controller.py    # User management
-│   │   │   ├── workspace_controller.py
-│   │   │   ├── chatbot_controller.py
-│   │   │   ├── conversation_controller.py
-│   │   │   └── feedback_controller.py
+│   │   │   ├── chatbot_controller.py # Chatbot management
+│   │   │   ├── conversation_controller.py # Chat conversations
+│   │   │   ├── document_controller.py # Document upload/management
+│   │   │   └── user_controller.py    # User management
+│   │   ├── routers/                  # FastAPI route definitions
+│   │   │   ├── ai_routes.py          # AI API routes
+│   │   │   ├── auth_routes.py        # Authentication routes
+│   │   │   ├── chatbot_routes.py     # Chatbot routes
+│   │   │   ├── conversation_routes.py # Conversation routes
+│   │   │   ├── document_routes.py    # Document routes
+│   │   │   └── user_routes.py        # User routes
 │   │   └── middlewares/              # Route-level middleware
-│   │       ├── jwt_middleware.py     # JWT validation
-│   │       └── rbac_middleware.py    # Permission checks
+│   │       └── jwt_middleware.py     # JWT validation
 │   │
 │   ├── application/                  # Application Layer
-│   │   ├── services/                 # Business logic services
-│   │   │   ├── auth_service.py       # Authentication logic
-│   │   │   ├── user_service.py
-│   │   │   ├── workspace_service.py
-│   │   │   ├── chatbot_service.py
-│   │   │   ├── conversation_service.py
-│   │   │   └── feedback_service.py
-│   │   └── tool_registry/            # AI tool system
-│   │       ├── tool_manager.py       # Tool registration
-│   │       └── web_search_tool.py    # Example tool
+│   │   └── services/                 # Business logic services
+│   │       ├── auth_service.py       # Authentication logic
+│   │       ├── chatbot_service.py    # Chatbot business logic
+│   │       ├── conversation_service.py # Conversation management
+│   │       ├── document_upload_service.py # Document processing
+│   │       ├── rag_service.py        # RAG workflow logic
+│   │       ├── user_service.py       # User management logic
+│   │       └── vector_store_service.py # Vector store operations
 │   │
-│   ├── usecases/              
-│   │   ├── auth_use_cases.py
-│   │   ├── chatbot_use_cases.py
-│   │   ├── conversation_use_cases.py
-│   │   ├── user_use_cases.py
+│   ├── usecases/                     # Use Case Layer
+│   │   ├── auth_use_cases.py         # Authentication use cases
+│   │   ├── chatbot_use_cases.py      # Chatbot use cases
+│   │   ├── conversation_use_cases.py # Conversation use cases
+│   │   ├── document_use_cases.py     # Document use cases
+│   │   ├── rag_use_cases.py          # RAG use cases
+│   │   └── user_use_cases.py         # User use cases
 │   │
 │   ├── domain/                       # Domain Layer
 │   │   ├── entities/                 # Business entities
+│   │   │   ├── chatbot.py            # Chatbot domain model
+│   │   │   ├── conversation.py       # Conversation domain model
+│   │   │   ├── document.py           # Document domain model
+│   │   │   ├── embedding_index.py    # Embedding index model
+│   │   │   ├── feedback.py           # User feedback model
+│   │   │   ├── ingestion_job.py      # Data ingestion job model
+│   │   │   ├── message.py            # Chat message model
+│   │   │   ├── role.py               # User role model
 │   │   │   ├── user.py               # User domain model
-│   │   │   ├── role.py               # Role with permissions
-│   │   │   ├── workspace.py          # Workspace model
-│   │   │   ├── chatbot.py            # Chatbot configuration
-│   │   │   ├── message.py            # Chat message
-│   │   │   └── feedback.py           # User feedback
+│   │   │   └── workspace.py          # Workspace model
 │   │   └── value_objects/            # Immutable value objects
-│   │   │   ├── email.py              # Email with validation
-│   │   │   └── uuid_vo.py            # Type-safe UUIDs
-│   │   └── events/  
-│   ├── shared/
-│   │   ├── repositories/
-│   │   │   ├── user_repository.py
-│   │   │   ├── role_repository.py
-│   │   │   ├── workspace_repository.py
-│   │   │   ├── chatbot_repository.py
-│   │   │   ├── conversation_repository.py
-│   │   │   └── feedback_repository.py
+│   │       ├── email.py              # Email with validation
+│   │       └── uuid_vo.py            # Type-safe UUIDs
+│   │
+│   ├── shared/                       # Shared interfaces
+│   │   └── interfaces/               # Clean interface organization
+│   │       ├── repositories/         # Repository interfaces
+│   │       │   ├── base_repository.py # Base repository interface
+│   │       │   ├── chatbot_repository.py # Chatbot repository interface
+│   │       │   ├── conversation_repository.py # Conversation repository interface
+│   │       │   ├── document_repository.py # Document repository interface
+│   │       │   ├── embedding_index_repository.py # Embedding repository interface
+│   │       │   ├── feedback_repository.py # Feedback repository interface
+│   │       │   ├── ingestion_job_repository.py # Ingestion job repository interface
+│   │       │   ├── message_repository.py # Message repository interface
+│   │       │   ├── role_repository.py # Role repository interface
+│   │       │   ├── user_repository.py # User repository interface
+│   │       │   └── workspace_repository.py # Workspace repository interface
+│   │       ├── services/             # Service interfaces
+│   │       │   ├── ai_services/      # AI-related service interfaces
+│   │       │   │   ├── embedding_service.py # Embedding service interface
+│   │       │   │   ├── knowledge_base_service.py # Knowledge base service interface
+│   │       │   │   ├── rag_service.py # RAG service interface
+│   │       │   │   └── vector_store_service.py # Vector store service interface
+│   │       │   ├── storage/          # Storage service interfaces
+│   │       │   │   └── file_storage_service.py # File storage service interface
+│   │       │   └── upload/           # Upload service interfaces
+│   │       │       └── document_upload_service.py # Document upload service interface
+│   │       └── types/                # Type interfaces
 │   │
 │   ├── infrastructure/               # Infrastructure Layer
-│   │   ├── postgresql/               # PostgreSQL clients
-│   │   │   ├── pg_client.py          # SQLAlchemy setup
-│   │   │   ├── user_repo.py          # User repository
-│   │   │   ├── workspace_repo.py
-│   │   │   └── chatbot_repo.py
-│   │   ├── bedrock/                  # AWS Bedrock
-│   │   │   └── bedrock_client.py     # AI model client
-│   │   ├── tools/                    # External tool clients
-│   │   │   ├── web_search_client.py
-│   │   │   └── backlog_client.py
-│   │   └── auth/                     # Auth infrastructure
-│   │       └── jwt_handler.py        # JWT operations
+│   │   ├── ai_services/              # AI service implementations
+│   │   │   ├── factory.py            # AI service factory
+│   │   │   ├── providers/            # AI provider implementations
+│   │   │   │   ├── base.py           # Base AI provider
+│   │   │   │   ├── bedrock.py        # AWS Bedrock provider
+│   │   │   │   └── gemini.py         # Google Gemini provider
+│   │   │   └── services/             # AI service implementations
+│   │   │       ├── embedding.py     # Embedding service implementation
+│   │   │       └── knowledge_base.py # Knowledge base service implementation
+│   │   ├── auth/                     # Authentication infrastructure
+│   │   │   └── jwt_handler.py        # JWT operations
+│   │   ├── postgresql/               # PostgreSQL infrastructure
+│   │   │   ├── connection/           # Database connection management
+│   │   │   │   ├── base.py           # SQLAlchemy base configuration
+│   │   │   │   └── database.py       # Database session management
+│   │   │   ├── models/               # SQLAlchemy models
+│   │   │   │   ├── chatbot_model.py  # Chatbot database model
+│   │   │   │   ├── conversation_model.py # Conversation database model
+│   │   │   │   ├── document_model.py # Document database model
+│   │   │   │   └── user_model.py     # User database model
+│   │   │   ├── repositories/         # Repository implementations
+│   │   │   │   ├── chatbot_repository.py # Chatbot repository implementation
+│   │   │   │   ├── conversation_repository.py # Conversation repository implementation
+│   │   │   │   ├── document_repository.py # Document repository implementation
+│   │   │   │   ├── embedding_index_repository.py # Embedding repository implementation
+│   │   │   │   ├── ingestion_job_repository.py # Ingestion job repository implementation
+│   │   │   │   └── user_repository.py # User repository implementation
+│   │   │   └── mappers/              # Domain ↔ Model mappers
+│   │   │       ├── chatbot_mapper.py # Chatbot entity mapper
+│   │   │       ├── conversation_mapper.py # Conversation entity mapper
+│   │   │       ├── document_mapper.py # Document entity mapper
+│   │   │       ├── message_mapper.py # Message entity mapper
+│   │   │       └── user_mapper.py    # User entity mapper
+│   │   ├── s3/                       # S3 storage infrastructure
+│   │   │   ├── file_storage_service_impl.py # File storage implementation
+│   │   │   └── s3_file_storage_service.py # S3 storage service
+│   │   └── vector_store/             # Vector store infrastructure
+│   │       ├── base.py               # Base vector store
+│   │       ├── factory.py            # Vector store factory
+│   │       └── providers/            # Vector store providers
+│   │           ├── chromadb.py       # ChromaDB provider
+│   │           └── s3_vector.py      # S3 vector provider
+│   │
+│   ├── schemas/                      # Pydantic DTOs
+│   │   ├── auth_schema.py            # Auth request/response schemas
+│   │   ├── chatbot_schema.py         # Chatbot DTOs
+│   │   ├── conversation_schema.py    # Conversation DTOs
+│   │   ├── document_schema.py        # Document DTOs
+│   │   ├── rag_schema.py             # RAG DTOs
+│   │   └── user_schema.py            # User DTOs
 │   │
 │   ├── core/                         # Core utilities
 │   │   ├── config.py                 # Configuration management
-│   │   ├── logger.py                 # Structured logging
+│   │   ├── dependencies.py           # Dependency injection
 │   │   ├── errors.py                 # Exception hierarchy
-│   │   ├── di.py                     # Dependency injection
-│   │   └── middlewares/              # App-level middleware
-│   │       ├── request_id.py         # Request tracking
-│   │       └── error_handler.py      # Global error handling
-│   │
-│   ├── schemas/                      # Pydantic DTOs
-│   │   ├── auth_schema.py            # Auth request/response
-│   │   ├── user_schema.py            # User DTOs
-│   │   ├── chatbot_schema.py         # Chatbot DTOs
-│   │   └── conversation_schema.py    # Message DTOs
-│   │
-│   ├── helpers/                      # Helper utilities
-│   │   ├── constants.py              # Application constants
-│   │   ├── time_utils.py             # Date/time helpers
-│   │   ├── prompt_helper.py          # Prompt templates
-│   │   └── chunk_utils.py            # Text chunking
-│   │
-│   ├── ingestion/                    # Data ingestion system
-│   │   ├── providers/                # External data sources
-│   │   │   ├── slack_provider.py     # Slack ingestion
-│   │   │   ├── gitlab_provider.py    # GitLab ingestion
-│   │   │   └── backlog_provider.py   # Backlog ingestion
-│   │   ├── orchestrator.py           # Ingestion coordinator
-│   │   └── embedding_worker.py       # Vector embedding
+│   │   └── logger.py                 # Structured logging
 │   │
 │   ├── lambda_handlers/              # Lambda entry points
 │   │   ├── api_handler.py            # REST API handler
-│   │   ├── ws_handler.py             # WebSocket handler
-│   │   ├── ingest_orchestrator_handler.py
-│   │   └── embed_worker_handler.py
+│   │   └── ws_handler.py             # WebSocket handler
+│   │
+│   ├── helpers/                      # Helper utilities
+│   ├── ingestion/                    # Data ingestion system
 │   │
 │   └── main.py                       # FastAPI app initialization
 │
-├── docker/
-│   └── Dockerfile                    # Lambda container image
+├── alembic/                          # Database migrations
+│   ├── versions/                     # Migration files
+│   ├── env.py                        # Alembic environment
+│   └── script.py.mako               # Migration template
 │
-├── infra/                            # Infrastructure as Code
-│   └── terraform/                    # Terraform modules
-│       ├── modules/
-│       │   ├── lambda/
-│       │   ├── api_gateway/
-│       │   ├── rds/
-│       │   └── vpc/
-│       └── main.tf
+├── docker/                           # Docker configuration
+│   ├── Dockerfile                    # Application container
+│   └── init.sql                      # Database initialization
+│
+├── terraform/                        # Infrastructure as Code
 │
 ├── tests/                            # Test suite
 │   ├── unit/                         # Unit tests
-│   ├── integration/                  # Integration tests
-│   └── e2e/                          # End-to-end tests
+│   ├── conftest.py                   # Test configuration
+│   └── test_*.py                     # Test files
 │
+├── scripts/                          # Utility scripts
+├── docker-compose.yml                # Local development setup
+├── Dockerfile.dev                    # Development container
 ├── .env.example                      # Environment template
 ├── requirements.txt                  # Python dependencies
 ├── pyproject.toml                    # Project metadata
