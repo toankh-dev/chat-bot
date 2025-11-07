@@ -6,6 +6,7 @@ from infrastructure.postgresql.connection.base import Base
 class Conversation(Base):
     """Chat conversation session."""
     __tablename__ = "conversations"
+    __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     chatbot_id = Column(Integer, ForeignKey("chatbots.id", ondelete="SET NULL"), nullable=False)
@@ -24,6 +25,7 @@ class Message(Base):
     __tablename__ = "messages"
     __table_args__ = (
         Index("idx_messages_conversation_id", "conversation_id"),
+        {'extend_existing': True}
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)

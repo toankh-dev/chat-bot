@@ -9,7 +9,8 @@ from .connection import db_manager, get_db_session, Base
 
 # Models
 from .models import (
-    User, Chatbot, Conversation, Message, DocumentModel
+    User, Chatbot, Conversation, Message, DocumentModel, 
+    Group, UserGroup, UserChatbot, GroupChatbot
 )
 
 # Repositories  
@@ -20,7 +21,11 @@ from .repositories import (
     MessageRepositoryImpl,
     DocumentRepositoryImpl,
     EmbeddingIndexRepositoryImpl,
-    IngestionJobRepositoryImpl
+    GroupRepositoryImpl,
+    GroupChatbotRepositoryImpl,
+    IngestionJobRepositoryImpl,
+    UserGroupRepositoryImpl,
+    UserChatbotRepositoryImpl
 )
 
 # Mappers
@@ -29,7 +34,11 @@ from .mappers import (
     ChatbotMapper, 
     ConversationMapper,
     MessageMapper,
-    DocumentMapper
+    DocumentMapper,
+    GroupMapper,
+    UserGroupMapper,
+    UserChatbotMapper,
+    GroupChatbotMapper
 )
 
 __all__ = [
@@ -38,14 +47,18 @@ __all__ = [
     
     # Models
     "User", "Chatbot", "Conversation", "Message", "DocumentModel",
+    "Group", "UserGroup", "UserChatbot", "GroupChatbot",
     
     # Repositories
     "UserRepositoryImpl", "ChatbotRepositoryImpl", 
     "ConversationRepositoryImpl", "MessageRepositoryImpl",
     "DocumentRepositoryImpl", "EmbeddingIndexRepositoryImpl", 
-    "IngestionJobRepositoryImpl",
+    "GroupRepositoryImpl", "GroupChatbotRepositoryImpl",
+    "IngestionJobRepositoryImpl", "UserGroupRepositoryImpl",
+    "UserChatbotRepositoryImpl",
     
     # Mappers
     "UserMapper", "ChatbotMapper", "ConversationMapper",
-    "MessageMapper", "DocumentMapper"
+    "MessageMapper", "DocumentMapper", "GroupMapper",
+    "UserGroupMapper", "UserChatbotMapper", "GroupChatbotMapper"
 ]

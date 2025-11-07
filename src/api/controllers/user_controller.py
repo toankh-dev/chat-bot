@@ -94,9 +94,9 @@ async def create_user(
         use_case: Create user use case instance
 
     Returns:
-        UserResponse: Created user data
+        UserResponse: Created user data with group assignments
     """
-    return await use_case.execute(user_data)
+    return await use_case.execute(user_data, admin_id=current_user.id)
 
 
 async def update_user(
@@ -115,9 +115,9 @@ async def update_user(
         use_case: Update user use case instance
 
     Returns:
-        UserResponse: Updated user data
+        UserResponse: Updated user data with group assignments
     """
-    return await use_case.execute(user_id, user_data)
+    return await use_case.execute(user_id, user_data, admin_id=current_user.id)
 
 
 async def delete_user(
