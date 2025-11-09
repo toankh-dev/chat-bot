@@ -9,7 +9,7 @@ from ..value_objects.uuid_vo import UUID
 
 
 @dataclass
-class Role:
+class RoleEntity:
     """
     Role entity for role-based access control.
 
@@ -78,3 +78,6 @@ class Role:
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat()
         }
+
+# Backwards compatibility alias
+Role = RoleEntity

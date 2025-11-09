@@ -7,6 +7,7 @@ ORM model for user_groups junction table.
 from datetime import datetime
 from sqlalchemy import Column, Integer, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
+from .user_model import UserModel
 from infrastructure.postgresql.connection.base import Base
 
 
@@ -27,9 +28,9 @@ class UserGroup(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     
     # Relationships
-    user = relationship("User", foreign_keys=[user_id])
+    user = relationship(UserModel, foreign_keys=[user_id])
     group = relationship("Group", back_populates="user_groups")
-    added_by_user = relationship("User", foreign_keys=[added_by])
+    added_by_user = relationship(UserModel, foreign_keys=[added_by])
     
     def __repr__(self):
         return f"<UserGroup(user_id={self.user_id}, group_id={self.group_id})>"

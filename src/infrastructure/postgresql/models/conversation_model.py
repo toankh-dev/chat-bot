@@ -1,9 +1,10 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Index
 from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 from infrastructure.postgresql.connection.base import Base
 
 
-class Conversation(Base):
+class ConversationModel(Base):
     """Chat conversation session."""
     __tablename__ = "conversations"
     __table_args__ = {'extend_existing': True}
@@ -19,18 +20,29 @@ class Conversation(Base):
     last_accessed_at = Column(DateTime, default=func.now())
     message_count = Column(Integer, default=0)
 
+    # Relationships
+    chatbot = relationship("ChatbotModel", back_populates="conversations")
+    user = relationship("UserModel", back_populates="conversations")
+    messages = relationship("MessageModel", back_populates="conversation", cascade="all, delete-orphan")
 
-class Message(Base):
-    """Individual message in a conversation."""
+class MessageModel(Base):
+    """Chat message within a conversation."""
     __tablename__ = "messages"
-    __table_args__ = (
-        Index("idx_messages_conversation_id", "conversation_id"),
-        {'extend_existing': True}
-    )
+    __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     conversation_id = Column(Integer, ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False)
-    role = Column(String(20), nullable=False)
+    role = Column(String(20), nullable=False)  # user, assistant, system
     content = Column(Text, nullable=False)
-    message_metadata = Column(Text)  # JSON as text for compatibility
+    tokens = Column(Integer)
     created_at = Column(DateTime, default=func.now())
+
+    # Create an index on (conversation_id, created_at)
+    __table_args__ = (
+        Index('idx_messages_conversation_created', 'conversation_id', 'created_at'),
+        {'extend_existing': True}
+    )
+
+    # Relationships
+    conversation = relationship("ConversationModel", back_populates="messages")
+

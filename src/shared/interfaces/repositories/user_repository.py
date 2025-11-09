@@ -7,10 +7,10 @@ Defines the contract for user data access operations.
 from abc import abstractmethod
 from typing import Optional, List
 from shared.interfaces.repositories.base_repository import BaseRepository
-from domain.entities.user import User
+from domain.entities.user import UserEntity
 
 
-class UserRepository(BaseRepository[User, str]):
+class UserRepository(BaseRepository[UserEntity, str]):
     """
     User repository interface.
 
@@ -18,7 +18,7 @@ class UserRepository(BaseRepository[User, str]):
     """
 
     @abstractmethod
-    async def find_by_email(self, email: str) -> Optional[User]:
+    async def find_by_email(self, email: str) -> Optional[UserEntity]:
         """
         Find user by email address.
 
@@ -31,7 +31,7 @@ class UserRepository(BaseRepository[User, str]):
         pass
 
     @abstractmethod
-    async def find_active_users(self, skip: int = 0, limit: int = 100) -> List[User]:
+    async def find_active_users(self, skip: int = 0, limit: int = 100) -> List[UserEntity]:
         """
         Find all active users with pagination.
 

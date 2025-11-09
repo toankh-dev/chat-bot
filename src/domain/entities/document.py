@@ -2,9 +2,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 from domain.value_objects.uuid_vo import UUID
-
 @dataclass
-class Document:
+class DocumentEntity:
     id: UUID
     user_id: str
     filename: str
@@ -36,3 +35,7 @@ class Document:
         self.upload_status = "failed"
         self.processing_status = "error"
         self.error_message = error
+
+        
+# Backwards compatibility alias
+Document = DocumentEntity

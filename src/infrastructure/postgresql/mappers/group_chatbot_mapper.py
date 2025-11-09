@@ -5,8 +5,8 @@ Handles conversion between domain GroupChatbot entity and SQLAlchemy GroupChatbo
 """
 
 from typing import Optional
-from domain.entities.group_chatbot import GroupChatbot as GroupChatbotEntity
-from infrastructure.postgresql.models.group_chatbot import GroupChatbot as GroupChatbotModel
+from domain.entities.group_chatbot import GroupChatbotEntity
+from infrastructure.postgresql.models.group_chatbot import GroupChatbotModel
 
 
 class GroupChatbotMapper:

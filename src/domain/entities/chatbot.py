@@ -9,7 +9,7 @@ from ..value_objects.uuid_vo import UUID
 
 
 @dataclass
-class Chatbot:
+class ChatbotEntity:
     """
     Chatbot entity representing an AI assistant configuration.
 
@@ -107,3 +107,7 @@ class Chatbot:
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat()
         }
+
+
+# Backwards compatibility alias
+Chatbot = ChatbotEntity

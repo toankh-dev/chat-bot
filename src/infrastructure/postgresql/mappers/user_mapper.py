@@ -5,10 +5,10 @@ Handles conversion between domain User entity and SQLAlchemy User model.
 """
 
 from typing import Optional
-from domain.entities.user import User as UserEntity
+from domain.entities.user import UserEntity
 from domain.value_objects.email import Email
 from domain.value_objects.uuid_vo import UUID as UUIDValue
-from infrastructure.postgresql.models import User as UserModel
+from infrastructure.postgresql.models import UserModel
 
 
 class UserMapper:

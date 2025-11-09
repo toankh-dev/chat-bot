@@ -8,10 +8,14 @@ from typing import List, Optional
 from domain.entities.message import Message
 
 @dataclass
-class Conversation:
+class ConversationEntity:
     id: str
     user_id: str
     chatbot_id: str
     messages: List[Message] = field(default_factory=list)
     created_at: Optional[str] = None  # Use datetime in real implementation
     updated_at: Optional[str] = None
+
+
+# Backwards compatibility alias
+Conversation = ConversationEntity

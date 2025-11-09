@@ -7,8 +7,8 @@ Implements user-group relationship management using SQLAlchemy.
 from typing import List
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
-from domain.entities.user_group import UserGroup as UserGroupEntity
-from domain.entities.group import Group as GroupEntity
+from domain.entities.user_group import UserGroupEntity
+from domain.entities.group import GroupEntity
 from infrastructure.postgresql.models.user_group_model import UserGroup as UserGroupModel
 from infrastructure.postgresql.models.group_model import Group as GroupModel
 from infrastructure.postgresql.mappers.user_group_mapper import UserGroupMapper

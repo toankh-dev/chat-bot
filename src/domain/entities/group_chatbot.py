@@ -10,7 +10,7 @@ from typing import Optional
 
 
 @dataclass
-class GroupChatbot:
+class GroupChatbotEntity:
     """
     GroupChatbot entity representing the relationship between a group and a chatbot.
     
@@ -42,22 +42,25 @@ class GroupChatbot:
     
     def __str__(self) -> str:
         """String representation of the group-chatbot relationship."""
-        return f"GroupChatbot(group_id={self.group_id}, chatbot_id={self.chatbot_id})"
+        return f"GroupChatbotEntity(group_id={self.group_id}, chatbot_id={self.chatbot_id})"
     
     def __repr__(self) -> str:
         """Detailed string representation of the group-chatbot relationship."""
         return (
-            f"GroupChatbot(id={self.id}, group_id={self.group_id}, "
+            f"GroupChatbotEntity(id={self.id}, group_id={self.group_id}, "
             f"chatbot_id={self.chatbot_id}, created_at={self.created_at}, "
             f"assigned_by={self.assigned_by})"
         )
     
     def __eq__(self, other) -> bool:
         """Check equality based on group_id and chatbot_id."""
-        if not isinstance(other, GroupChatbot):
+        if not isinstance(other, (GroupChatbot, GroupChatbotEntity)):
             return False
         return self.group_id == other.group_id and self.chatbot_id == other.chatbot_id
     
     def __hash__(self) -> int:
         """Hash based on group_id and chatbot_id for use in sets/dicts."""
         return hash((self.group_id, self.chatbot_id))
+
+# Backwards compatibility alias
+GroupChatbot = GroupChatbotEntity

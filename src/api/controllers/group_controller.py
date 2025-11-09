@@ -2,17 +2,17 @@
 
 from fastapi import Depends
 from typing import List
-from src.schemas.group_schema import GroupResponse, GroupCreate, GroupUpdate
-from src.infrastructure.postgresql.models import User
-from src.api.middlewares.jwt_middleware import get_current_user, require_admin
-from src.usecases.group_use_cases import (
+from schemas.group_schema import GroupResponse, GroupCreate, GroupUpdate
+from domain.entities.user import UserEntity
+from api.middlewares.jwt_middleware import get_current_user, require_admin
+from usecases.group_use_cases import (
     ListGroupsUseCase,
     GetGroupUseCase,
     CreateGroupUseCase,
     UpdateGroupUseCase,
     DeleteGroupUseCase
 )
-from src.core.dependencies import (
+from core.dependencies import (
     get_list_groups_use_case,
     get_group_use_case,
     get_create_group_use_case,
@@ -24,7 +24,7 @@ from src.core.dependencies import (
 async def list_groups(
     skip: int = 0,
     limit: int = 100,
-    current_user: User = Depends(get_current_user),
+    current_user: UserEntity = Depends(get_current_user),
     use_case: ListGroupsUseCase = Depends(get_list_groups_use_case)
 ) -> List[GroupResponse]:
     """
@@ -44,7 +44,7 @@ async def list_groups(
 
 async def get_group(
     group_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: UserEntity = Depends(get_current_user),
     use_case: GetGroupUseCase = Depends(get_group_use_case)
 ) -> GroupResponse:
     """
@@ -63,7 +63,7 @@ async def get_group(
 
 async def create_group(
     group_data: GroupCreate,
-    current_user: User = Depends(require_admin),
+    current_user: UserEntity = Depends(require_admin),
     use_case: CreateGroupUseCase = Depends(get_create_group_use_case)
 ) -> GroupResponse:
     """
@@ -83,7 +83,7 @@ async def create_group(
 async def update_group(
     group_id: int,
     group_data: GroupUpdate,
-    current_user: User = Depends(require_admin),
+    current_user: UserEntity = Depends(require_admin),
     use_case: UpdateGroupUseCase = Depends(get_update_group_use_case)
 ) -> GroupResponse:
     """
@@ -103,7 +103,7 @@ async def update_group(
 
 async def delete_group(
     group_id: int,
-    current_user: User = Depends(require_admin),
+    current_user: UserEntity = Depends(require_admin),
     use_case: DeleteGroupUseCase = Depends(get_delete_group_use_case)
 ) -> None:
     """

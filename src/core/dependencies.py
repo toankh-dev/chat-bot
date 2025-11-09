@@ -13,8 +13,8 @@ from core.config import settings
 # Vector Store & RAG dependencies
 from infrastructure.vector_store.factory import VectorStoreFactory
 from application.services.vector_store_service import VectorStoreService
-from infrastructure.ai_services.providers.bedrock import BedrockClient
-from infrastructure.ai_services.services.knowledge_base import BedrockKnowledgeBaseService
+from infrastructure.ai_services.bedrock_client import BedrockClient, get_bedrock_client as _create_bedrock_client
+from infrastructure.ai_services.knowledge_base.bedrock_kb import BedrockKnowledgeBaseService
 from application.services.rag_service import RAGService
 from shared.interfaces.services.ai_services.knowledge_base_service import IKnowledgeBaseService
 from shared.interfaces.services.ai_services.rag_service import IRAGService
@@ -56,7 +56,7 @@ from application.services.conversation_service import ConversationService
 
 # Use Cases
 from usecases.auth_use_cases import LoginUseCase, RegisterUseCase
-from src.usecases.user_use_cases import (
+from usecases.user_use_cases import (
     GetCurrentUserUseCase,
     ListUsersUseCase,
     GetUserUseCase,
@@ -375,8 +375,8 @@ def get_delete_conversation_use_case(
 
 
 def get_bedrock_client() -> BedrockClient:
-    """Get Bedrock client instance."""
-    return BedrockClient()
+    """Get Bedrock client instance (delegates to central client factory)."""
+    return _create_bedrock_client()
 
 def get_vector_store_service() -> VectorStoreService:
     """Get vector store service instance."""
@@ -394,7 +394,7 @@ def get_rag_service(
     knowledge_base_service: IKnowledgeBaseService = Depends(get_knowledge_base_service)
 ) -> IRAGService:
     """Get RAG service instance with direct LLM provider."""
-    from infrastructure.ai_services.factory import LLMFactory
+    from infrastructure.ai_services.llm.factory import LLMFactory
     llm_provider = LLMFactory.create()  # Direct provider
     return RAGService(knowledge_base_service, llm_provider)
 
@@ -444,6 +444,89 @@ def get_list_user_documents_use_case(
     """Get list user documents use case."""
     from usecases.document_use_cases import ListUserDocumentsUseCase
     return ListUserDocumentsUseCase(document_repository)
+
+
+# Document processing services
+from application.services.document_processing_service import DocumentProcessingService
+from application.services.document_chunking_service import DocumentChunkingService
+from application.services.kb_sync_service import KBSyncService
+from shared.interfaces.services.ai_services.embedding_service import IEmbeddingService
+from infrastructure.ai_services.embeddings.factory import EmbeddingFactory
+
+
+def get_document_processing_service() -> DocumentProcessingService:
+    """Get document processing service instance."""
+    return DocumentProcessingService()
+
+
+def get_document_chunking_service() -> DocumentChunkingService:
+    """Get document chunking service instance."""
+    chunk_size = int(getattr(settings, "CHUNK_SIZE", 1000))
+    chunk_overlap = int(getattr(settings, "CHUNK_OVERLAP", 200))
+    max_chunks = int(getattr(settings, "MAX_CHUNKS_PER_DOCUMENT", 500))
+    return DocumentChunkingService(chunk_size, chunk_overlap, max_chunks)
+
+
+def get_embedding_service() -> IEmbeddingService:
+    """
+    Get embedding service instance based on LLM_PROVIDER.
+
+    Automatically selects the correct embedding service (Bedrock or Gemini)
+    based on the LLM_PROVIDER setting.
+    """
+    provider = getattr(settings, "LLM_PROVIDER", "gemini")
+    model_id = getattr(settings, "EMBEDDING_MODEL", None)
+
+    # Use factory to create the appropriate embedding service
+    return EmbeddingFactory.create(model_id=model_id)
+
+
+def get_kb_sync_service(
+    embedding_service: IEmbeddingService = Depends(get_embedding_service),
+    vector_store_service: VectorStoreService = Depends(get_vector_store_service),
+    document_repository: DocumentRepository = Depends(get_document_repository)
+) -> KBSyncService:
+    """Get KB sync service instance."""
+    return KBSyncService(
+        embedding_service,
+        vector_store_service.vector_store,
+        document_repository
+    )
+
+
+def get_process_document_use_case(
+    document_repository: DocumentRepository = Depends(get_document_repository),
+    file_storage_service: IFileStorageService = Depends(get_file_storage_service),
+    processing_service: DocumentProcessingService = Depends(get_document_processing_service),
+    chunking_service: DocumentChunkingService = Depends(get_document_chunking_service),
+    kb_sync_service: KBSyncService = Depends(get_kb_sync_service)
+):
+    """Get process document use case."""
+    from usecases.document_use_cases import ProcessDocumentUseCase
+
+    # Get KB configuration from settings
+    kb_config = {
+        "healthcare": getattr(settings, "KNOWLEDGE_BASE_HEALTHCARE_ID", "kb_healthcare"),
+        "finance": getattr(settings, "KNOWLEDGE_BASE_FINANCE_ID", "kb_finance"),
+        "general": getattr(settings, "KNOWLEDGE_BASE_GENERAL_ID", "kb_general")
+    }
+
+    return ProcessDocumentUseCase(
+        document_repository,
+        file_storage_service,
+        processing_service,
+        chunking_service,
+        kb_sync_service,
+        kb_config
+    )
+
+
+def get_document_status_use_case(
+    document_repository: DocumentRepository = Depends(get_document_repository)
+):
+    """Get document status use case."""
+    from usecases.document_use_cases import GetDocumentStatusUseCase
+    return GetDocumentStatusUseCase(document_repository)
 
 # RAG Use Cases
 def get_chat_with_documents_use_case(

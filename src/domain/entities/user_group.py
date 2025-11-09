@@ -10,7 +10,7 @@ from typing import Optional
 
 
 @dataclass
-class UserGroup:
+class UserGroupEntity:
     """
     UserGroup entity representing the relationship between a user and a group.
     
@@ -54,10 +54,14 @@ class UserGroup:
     
     def __eq__(self, other) -> bool:
         """Check equality based on user_id and group_id."""
-        if not isinstance(other, UserGroup):
+        if not isinstance(other, UserGroupEntity):
             return False
         return self.user_id == other.user_id and self.group_id == other.group_id
     
     def __hash__(self) -> int:
         """Hash based on user_id and group_id for use in sets/dicts."""
         return hash((self.user_id, self.group_id))
+
+
+# Backwards compatibility alias
+UserGroup = UserGroupEntity

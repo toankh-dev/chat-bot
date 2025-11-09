@@ -7,7 +7,7 @@ Implements group data access using SQLAlchemy.
 from typing import Optional, List
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from domain.entities.group import Group as GroupEntity
+from domain.entities.group import GroupEntity
 from infrastructure.postgresql.models.group_model import Group as GroupModel
 from infrastructure.postgresql.mappers.group_mapper import GroupMapper
 from shared.interfaces.repositories.group_repository import GroupRepository

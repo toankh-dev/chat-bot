@@ -5,7 +5,7 @@ Handles conversion between domain Group entity and SQLAlchemy Group model.
 """
 
 from typing import Optional
-from domain.entities.group import Group as GroupEntity
+from domain.entities.group import GroupEntity
 from infrastructure.postgresql.models.group_model import Group as GroupModel
 
 

@@ -5,7 +5,7 @@ Handles conversion between domain UserGroup entity and SQLAlchemy UserGroup mode
 """
 
 from typing import Optional
-from domain.entities.user_group import UserGroup as UserGroupEntity
+from domain.entities.user_group import UserGroupEntity
 from infrastructure.postgresql.models.user_group_model import UserGroup as UserGroupModel
 
 

@@ -10,10 +10,10 @@ from shared.interfaces.repositories.base_repository import BaseRepository
 
 
 # Import the Conversation domain entity
-from domain.entities.conversation import Conversation
+from domain.entities.conversation import ConversationEntity
 
 
-class ConversationRepository(BaseRepository[Conversation, str]):
+class ConversationRepository(BaseRepository[ConversationEntity, str]):
     """
     Conversation repository interface.
 
@@ -22,7 +22,7 @@ class ConversationRepository(BaseRepository[Conversation, str]):
     """
 
     @abstractmethod
-    async def find_by_id_with_messages(self, id: str) -> Optional[Conversation]:
+    async def find_by_id_with_messages(self, id: str) -> Optional[ConversationEntity]:
         """
         Find conversation by ID with all messages eagerly loaded.
 
@@ -35,7 +35,7 @@ class ConversationRepository(BaseRepository[Conversation, str]):
         pass
 
     @abstractmethod
-    async def find_by_user(self, user_id: str, skip: int = 0, limit: int = 100) -> List[Conversation]:
+    async def find_by_user(self, user_id: str, skip: int = 0, limit: int = 100) -> List[ConversationEntity]:
         """
         Find conversations by user ID with pagination.
 
@@ -50,7 +50,7 @@ class ConversationRepository(BaseRepository[Conversation, str]):
         pass
 
     @abstractmethod
-    async def find_by_user_and_chatbot(self, user_id: str, chatbot_id: str) -> List[Conversation]:
+    async def find_by_user_and_chatbot(self, user_id: str, chatbot_id: str) -> List[ConversationEntity]:
         """
         Find conversations between a specific user and chatbot.
 

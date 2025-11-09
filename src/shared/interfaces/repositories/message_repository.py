@@ -7,10 +7,10 @@ Defines the contract for message data access operations.
 from abc import abstractmethod
 from typing import List
 from shared.interfaces.repositories.base_repository import BaseRepository
-from domain.entities.message import Message
+from domain.entities.message import MessageEntity
 
 
-class MessageRepository(BaseRepository[Message, str]):
+class MessageRepository(BaseRepository[MessageEntity, str]):
     """
     Message repository interface.
 
@@ -18,7 +18,7 @@ class MessageRepository(BaseRepository[Message, str]):
     """
 
     @abstractmethod
-    async def find_by_conversation(self, conversation_id: str) -> List[Message]:
+    async def find_by_conversation(self, conversation_id: str) -> List[MessageEntity]:
         """
         Find all messages in a conversation ordered by creation time.
 

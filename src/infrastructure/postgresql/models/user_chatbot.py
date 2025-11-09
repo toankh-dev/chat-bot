@@ -4,12 +4,13 @@ User SQLAlchemy ORM model.
 
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
+from .user_model import UserModel
 from sqlalchemy.sql import func
 
 from infrastructure.postgresql.connection.base import Base
 
 
-class UserChatbot(Base):
+class UserChatbotModel(Base):
     """
     Direct assignment of chatbots to individual users.
     """
@@ -28,8 +29,8 @@ class UserChatbot(Base):
     status = Column(String(20), default="active", comment="active, revoked")
 
     # Relationships
-    user = relationship("User", back_populates="user_chatbots", foreign_keys=[user_id])
-    chatbot = relationship("Chatbot", back_populates="user_chatbots")
-    assigned_by_user = relationship("User", foreign_keys=[assigned_by])
+    user = relationship(UserModel, back_populates="user_chatbots", foreign_keys=[user_id])
+    chatbot = relationship("ChatbotModel", back_populates="user_chatbots")
+    assigned_by_user = relationship(UserModel, foreign_keys=[assigned_by])
 
 

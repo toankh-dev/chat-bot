@@ -9,7 +9,7 @@ from ..value_objects.uuid_vo import UUID
 
 
 @dataclass
-class Workspace:
+class WorkspaceEntity:
     """
     Workspace entity for organizing chatbots and users.
 
@@ -68,3 +68,7 @@ class Workspace:
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat()
         }
+
+
+# Backwards compatibility alias
+Workspace = WorkspaceEntity

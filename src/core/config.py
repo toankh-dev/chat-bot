@@ -76,6 +76,19 @@ class Settings(BaseSettings):
     GEMINI_MODEL: str = "gemini-1.5-pro"
     GEMINI_MODEL_NAME: str = "gemini-1.5-pro"  # Alias for compatibility
 
+    # Embeddings
+    EMBEDDING_PROVIDER: str = "bedrock"  # bedrock or gemini
+    EMBEDDING_MODEL: Optional[str] = None  # Auto-detected from provider (e.g., models/embedding-001 for Gemini)
+    EMBEDDING_DIMENSION: int = 768  # Default for Gemini, 1536 for Bedrock Titan
+
+    # Vector Store
+    VECTOR_STORE_PROVIDER: str = "chromadb"  # chromadb or opensearch
+
+    # ChromaDB Configuration
+    CHROMADB_HOST: str = "localhost"
+    CHROMADB_PORT: int = 8000
+    CHROMADB_PERSIST_DIRECTORY: str = "./chroma_db"
+
     # S3
     S3_BUCKET_NAME: str = "ai-backend-documents"
     S3_BUCKET_EMBEDDINGS: str = "ai-backend-embeddings"

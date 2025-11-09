@@ -8,8 +8,8 @@ from typing import List, Optional
 from decimal import Decimal
 from core.errors import NotFoundError, ValidationError
 from domain.value_objects.uuid_vo import UUID
-from domain.entities.user import User
-from domain.entities.chatbot import Chatbot
+from domain.entities.user import UserEntity
+from domain.entities.chatbot import ChatbotEntity
 from shared.interfaces.repositories.chatbot_repository import ChatbotRepository
 from shared.interfaces.repositories.group_chatbot_repository import GroupChatbotRepository
 from shared.interfaces.repositories.group_repository import GroupRepository
@@ -44,7 +44,7 @@ class ChatbotService:
             return []
         return await self.group_chatbot_repository.get_chatbot_groups(chatbot_id)
 
-    async def get_chatbot_assigned_users(self, chatbot_id: int) -> List[User]:
+    async def get_chatbot_assigned_users(self, chatbot_id: int) -> List[UserEntity]:
         """Get users assigned to a chatbot."""
         if not self.user_chatbot_repository or not self.user_repository:
             return []
@@ -57,7 +57,7 @@ class ChatbotService:
                 users.append(user)
         return users
 
-    async def get_chatbot_by_id(self, chatbot_id: int, include_assignments: bool = False) -> Chatbot:
+    async def get_chatbot_by_id(self, chatbot_id: int, include_assignments: bool = False) -> ChatbotEntity:
         """
         Get chatbot by ID.
 
@@ -82,7 +82,7 @@ class ChatbotService:
 
         return chatbot
 
-    async def list_chatbots(self, skip: int = 0, limit: int = 100) -> List[Chatbot]:
+    async def list_chatbots(self, skip: int = 0, limit: int = 100) -> List[ChatbotEntity]:
         """
         List all chatbots with pagination.
 
@@ -95,7 +95,7 @@ class ChatbotService:
         """
         return await self.chatbot_repository.find_all(skip=skip, limit=limit)
 
-    async def list_active_chatbots(self, skip: int = 0, limit: int = 100) -> List[Chatbot]:
+    async def list_active_chatbots(self, skip: int = 0, limit: int = 100) -> List[ChatbotEntity]:
         """
         List active chatbots with pagination.
 
@@ -121,7 +121,7 @@ class ChatbotService:
         group_ids: Optional[List[int]] = None,
         user_ids: Optional[List[int]] = None,
         assigned_by: Optional[int] = None
-    ) -> Chatbot:
+    ) -> ChatbotEntity:
         """
         Create new chatbot.
 
@@ -163,7 +163,7 @@ class ChatbotService:
                     if not await self.user_repository.exists(user_id):
                         raise ValidationError(f"User with ID {user_id} not found")
 
-        chatbot = Chatbot(
+        chatbot = ChatbotEntity(
             id=UUID.generate(),
             workspace_id=workspace_id,
             name=name,
@@ -211,7 +211,7 @@ class ChatbotService:
         group_ids: Optional[List[int]] = None,
         user_ids: Optional[List[int]] = None,
         assigned_by: Optional[int] = None
-    ) -> Chatbot:
+    ) -> ChatbotEntity:
         """
         Update chatbot configuration.
 

@@ -1,10 +1,23 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
-from schemas.document_schema import DocumentUploadResponse, DocumentListResponse, DocumentStatusResponse
-from usecases.document_use_cases import UploadDocumentUseCase, DeleteDocumentUseCase, ListUserDocumentsUseCase
+from schemas.document_schema import (
+    DocumentUploadResponse,
+    DocumentListResponse,
+    DocumentStatusResponse,
+    DocumentProcessingResponse
+)
+from usecases.document_use_cases import (
+    UploadDocumentUseCase,
+    DeleteDocumentUseCase,
+    ListUserDocumentsUseCase,
+    ProcessDocumentUseCase,
+    GetDocumentStatusUseCase
+)
 from core.dependencies import (
     get_upload_document_use_case,
-    get_delete_document_use_case, 
-    get_list_user_documents_use_case
+    get_delete_document_use_case,
+    get_list_user_documents_use_case,
+    get_process_document_use_case,
+    get_document_status_use_case
 )
 from core.logger import logger
 
@@ -89,3 +102,47 @@ class DocumentController:
             except Exception as e:
                 logger.error(f"List documents error: {e}")
                 raise HTTPException(status_code=500, detail="Failed to list documents")
+
+        @self.router.post("/{document_id}/process", response_model=DocumentProcessingResponse)
+        async def process_document(
+            document_id: str,
+            user_id: str = Form(...),  # In real app, get from JWT token
+            use_case: ProcessDocumentUseCase = Depends(get_process_document_use_case)
+        ):
+            """
+            Process an uploaded document: extract text, chunk, and add to Knowledge Base.
+            """
+            try:
+                result = await use_case.execute(document_id, user_id)
+                return DocumentProcessingResponse(**result)
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e))
+            except Exception as e:
+                logger.error(f"Process document error: {e}")
+                raise HTTPException(status_code=500, detail="Processing failed")
+
+        @self.router.get("/{document_id}/status", response_model=DocumentStatusResponse)
+        async def get_document_status(
+            document_id: str,
+            user_id: str,  # In real app, get from JWT token
+            use_case: GetDocumentStatusUseCase = Depends(get_document_status_use_case)
+        ):
+            """
+            Get processing status of a document.
+            """
+            try:
+                document = await use_case.execute(document_id, user_id)
+                return DocumentStatusResponse(
+                    id=str(document.id.value),
+                    upload_status=document.upload_status,
+                    processing_status=document.processing_status,
+                    knowledge_base_id=document.knowledge_base_id,
+                    error_message=document.error_message,
+                    uploaded_at=document.uploaded_at,
+                    processed_at=document.processed_at
+                )
+            except ValueError as e:
+                raise HTTPException(status_code=404, detail=str(e))
+            except Exception as e:
+                logger.error(f"Get status error: {e}")
+                raise HTTPException(status_code=500, detail="Failed to get status")

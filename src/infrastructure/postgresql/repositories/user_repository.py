@@ -7,8 +7,8 @@ Implements user data access using SQLAlchemy.
 from typing import Optional, List
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from domain.entities.user import User as UserEntity
-from infrastructure.postgresql.models import User as UserModel
+from domain.entities.user import UserEntity
+from infrastructure.postgresql.models import UserModel
 from infrastructure.postgresql.mappers.user_mapper import UserMapper
 from shared.interfaces.repositories.user_repository import UserRepository
 

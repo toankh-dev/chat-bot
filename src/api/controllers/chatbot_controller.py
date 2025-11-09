@@ -3,7 +3,7 @@
 from fastapi import Depends, status
 from typing import List
 from schemas.chatbot_schema import ChatbotResponse, ChatbotCreate, ChatbotUpdate
-from infrastructure.postgresql.models import User
+from domain.entities.user import UserEntity
 from api.middlewares.jwt_middleware import get_current_user, require_admin
 from usecases.chatbot_use_cases import (
     ListChatbotsUseCase,
@@ -24,7 +24,7 @@ from core.dependencies import (
 async def list_chatbots(
     skip: int = 0,
     limit: int = 100,
-    current_user: User = Depends(get_current_user),
+    current_user: UserEntity = Depends(get_current_user),
     use_case: ListChatbotsUseCase = Depends(get_list_chatbots_use_case)
 ) -> List[ChatbotResponse]:
     """
@@ -44,7 +44,7 @@ async def list_chatbots(
 
 async def get_chatbot(
     chatbot_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: UserEntity = Depends(get_current_user),
     use_case: GetChatbotUseCase = Depends(get_chatbot_use_case)
 ) -> ChatbotResponse:
     """
@@ -63,7 +63,7 @@ async def get_chatbot(
 
 async def create_chatbot(
     chatbot_data: ChatbotCreate,
-    current_user: User = Depends(require_admin),
+    current_user: UserEntity = Depends(require_admin),
     use_case: CreateChatbotUseCase = Depends(get_create_chatbot_use_case)
 ) -> ChatbotResponse:
     """
@@ -83,7 +83,7 @@ async def create_chatbot(
 async def update_chatbot(
     chatbot_id: int,
     chatbot_data: ChatbotUpdate,
-    current_user: User = Depends(require_admin),
+    current_user: UserEntity = Depends(require_admin),
     use_case: UpdateChatbotUseCase = Depends(get_update_chatbot_use_case)
 ) -> ChatbotResponse:
     """
@@ -103,7 +103,7 @@ async def update_chatbot(
 
 async def delete_chatbot(
     chatbot_id: int,
-    current_user: User = Depends(require_admin),
+    current_user: UserEntity = Depends(require_admin),
     use_case: DeleteChatbotUseCase = Depends(get_delete_chatbot_use_case)
 ) -> None:
     """

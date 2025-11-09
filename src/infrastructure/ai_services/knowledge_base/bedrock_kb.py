@@ -3,7 +3,7 @@ AWS Bedrock Knowledge Base Service.
 """
 
 from shared.interfaces.services.ai_services.knowledge_base_service import IKnowledgeBaseService
-from infrastructure.ai_services.providers.bedrock import BedrockClient
+from infrastructure.ai_services.bedrock_client import BedrockClient
 from typing import List, Dict, Any
 
 class BedrockKnowledgeBaseService(IKnowledgeBaseService):

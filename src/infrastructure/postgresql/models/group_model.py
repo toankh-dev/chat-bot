@@ -28,7 +28,7 @@ class Group(Base):
     
     # Relationships
     user_groups = relationship("UserGroup", back_populates="group", cascade="all, delete-orphan")
-    group_chatbots = relationship("GroupChatbot", back_populates="group", cascade="all, delete-orphan")
+    group_chatbots = relationship("GroupChatbotModel", back_populates="group", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Group(id={self.id}, name='{self.name}')>"

@@ -7,9 +7,9 @@ Implements group-chatbot relationship management using SQLAlchemy.
 from typing import List
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
-from domain.entities.group_chatbot import GroupChatbot as GroupChatbotEntity
-from domain.entities.group import Group as GroupEntity
-from infrastructure.postgresql.models.group_chatbot import GroupChatbot as GroupChatbotModel
+from domain.entities.group_chatbot import GroupChatbotEntity
+from domain.entities.group import GroupEntity
+from infrastructure.postgresql.models.group_chatbot import GroupChatbotModel
 from infrastructure.postgresql.models.group_model import Group as GroupModel
 from infrastructure.postgresql.mappers.group_chatbot_mapper import GroupChatbotMapper
 from infrastructure.postgresql.mappers.group_mapper import GroupMapper

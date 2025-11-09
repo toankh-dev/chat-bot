@@ -6,7 +6,7 @@ Defines the contract for user-group relationship operations.
 
 from abc import ABC, abstractmethod
 from typing import List
-from domain.entities.group import Group
+from domain.entities.group import GroupEntity
 
 class UserGroupRepository(ABC):
     """
@@ -40,7 +40,7 @@ class UserGroupRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_user_groups(self, user_id: int) -> List[Group]:
+    async def get_user_groups(self, user_id: int) -> List[GroupEntity]:
         """
         Get all groups a user belongs to.
 

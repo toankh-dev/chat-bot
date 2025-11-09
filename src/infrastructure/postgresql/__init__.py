@@ -9,8 +9,8 @@ from .connection import db_manager, get_db_session, Base
 
 # Models
 from .models import (
-    User, Chatbot, Conversation, Message, DocumentModel, 
-    Group, UserGroup, UserChatbot, GroupChatbot
+    UserModel, ChatbotModel, ConversationModel, MessageModel, DocumentModel, 
+    Group, UserGroup, UserChatbotModel, GroupChatbotModel
 )
 
 # Repositories  
@@ -46,8 +46,8 @@ __all__ = [
     "db_manager", "get_db_session", "Base",
     
     # Models
-    "User", "Chatbot", "Conversation", "Message", "DocumentModel",
-    "Group", "UserGroup", "UserChatbot", "GroupChatbot",
+    "UserModel", "ChatbotModel", "ConversationModel", "MessageModel", "DocumentModel",
+    "Group", "UserGroup", "UserChatbotModel", "GroupChatbotModel",
     
     # Repositories
     "UserRepositoryImpl", "ChatbotRepositoryImpl", 

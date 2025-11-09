@@ -7,8 +7,8 @@ Implements chatbot data access using SQLAlchemy.
 from typing import Optional, List
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from domain.entities.chatbot import Chatbot as ChatbotEntity
-from infrastructure.postgresql.models import Chatbot as ChatbotModel
+from domain.entities.chatbot import ChatbotEntity
+from infrastructure.postgresql.models import ChatbotModel
 from infrastructure.postgresql.mappers.chatbot_mapper import ChatbotMapper
 from shared.interfaces.repositories.chatbot_repository import ChatbotRepository
 

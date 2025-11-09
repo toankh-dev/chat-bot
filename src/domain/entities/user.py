@@ -10,7 +10,7 @@ from ..value_objects.uuid_vo import UUID
 
 
 @dataclass
-class User:
+class UserEntity:
     """
     User entity representing a system user.
 
@@ -77,3 +77,7 @@ class User:
             "updated_at": self.updated_at.isoformat(),
             "last_login_at": self.last_login_at.isoformat() if self.last_login_at else None
         }
+ 
+
+# Backwards compatibility alias
+User = UserEntity

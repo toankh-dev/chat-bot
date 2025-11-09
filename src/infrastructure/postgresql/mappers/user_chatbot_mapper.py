@@ -5,8 +5,8 @@ Handles conversion between domain UserChatbot entity and SQLAlchemy UserChatbot 
 """
 
 from typing import Optional
-from domain.entities.user_chatbot import UserChatbot as UserChatbotEntity
-from infrastructure.postgresql.models.user_chatbot import UserChatbot as UserChatbotModel
+from domain.entities.user_chatbot import UserChatbotEntity
+from infrastructure.postgresql.models.user_chatbot import UserChatbotModel
 
 
 class UserChatbotMapper:

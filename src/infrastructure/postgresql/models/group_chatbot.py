@@ -4,12 +4,13 @@ User SQLAlchemy ORM model.
 
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
+from .user_model import UserModel
 from sqlalchemy.sql import func
 
 from infrastructure.postgresql.connection.base import Base
 
 
-class GroupChatbot(Base):
+class GroupChatbotModel(Base):
     """
     Assignment of chatbots to groups.
     """
@@ -30,5 +31,5 @@ class GroupChatbot(Base):
 
     # Relationships
     group = relationship("Group", back_populates="group_chatbots")
-    chatbot = relationship("Chatbot", back_populates="group_chatbots")
-    assigned_by_user = relationship("User", foreign_keys=[assigned_by])
+    chatbot = relationship("ChatbotModel", back_populates="group_chatbots")
+    assigned_by_user = relationship(UserModel, foreign_keys=[assigned_by])

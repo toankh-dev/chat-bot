@@ -6,7 +6,7 @@ Defines the contract for group-chatbot relationship operations.
 
 from abc import ABC, abstractmethod
 from typing import List
-from domain.entities.group import Group
+from domain.entities.group import GroupEntity
 
 class GroupChatbotRepository(ABC):
     """
@@ -40,7 +40,7 @@ class GroupChatbotRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_chatbot_groups(self, chatbot_id: int) -> List[Group]:
+    async def get_chatbot_groups(self, chatbot_id: int) -> List[GroupEntity]:
         """
         Get all groups a chatbot is assigned to.
 

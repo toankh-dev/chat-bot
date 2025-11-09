@@ -8,7 +8,7 @@ from sqlalchemy.sql import func
 from infrastructure.postgresql.connection.base import Base
 
 
-class Chatbot(Base):
+class ChatbotModel(Base):
     """
     Chatbot configuration model.
 
@@ -54,9 +54,9 @@ class Chatbot(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
     # Relationships
-    creator = relationship("User", back_populates="created_chatbots", foreign_keys=[created_by])
-    group_chatbots = relationship("GroupChatbot", back_populates="chatbot", cascade="all, delete-orphan")
-    user_chatbots = relationship("UserChatbot", back_populates="chatbot", cascade="all, delete-orphan")
-    chatbot_tools = relationship("ChatbotTool", back_populates="chatbot")
-    conversations = relationship("Conversation", back_populates="chatbot")
+    creator = relationship("UserModel", back_populates="created_chatbots", foreign_keys=[created_by])
+    group_chatbots = relationship("GroupChatbotModel", back_populates="chatbot", cascade="all, delete-orphan")
+    user_chatbots = relationship("UserChatbotModel", back_populates="chatbot", cascade="all, delete-orphan")
+    chatbot_tools = relationship("ChatbotToolModel", back_populates="chatbot")
+    conversations = relationship("ConversationModel", back_populates="chatbot")
 

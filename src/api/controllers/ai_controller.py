@@ -9,7 +9,7 @@ from core.dependencies import (
     get_rag_service
 )
 from shared.interfaces.services.ai_services.rag_service import IRAGService
-from infrastructure.ai_services.factory import LLMFactory
+from infrastructure.ai_services.llm.factory import LLMFactory
 from core.logger import logger
 from pydantic import BaseModel
 

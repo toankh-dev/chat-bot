@@ -10,7 +10,7 @@ from typing import Optional
 
 
 @dataclass
-class UserChatbot:
+class UserChatbotEntity:
     """
     UserChatbot entity representing the relationship between a user and a chatbot.
     
@@ -54,10 +54,14 @@ class UserChatbot:
     
     def __eq__(self, other) -> bool:
         """Check equality based on user_id and chatbot_id."""
-        if not isinstance(other, UserChatbot):
+        if not isinstance(other, UserChatbotEntity):
             return False
         return self.user_id == other.user_id and self.chatbot_id == other.chatbot_id
     
     def __hash__(self) -> int:
         """Hash based on user_id and chatbot_id for use in sets/dicts."""
         return hash((self.user_id, self.chatbot_id))
+
+
+# Backwards compatibility alias
+UserChatbot = UserChatbotEntity

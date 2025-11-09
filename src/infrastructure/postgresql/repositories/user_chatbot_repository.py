@@ -7,8 +7,8 @@ Implements user-chatbot relationship management using SQLAlchemy.
 from typing import List
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
-from domain.entities.user_chatbot import UserChatbot as UserChatbotEntity
-from infrastructure.postgresql.models.user_chatbot import UserChatbot as UserChatbotModel
+from domain.entities.user_chatbot import UserChatbotEntity
+from infrastructure.postgresql.models.user_chatbot import UserChatbotModel
 from infrastructure.postgresql.mappers.user_chatbot_mapper import UserChatbotMapper
 from shared.interfaces.repositories.user_chatbot_repository import UserChatbotRepository
 

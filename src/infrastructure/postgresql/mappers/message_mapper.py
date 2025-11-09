@@ -3,8 +3,8 @@ Message entity mapper.
 """
 
 from typing import Optional
-from domain.entities.message import Message as MessageEntity
-from infrastructure.postgresql.models.conversation_model import Message as MessageModel
+from domain.entities.message import MessageEntity
+from infrastructure.postgresql.models.conversation_model import MessageModel
 
 
 class MessageMapper:
