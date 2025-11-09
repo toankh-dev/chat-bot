@@ -194,6 +194,7 @@ from api.routers.chatbot_routes import router as chatbot_router
 from api.routers.conversation_routes import router as conversation_router
 from api.routers.document_routes import router as document_router
 from api.routers.ai_routes import create_ai_routes
+from api.controllers.gitlab_controller import router as gitlab_router
 
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(user_router, prefix="/api/v1/users", tags=["Users"])
@@ -202,6 +203,7 @@ app.include_router(chatbot_router, prefix="/api/v1/chatbots", tags=["Chatbots"])
 app.include_router(conversation_router, prefix="/api/v1/conversations", tags=["Conversations"])
 app.include_router(document_router, prefix="/api/v1", tags=["Documents"])
 app.include_router(create_ai_routes(), prefix="/api/v1", tags=["AI Services"])
+app.include_router(gitlab_router, tags=["GitLab Integration"])
 
 
 if __name__ == "__main__":

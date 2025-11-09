@@ -127,6 +127,8 @@ class Settings(BaseSettings):
 
     GITLAB_API_TOKEN: Optional[str] = None
     GITLAB_URL: str = "https://gitlab.com"
+    GITLAB_WEBHOOK_SECRET: Optional[str] = None
+    KNOWLEDGE_BASE_GITLAB_ID: str = "kb_gitlab"
 
     BACKLOG_API_KEY: Optional[str] = None
     BACKLOG_SPACE_KEY: Optional[str] = None
