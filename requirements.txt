@@ -1,7 +1,7 @@
 # Core Framework
-fastapi==0.104.1
+fastapi==0.111.0
 uvicorn[standard]==0.24.0
-pydantic==2.5.0
+pydantic==2.8.2
 pydantic-settings==2.1.0
 email-validator==2.1.0
 
@@ -22,7 +22,7 @@ google-generativeai==0.3.2
 # Authentication
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
-python-multipart==0.0.6
+python-multipart>=0.0.7
 
 # Logging
 python-json-logger==2.0.7
@@ -56,3 +56,9 @@ mangum==0.17.0
 
 # Monitoring (Optional)
 sentry-sdk==1.39.1
+
+#langchain and related dependencies
+langchain==0.2.14
+langchain-core==0.2.32
+langchain-community==0.2.11
+langchain-text-splitters==0.2.2

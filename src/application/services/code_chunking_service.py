@@ -1,66 +1,53 @@
-"""
-Code Chunking Service - Specialized chunking for source code files.
-"""
-
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 import os
 from pathlib import Path
-
+from langchain_text_splitters import RecursiveCharacterTextSplitter, Language
 
 @dataclass
 class CodeChunk:
-    """Represents a chunk of source code with metadata."""
     text: str
     chunk_index: int
     metadata: Dict[str, Any]
 
-
 class CodeChunkingService:
-    """Service for chunking source code files for embedding."""
+    """Service for chunking source code files for embedding, using LangChain splitter."""
 
     def __init__(self, max_file_size: int = 50000):
-        """
-        Initialize code chunking service.
-
-        Args:
-            max_file_size: Maximum file size in bytes (default 50KB)
-        """
         self.max_file_size = max_file_size
 
-        # Language extensions mapping
+        # Mapping từ extension → LangChain Language enum
         self.language_map = {
-            ".py": "python",
-            ".js": "javascript",
-            ".ts": "typescript",
-            ".tsx": "typescript",
-            ".jsx": "javascript",
-            ".java": "java",
-            ".go": "go",
-            ".rs": "rust",
-            ".cpp": "cpp",
-            ".c": "c",
-            ".h": "c",
-            ".hpp": "cpp",
-            ".rb": "ruby",
-            ".php": "php",
-            ".swift": "swift",
-            ".kt": "kotlin",
-            ".scala": "scala",
-            ".cs": "csharp",
-            ".sql": "sql",
-            ".sh": "bash",
-            ".yaml": "yaml",
-            ".yml": "yaml",
-            ".json": "json",
-            ".xml": "xml",
-            ".md": "markdown",
-            ".html": "html",
-            ".css": "css",
-            ".vue": "vue",
-            ".r": "r",
-            ".m": "matlab",
-            ".dart": "dart"
+            ".py": Language.PYTHON,
+            ".js": Language.JS,
+            ".ts": Language.TS,
+            ".tsx": Language.TS,
+            ".jsx": Language.JS,
+            ".java": Language.JAVA,
+            ".go": Language.GO,
+            ".rs": Language.RUST,
+            ".cpp": Language.CPP,
+            ".c": Language.CPP,
+            ".h": Language.CPP,
+            ".hpp": Language.CPP,
+            ".rb": Language.RUBY,
+            ".php": Language.PHP,
+            ".swift": Language.SWIFT,
+            ".kt": Language.KOTLIN,
+            ".scala": Language.SCALA,
+            ".cs": Language.CSHARP,
+            ".sql": Language.SQL,
+            ".sh": Language.BASH,
+            ".yaml": Language.YAML,
+            ".yml": Language.YAML,
+            ".json": Language.JSON,
+            ".xml": Language.HTML,
+            ".html": Language.HTML,
+            ".css": Language.HTML,
+            ".vue": Language.HTML,
+            ".r": Language.PYTHON,
+            ".m": Language.MARKDOWN,
+            ".dart": Language.PYTHON,
         }
 
     def chunk_by_file(
@@ -69,35 +56,15 @@ class CodeChunkingService:
         content: str,
         metadata: Dict[str, Any]
     ) -> List[CodeChunk]:
-        """
-        Chunk code by file (1 file = 1 chunk for MVP).
-
-        Strategy: Keep entire file as one chunk if under size limit.
-        This preserves full context for smaller files.
-
-        Args:
-            file_path: Path to the file within repository
-            content: File content as string
-            metadata: Additional metadata (repo, commit, branch, etc.)
-
-        Returns:
-            List of CodeChunk objects
-
-        Raises:
-            ValueError: If content is empty or too large
-        """
         if not content or not content.strip():
             raise ValueError(f"Cannot chunk empty file: {file_path}")
 
-        # Check file size
-        content_size = len(content.encode('utf-8'))
-
+        content_size = len(content.encode("utf-8"))
         if content_size > self.max_file_size:
-            # File too large, split by logical boundaries
             print(f"⚠️ File {file_path} is {content_size} bytes, splitting...")
             return self._chunk_large_file(file_path, content, metadata)
 
-        # Single chunk for the entire file
+        # File nhỏ → 1 chunk duy nhất
         chunk_metadata = self._create_chunk_metadata(
             file_path=file_path,
             content=content,
@@ -105,12 +72,7 @@ class CodeChunkingService:
             chunk_index=0,
             total_chunks=1
         )
-
-        return [CodeChunk(
-            text=content,
-            chunk_index=0,
-            metadata=chunk_metadata
-        )]
+        return [CodeChunk(text=content, chunk_index=0, metadata=chunk_metadata)]
 
     def _chunk_large_file(
         self,
@@ -119,59 +81,33 @@ class CodeChunkingService:
         metadata: Dict[str, Any]
     ) -> List[CodeChunk]:
         """
-        Split large files into multiple chunks.
-
-        Strategy: Split by logical boundaries (classes, functions, sections).
-        For Phase 2, we'll implement AST-based splitting.
-        For now, use simple line-based splitting.
-
-        Args:
-            file_path: Path to the file
-            content: File content
-            metadata: Base metadata
-
-        Returns:
-            List of CodeChunk objects
+        Split large code file using LangChain RecursiveCharacterTextSplitter.from_language.
+        Giữ nguyên ý tưởng 'split theo function/class' nếu có hỗ trợ.
         """
-        lines = content.split('\n')
-        total_lines = len(lines)
+        language = self._detect_langchain_language(file_path)
 
-        # Target ~30KB per chunk
-        lines_per_chunk = min(500, total_lines)
+        splitter = RecursiveCharacterTextSplitter.from_language(
+            language=language,
+            chunk_size=1000,
+            chunk_overlap=200
+        )
 
-        chunks = []
-        chunk_index = 0
+        chunks_text = splitter.split_text(content)
+        chunks: List[CodeChunk] = []
 
-        for start_line in range(0, total_lines, lines_per_chunk):
-            end_line = min(start_line + lines_per_chunk, total_lines)
-
-            chunk_lines = lines[start_line:end_line]
-            chunk_content = '\n'.join(chunk_lines)
-
-            if not chunk_content.strip():
-                continue
-
+        for i, chunk_text in enumerate(chunks_text):
             chunk_metadata = self._create_chunk_metadata(
                 file_path=file_path,
-                content=chunk_content,
+                content=chunk_text,
                 base_metadata=metadata,
-                chunk_index=chunk_index,
-                total_chunks=-1,  # Will update after
-                line_start=start_line + 1,
-                line_end=end_line
+                chunk_index=i,
+                total_chunks=len(chunks_text)
             )
-
             chunks.append(CodeChunk(
-                text=chunk_content,
-                chunk_index=chunk_index,
+                text=chunk_text,
+                chunk_index=i,
                 metadata=chunk_metadata
             ))
-
-            chunk_index += 1
-
-        # Update total_chunks in metadata
-        for chunk in chunks:
-            chunk.metadata["total_chunks"] = len(chunks)
 
         return chunks
 
@@ -185,29 +121,8 @@ class CodeChunkingService:
         line_start: Optional[int] = None,
         line_end: Optional[int] = None
     ) -> Dict[str, Any]:
-        """
-        Create comprehensive metadata for a code chunk.
-
-        Args:
-            file_path: Path to the file
-            content: Chunk content
-            base_metadata: Base metadata from repository
-            chunk_index: Index of this chunk
-            total_chunks: Total number of chunks for this file
-            line_start: Starting line number (optional)
-            line_end: Ending line number (optional)
-
-        Returns:
-            Dictionary with chunk metadata
-        """
-        # Detect language
-        language = self.detect_language(file_path)
-
-        # Get file statistics
-        lines = content.split('\n')
-        line_count = len(lines)
-
-        # Extract filename and directory
+        language_name = self.detect_language(file_path)
+        lines = content.split("\n")
         filename = os.path.basename(file_path)
         directory = os.path.dirname(file_path)
 
@@ -217,15 +132,14 @@ class CodeChunkingService:
             "file_path": file_path,
             "filename": filename,
             "directory": directory,
-            "language": language,
+            "language": language_name,
             "chunk_index": chunk_index,
             "total_chunks": total_chunks,
-            "line_count": line_count,
+            "line_count": len(lines),
             "char_count": len(content),
-            "byte_size": len(content.encode('utf-8'))
+            "byte_size": len(content.encode("utf-8")),
         }
 
-        # Add line numbers if provided
         if line_start is not None:
             metadata["line_start"] = line_start
         if line_end is not None:
@@ -234,33 +148,14 @@ class CodeChunkingService:
         return metadata
 
     def detect_language(self, file_path: str) -> str:
-        """
-        Detect programming language from file extension.
-
-        Args:
-            file_path: Path to the file
-
-        Returns:
-            Language name (e.g., 'python', 'javascript')
-        """
         ext = Path(file_path).suffix.lower()
-        return self.language_map.get(ext, "unknown")
+        return self.language_map.get(ext, Language.PYTHON).value if hasattr(Language, "value") else str(self.language_map.get(ext, "unknown"))
 
-    def filter_files(
-        self,
-        file_list: List[str],
-        exclude_patterns: Optional[List[str]] = None
-    ) -> List[str]:
-        """
-        Filter source code files.
+    def _detect_langchain_language(self, file_path: str):
+        ext = Path(file_path).suffix.lower()
+        return self.language_map.get(ext, Language.PYTHON)
 
-        Args:
-            file_list: List of file paths
-            exclude_patterns: Patterns to exclude
-
-        Returns:
-            Filtered list of files
-        """
+    def filter_files(self, file_list: List[str], exclude_patterns: Optional[List[str]] = None) -> List[str]:
         if exclude_patterns is None:
             exclude_patterns = [
                 "node_modules/",
@@ -280,45 +175,21 @@ class CodeChunkingService:
                 ".min.css",
                 ".lock",
                 "package-lock.json",
-                "yarn.lock"
+                "yarn.lock",
             ]
-
         filtered = []
-
         for file_path in file_list:
-            # Check if it's a code file
             ext = Path(file_path).suffix.lower()
             if ext not in self.language_map:
                 continue
-
-            # Check exclude patterns
-            should_exclude = any(pattern in file_path for pattern in exclude_patterns)
-
-            if not should_exclude:
-                filtered.append(file_path)
-
+            if any(p in file_path for p in exclude_patterns):
+                continue
+            filtered.append(file_path)
         return filtered
 
-    def extract_metadata(
-        self,
-        file_path: str,
-        content: str,
-        repo_info: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """
-        Extract metadata from source code file.
-
-        Args:
-            file_path: Path to the file
-            content: File content
-            repo_info: Repository information
-
-        Returns:
-            Dictionary with extracted metadata
-        """
+    def extract_metadata(self, file_path: str, content: str, repo_info: Dict[str, Any]) -> Dict[str, Any]:
         language = self.detect_language(file_path)
-        lines = content.split('\n')
-
+        lines = content.split("\n")
         return {
             "repo": repo_info.get("repo"),
             "repo_url": repo_info.get("repo_url"),
@@ -331,29 +202,19 @@ class CodeChunkingService:
             "filename": os.path.basename(file_path),
             "language": language,
             "line_count": len(lines),
-            "size_bytes": len(content.encode('utf-8'))
+            "size_bytes": len(content.encode("utf-8")),
         }
 
     def get_chunking_statistics(self, chunks: List[CodeChunk]) -> Dict[str, Any]:
-        """
-        Get statistics about code chunks.
-
-        Args:
-            chunks: List of code chunks
-
-        Returns:
-            Dictionary with statistics
-        """
         if not chunks:
             return {
                 "total_chunks": 0,
                 "total_files": 0,
                 "languages": {},
                 "total_lines": 0,
-                "total_bytes": 0
+                "total_bytes": 0,
             }
 
-        # Count languages
         languages = {}
         total_lines = 0
         total_bytes = 0
@@ -361,11 +222,9 @@ class CodeChunkingService:
         for chunk in chunks:
             lang = chunk.metadata.get("language", "unknown")
             languages[lang] = languages.get(lang, 0) + 1
-
             total_lines += chunk.metadata.get("line_count", 0)
             total_bytes += chunk.metadata.get("byte_size", 0)
 
-        # Count unique files (from chunk_index == 0)
         unique_files = len([c for c in chunks if c.chunk_index == 0])
 
         return {
@@ -374,7 +233,7 @@ class CodeChunkingService:
             "languages": languages,
             "total_lines": total_lines,
             "total_bytes": total_bytes,
-            "avg_chunk_size": total_bytes / len(chunks) if chunks else 0
+            "avg_chunk_size": total_bytes / len(chunks) if chunks else 0,
         }
 
     def create_gitlab_link(
@@ -385,27 +244,10 @@ class CodeChunkingService:
         line_start: Optional[int] = None,
         line_end: Optional[int] = None
     ) -> str:
-        """
-        Create GitLab link to specific file and lines.
-
-        Args:
-            repo_url: Repository URL
-            file_path: Path to file
-            commit_sha: Commit SHA
-            line_start: Starting line number (optional)
-            line_end: Ending line number (optional)
-
-        Returns:
-            GitLab URL to the file
-        """
-        # Base URL format: https://gitlab.com/user/repo/blob/commit/path
         link = f"{repo_url}/blob/{commit_sha}/{file_path}"
-
-        # Add line numbers if provided
         if line_start is not None:
             if line_end is not None and line_end != line_start:
                 link += f"#L{line_start}-{line_end}"
             else:
                 link += f"#L{line_start}"
-
         return link
