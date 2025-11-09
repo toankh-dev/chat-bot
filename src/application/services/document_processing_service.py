@@ -5,7 +5,7 @@ Document Processing Service - Extract text from various file formats.
 from typing import BinaryIO, Optional
 import io
 import os
-from PyPDF2 import PdfReader
+from pypdf import PdfReader
 from docx import Document as DocxDocument
 
 

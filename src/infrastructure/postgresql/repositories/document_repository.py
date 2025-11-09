@@ -6,7 +6,7 @@ from shared.interfaces.repositories.document_repository import DocumentRepositor
 from domain.entities.document import DocumentEntity
 from domain.value_objects.uuid_vo import UUID
 from infrastructure.postgresql.models.document_model import DocumentModel
-from datetime import datetime
+from datetime import datetime, UTC
 
 class DocumentRepositoryImpl(DocumentRepository):
     def __init__(self, session: AsyncSession):
@@ -16,6 +16,10 @@ class DocumentRepositoryImpl(DocumentRepository):
         """Create new document."""
         # Generate ID if not provided
         document_id = document.id if document.id else UUID.generate()
+
+        # Convert timezone-aware datetime to naive UTC datetime for PostgreSQL
+        uploaded_at = document.uploaded_at.replace(tzinfo=None) if document.uploaded_at and document.uploaded_at.tzinfo else document.uploaded_at
+        processed_at = document.processed_at.replace(tzinfo=None) if document.processed_at and document.processed_at.tzinfo else document.processed_at
 
         doc_model = DocumentModel(
             id=str(uuid.UUID(str(document_id.value))),
@@ -29,8 +33,8 @@ class DocumentRepositoryImpl(DocumentRepository):
             processing_status=document.processing_status,
             knowledge_base_id=document.knowledge_base_id,
             error_message=document.error_message,
-            uploaded_at=document.uploaded_at,
-            processed_at=document.processed_at
+            uploaded_at=uploaded_at,
+            processed_at=processed_at
         )
 
         # Create new
@@ -88,6 +92,10 @@ class DocumentRepositoryImpl(DocumentRepository):
         if not doc_model:
             raise ValueError(f"Document not found: {document.id}")
 
+        # Convert timezone-aware datetime to naive UTC datetime for PostgreSQL
+        uploaded_at = document.uploaded_at.replace(tzinfo=None) if document.uploaded_at and document.uploaded_at.tzinfo else document.uploaded_at
+        processed_at = document.processed_at.replace(tzinfo=None) if document.processed_at and document.processed_at.tzinfo else document.processed_at
+
         # Update all fields
         doc_model.filename = document.filename
         doc_model.file_size = document.file_size
@@ -99,8 +107,8 @@ class DocumentRepositoryImpl(DocumentRepository):
         doc_model.processing_status = document.processing_status
         doc_model.knowledge_base_id = document.knowledge_base_id
         doc_model.error_message = document.error_message
-        doc_model.uploaded_at = document.uploaded_at
-        doc_model.processed_at = document.processed_at
+        doc_model.uploaded_at = uploaded_at
+        doc_model.processed_at = processed_at
 
         await self._session.commit()
         await self._session.refresh(doc_model)

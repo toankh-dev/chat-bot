@@ -5,7 +5,7 @@ Represents the many-to-many relationship between users and groups.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Optional
 
 
@@ -31,9 +31,9 @@ class UserGroupEntity:
         
         if self.group_id <= 0:
             raise ValueError("Group ID must be a positive integer")
-        
+
         if self.created_at is None:
-            self.created_at = datetime.utcnow()
+            self.created_at = datetime.now(UTC)
     
     @property
     def is_persisted(self) -> bool:

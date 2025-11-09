@@ -5,7 +5,7 @@ Represents a group of users in the system.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Optional, List
 from domain.value_objects.uuid_vo import UUID
 
@@ -55,7 +55,7 @@ class GroupEntity:
         if description is not None:
             self.description = description.strip() if description.strip() else None
 
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     def __str__(self) -> str:
         """String representation of the group."""

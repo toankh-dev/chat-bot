@@ -135,3 +135,32 @@ class S3FileStorageService(IFileStorageService):
             else:
                 logger.error(f"Error checking file existence: {e}")
                 return False
+
+    async def get_file(self, file_key: str) -> bytes:
+        """
+        Get file content from S3.
+        
+        Args:
+            file_key: S3 key of the file to get
+        
+        Returns:
+            File content as bytes
+            
+        Raises:
+            Exception: If download fails
+        """
+        try:
+            response = self.s3_client.get_object(
+                Bucket=self.bucket_name,
+                Key=file_key
+            )
+            file_content = response['Body'].read()
+            logger.info(f"Successfully downloaded file from S3: {file_key}")
+            return file_content
+            
+        except ClientError as e:
+            logger.error(f"Failed to download file from S3: {e}")
+            raise Exception(f"S3 download failed: {str(e)}")
+        except Exception as e:
+            logger.error(f"Unexpected error during S3 download: {e}")
+            raise Exception(f"Download failed: {str(e)}")

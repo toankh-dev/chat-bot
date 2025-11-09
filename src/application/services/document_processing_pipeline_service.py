@@ -4,6 +4,7 @@ Document Processing Pipeline Service - Orchestrate document processing flow.
 
 from typing import Dict, Any, Optional
 import logging
+import io
 from fastapi import HTTPException
 from datetime import datetime
 
@@ -115,8 +116,11 @@ class DocumentProcessingPipelineService:
         """Extract text from document file."""
         try:
             # Get file content from S3 via the document storage service
-            file_content = await self.document_storage.get_file_content(document)
-            
+            file_content_bytes = await self.document_storage.get_file_content(document)
+
+            # Convert bytes to BytesIO for processing
+            file_content = io.BytesIO(file_content_bytes)
+
             # Extract text
             text = await self.document_processing.extract_text(
                 file_content,

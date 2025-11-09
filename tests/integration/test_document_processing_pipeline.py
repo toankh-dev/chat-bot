@@ -12,11 +12,9 @@ from src.application.services.document_processing_service import DocumentProcess
 from src.application.services.document_chunking_service import DocumentChunkingService
 from src.application.services.kb_sync_service import KBSyncService
 from src.infrastructure.postgresql.repositories.document_repository import DocumentRepositoryImpl
-from src.infrastructure.ai_services.embeddings.factory import EmbeddingFactory
-from src.infrastructure.ai_services.llm.factory import LLMFactory
 from src.infrastructure.vector_store.factory import VectorStoreFactory
-from src.infrastructure.s3.s3_file_storage_service import S3FileStorageService
 from tests.mocks.s3_service_mock import S3FileStorageServiceMock
+from tests.mocks.embedding_service_mock import EmbeddingServiceMock
 
 # Test configuration
 TEST_CONFIG = {
@@ -35,31 +33,35 @@ async def setup_pipeline(db_session, s3_service):
         chunk_overlap=200,
         max_chunks=500
     )
-    
+
     # Initialize repositories and services
     document_repository = DocumentRepositoryImpl(session=db_session)
-    
-    # Create services using factories
-    llm_service = LLMFactory.create()
-    embedding_service = EmbeddingFactory.create()
+
+    # Create mock services instead of real ones
+    embedding_service = EmbeddingServiceMock(embedding_dimension=768)
     vector_store = VectorStoreFactory.create(
         config={"persist_directory": ".chromadb_test"}
     )
-    
+
     kb_sync = KBSyncService(
         embedding_service=embedding_service,
         vector_store=vector_store,
         document_repository=document_repository
     )
-    
+
+    # Create document storage service with mock S3
+    from src.application.services.document_storage_service import DocumentStorageService
+    document_storage = DocumentStorageService(s3_service=s3_service)
+
     pipeline = DocumentProcessingPipelineService(
         document_processing_service=document_processing,
         document_chunking_service=document_chunking,
         kb_sync_service=kb_sync,
         document_repository=document_repository,
-        kb_config=TEST_CONFIG
+        kb_config=TEST_CONFIG,
+        document_storage_service=document_storage
     )
-    
+
     return pipeline, document_repository, s3_service
 
 async def create_test_document(repository: DocumentRepositoryImpl, s3_service: S3FileStorageServiceMock) -> DocumentEntity:
