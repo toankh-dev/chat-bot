@@ -11,9 +11,9 @@ from src.application.services.gitlab_sync_service import GitLabSyncService
 from src.infrastructure.external.gitlab_service import GitLabService
 from src.application.services.code_chunking_service import CodeChunkingService
 from src.application.services.kb_sync_service import KBSyncService
-from src.shared.interfaces.repositories.document_repository import IDocumentRepository
-from src.api.dependencies.auth import get_current_user
-from src.api.dependencies.database import get_document_repository
+from src.shared.interfaces.repositories.document_repository import DocumentRepository
+from src.api.middlewares.jwt_middleware import get_current_user
+from src.core.dependencies import get_document_repository
 from src.domain.entities.user import User
 from core.config import settings
 
@@ -92,7 +92,7 @@ def get_gitlab_service() -> GitLabService:
 
 def get_gitlab_sync_service(
     gitlab_service: GitLabService = Depends(get_gitlab_service),
-    document_repository: IDocumentRepository = Depends(get_document_repository)
+    document_repository: DocumentRepository = Depends(get_document_repository)
 ) -> GitLabSyncService:
     """Get GitLab sync service instance."""
     from src.infrastructure.ai_services.embeddings.embedding_service_factory import get_embedding_service
@@ -224,7 +224,7 @@ async def delete_repository_sync(
     group_id: str,
     repo_url: str,
     current_user: User = Depends(get_current_user),
-    document_repository: IDocumentRepository = Depends(get_document_repository)
+    document_repository: DocumentRepository = Depends(get_document_repository)
 ):
     """
     Delete all documents synced from a specific repository.

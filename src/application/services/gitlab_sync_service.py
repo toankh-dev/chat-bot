@@ -10,7 +10,7 @@ from src.infrastructure.external.gitlab_service import GitLabService
 from src.application.services.code_chunking_service import CodeChunkingService, CodeChunk
 from src.application.services.kb_sync_service import KBSyncService
 from src.domain.entities.document import Document
-from src.shared.interfaces.repositories.document_repository import IDocumentRepository
+from src.shared.interfaces.repositories.document_repository import DocumentRepository
 
 
 class GitLabSyncService:
@@ -21,7 +21,7 @@ class GitLabSyncService:
         gitlab_service: GitLabService,
         code_chunking_service: CodeChunkingService,
         kb_sync_service: KBSyncService,
-        document_repository: IDocumentRepository
+        document_repository: DocumentRepository
     ):
         """
         Initialize GitLab sync service.
