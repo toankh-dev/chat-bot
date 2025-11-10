@@ -4,11 +4,11 @@ Unit tests for domain entities.
 
 import pytest
 from datetime import datetime
-from src.domain.entities.user import User
-from src.domain.entities.role import Role
-from src.domain.entities.workspace import Workspace
-from src.domain.entities.chatbot import Chatbot
-from src.domain.entities.message import Message, MessageRole, MessageStatus
+from src.domain.entities.user import UserEntity
+from src.domain.entities.role import RoleEntity
+from src.domain.entities.workspace import WorkspaceEntity
+from src.domain.entities.chatbot import ChatbotEntity
+from src.domain.entities.message import MessageEntity, MessageRole, MessageStatus
 from src.domain.value_objects.email import Email
 from src.domain.value_objects.uuid_vo import UUID
 
@@ -18,7 +18,7 @@ class TestUser:
 
     def test_create_user(self):
         """Test creating a valid user."""
-        user = User(
+        user = UserEntity(
             id=UUID.generate(),
             email=Email("test@example.com"),
             username="testuser",
@@ -34,7 +34,7 @@ class TestUser:
     def test_user_invalid_username(self):
         """Test user creation with invalid username."""
         with pytest.raises(ValueError):
-            User(
+            UserEntity(
                 id=UUID.generate(),
                 email=Email("test@example.com"),
                 username="ab",  # Too short
@@ -44,7 +44,7 @@ class TestUser:
 
     def test_user_deactivate(self):
         """Test deactivating a user."""
-        user = User(
+        user = UserEntity(
             id=UUID.generate(),
             email=Email("test@example.com"),
             username="testuser",
@@ -57,7 +57,7 @@ class TestUser:
 
     def test_user_record_login(self):
         """Test recording user login."""
-        user = User(
+        user = UserEntity(
             id=UUID.generate(),
             email=Email("test@example.com"),
             username="testuser",
@@ -75,26 +75,26 @@ class TestRole:
 
     def test_create_role(self):
         """Test creating a valid role."""
-        role = Role(
+        role = RoleEntity(
             id=UUID.generate(),
             name="admin",
             description="Administrator role",
-            permissions={Role.PERM_ADMIN}
+            permissions={RoleEntity.PERM_ADMIN}
         )
 
         assert role.name == "admin"
-        assert Role.PERM_ADMIN in role.permissions
+        assert RoleEntity.PERM_ADMIN in role.permissions
 
     def test_add_permission(self):
         """Test adding permission to role."""
-        role = Role(
+        role = RoleEntity(
             id=UUID.generate(),
             name="user",
             description="Regular user"
         )
 
-        role.add_permission(Role.PERM_USER_READ)
-        assert Role.PERM_USER_READ in role.permissions
+        role.add_permission(RoleEntity.PERM_USER_READ)
+        assert RoleEntity.PERM_USER_READ in role.permissions
 
     def test_has_permission(self):
         """Test checking if role has permission."""
@@ -114,7 +114,7 @@ class TestMessage:
 
     def test_create_message(self):
         """Test creating a valid message."""
-        message = Message(
+        message = MessageEntity(
             id=UUID.generate(),
             conversation_id=UUID.generate(),
             session_id=UUID.generate(),
@@ -128,7 +128,7 @@ class TestMessage:
 
     def test_mark_as_completed(self):
         """Test marking message as completed."""
-        message = Message(
+        message = MessageEntity(
             id=UUID.generate(),
             conversation_id=UUID.generate(),
             session_id=UUID.generate(),
@@ -146,7 +146,7 @@ class TestChatbot:
 
     def test_create_chatbot(self):
         """Test creating a valid chatbot."""
-        chatbot = Chatbot(
+        chatbot = MessageEntity(
             id=UUID.generate(),
             workspace_id=UUID.generate(),
             name="Test Bot",
@@ -161,7 +161,7 @@ class TestChatbot:
     def test_invalid_temperature(self):
         """Test chatbot with invalid temperature."""
         with pytest.raises(ValueError):
-            Chatbot(
+            MessageEntity(
                 id=UUID.generate(),
                 workspace_id=UUID.generate(),
                 name="Test Bot",
@@ -172,7 +172,7 @@ class TestChatbot:
 
     def test_add_tool(self):
         """Test adding a tool to chatbot."""
-        chatbot = Chatbot(
+        chatbot = MessageEntity(
             id=UUID.generate(),
             workspace_id=UUID.generate(),
             name="Test Bot",

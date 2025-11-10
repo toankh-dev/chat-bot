@@ -1,15 +1,64 @@
-"""PostgreSQL infrastructure package."""
+"""
+PostgreSQL infrastructure components.
 
-from src.infrastructure.postgresql.user_repository_impl import UserRepositoryImpl
-from src.infrastructure.postgresql.chatbot_repository_impl import ChatbotRepositoryImpl
-from src.infrastructure.postgresql.conversation_repository_impl import (
+Clean architecture implementation for database access.
+"""
+
+# Connection management
+from .connection import db_manager, get_db_session, Base
+
+# Models
+from .models import (
+    UserModel, ChatbotModel, ConversationModel, MessageModel, DocumentModel, 
+    Group, UserGroup, UserChatbotModel, GroupChatbotModel
+)
+
+# Repositories  
+from .repositories import (
+    UserRepositoryImpl,
+    ChatbotRepositoryImpl,
     ConversationRepositoryImpl,
-    MessageRepositoryImpl
+    MessageRepositoryImpl,
+    DocumentRepositoryImpl,
+    EmbeddingIndexRepositoryImpl,
+    GroupRepositoryImpl,
+    GroupChatbotRepositoryImpl,
+    IngestionJobRepositoryImpl,
+    UserGroupRepositoryImpl,
+    UserChatbotRepositoryImpl
+)
+
+# Mappers
+from .mappers import (
+    UserMapper,
+    ChatbotMapper, 
+    ConversationMapper,
+    MessageMapper,
+    DocumentMapper,
+    GroupMapper,
+    UserGroupMapper,
+    UserChatbotMapper,
+    GroupChatbotMapper
 )
 
 __all__ = [
-    "UserRepositoryImpl",
-    "ChatbotRepositoryImpl",
-    "ConversationRepositoryImpl",
-    "MessageRepositoryImpl"
+    # Connection
+    "db_manager", "get_db_session", "Base",
+    
+    # Models
+    "UserModel", "ChatbotModel", "ConversationModel", "MessageModel", "DocumentModel",
+    "Group", "UserGroup", "UserChatbotModel", "GroupChatbotModel",
+    
+    # Repositories
+    "UserRepositoryImpl", "ChatbotRepositoryImpl", 
+    "ConversationRepositoryImpl", "MessageRepositoryImpl",
+    "DocumentRepositoryImpl", "EmbeddingIndexRepositoryImpl", 
+    "GroupRepositoryImpl", "GroupChatbotRepositoryImpl",
+    "IngestionJobRepositoryImpl", "UserGroupRepositoryImpl",
+    "UserChatbotRepositoryImpl",
+    
+    # Mappers
+    "UserMapper", "ChatbotMapper", "ConversationMapper",
+    "MessageMapper", "DocumentMapper", "GroupMapper",
+    "UserGroupMapper", "UserChatbotMapper", "GroupChatbotMapper"
 ]

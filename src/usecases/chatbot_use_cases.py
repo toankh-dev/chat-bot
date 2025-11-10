@@ -5,8 +5,8 @@ Defines application-level use cases for chatbot operations.
 """
 
 from typing import List
-from src.application.services.chatbot_service import ChatbotService
-from src.schemas.chatbot_schema import (
+from application.services.chatbot_service import ChatbotService
+from schemas.chatbot_schema import (
     ChatbotCreate,
     ChatbotUpdate,
     ChatbotResponse

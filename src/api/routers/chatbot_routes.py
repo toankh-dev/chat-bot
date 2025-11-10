@@ -2,14 +2,14 @@
 
 from fastapi import APIRouter, status
 from typing import List
-from src.api.controllers.chatbot_controller import (
+from api.controllers.chatbot_controller import (
     list_chatbots,
     get_chatbot,
     create_chatbot,
     update_chatbot,
     delete_chatbot
 )
-from src.schemas.chatbot_schema import ChatbotResponse
+from schemas.chatbot_schema import ChatbotResponse
 
 router = APIRouter()
 

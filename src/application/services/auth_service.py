@@ -6,18 +6,19 @@ Handles user authentication and token management.
 
 from typing import Optional
 import bcrypt
-from src.infrastructure.postgresql.user_repository_impl import UserRepositoryImpl
-from src.infrastructure.auth.jwt_handler import JWTHandler
-from src.infrastructure.postgresql.models import User
-from src.core.errors import AuthenticationError, ValidationError
-
+from shared.interfaces.repositories.user_repository import UserRepository
+from shared.interfaces.services.auth.jwt_handler import IJWTHandler
+from domain.entities.user import UserEntity
+from domain.value_objects.email import Email
+from domain.value_objects.uuid_vo import UUID
+from core.errors import AuthenticationError, ValidationError
 
 class AuthService:
     """
     Service for authentication operations.
     """
 
-    def __init__(self, user_repository: UserRepositoryImpl, jwt_handler: JWTHandler):
+    def __init__(self, user_repository: UserRepository, jwt_handler: IJWTHandler):
         self.user_repository = user_repository
         self.jwt_handler = jwt_handler
 
@@ -35,7 +36,7 @@ class AuthService:
             bcrypt.gensalt()
         ).decode('utf-8')
 
-    async def authenticate_user(self, email: str, password: str) -> User:
+    async def authenticate_user(self, email: str, password: str) -> UserEntity:
         """
         Authenticate user with email and password.
 
@@ -44,7 +45,7 @@ class AuthService:
             password: Plain password
 
         Returns:
-            User: Authenticated user
+            UserModel: Authenticated user
 
         Raises:
             AuthenticationError: If authentication fails
@@ -61,7 +62,7 @@ class AuthService:
 
         return user
 
-    async def register_user(self, email: str, password: str, name: str) -> User:
+    async def register_user(self, email: str, password: str, name: str) -> UserEntity:
         """
         Register new user.
 
@@ -71,7 +72,7 @@ class AuthService:
             name: User full name
 
         Returns:
-            User: Created user
+            UserModel: Created user
 
         Raises:
             ValidationError: If email already exists
@@ -82,17 +83,20 @@ class AuthService:
 
         hashed_password = self.hash_password(password)
 
-        user = User(
-            email=email,
-            password_hash=hashed_password,
-            name=name,
-            is_admin=False,
-            status="active"
+        # Build a domain User entity and persist via repository
+        user = UserEntity(
+            id=UUID.generate(),
+            email=Email(email),
+            username=email.split('@')[0],
+            full_name=name,
+            hashed_password=hashed_password,
+            is_active=True,
+            is_superuser=False
         )
 
         return await self.user_repository.create(user)
 
-    def create_tokens(self, user: User) -> dict:
+    def create_tokens(self, user: UserEntity) -> dict:
         """
         Create access and refresh tokens for user.
 
@@ -104,7 +108,7 @@ class AuthService:
         """
         access_token = self.jwt_handler.create_access_token(
             subject=str(user.id),
-            additional_claims={"email": user.email, "is_admin": user.is_admin}
+            additional_claims={"email": str(user.email), "is_admin": user.is_superuser}
         )
 
         refresh_token = self.jwt_handler.create_refresh_token(

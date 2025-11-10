@@ -6,23 +6,27 @@ Handles user management business logic.
 
 from typing import List, Optional
 import bcrypt
-from src.infrastructure.postgresql.user_repository_impl import UserRepositoryImpl
-from src.infrastructure.postgresql.user_group_repository_impl import UserGroupRepositoryImpl
-from src.infrastructure.postgresql.group_repository_impl import GroupRepositoryImpl
-from src.infrastructure.postgresql.models import User
-from src.core.errors import NotFoundError, ValidationError
+from domain.value_objects.email import Email
+from domain.value_objects.uuid_vo import UUID
+from core.errors import NotFoundError, ValidationError
+from domain.entities.user import User
+from shared.interfaces.repositories.group_repository import GroupRepository
+from shared.interfaces.repositories.user_group_repository import UserGroupRepository
+from shared.interfaces.repositories.user_repository import UserRepository
 
 
 class UserService:
     """
     Service for user management operations.
+
+    Works exclusively with domain entities, not ORM models.
     """
 
     def __init__(
         self,
-        user_repository: UserRepositoryImpl,
-        user_group_repository: Optional[UserGroupRepositoryImpl] = None,
-        group_repository: Optional[GroupRepositoryImpl] = None
+        user_repository: UserRepository,
+        user_group_repository: Optional[UserGroupRepository] = None,
+        group_repository: Optional[GroupRepository] = None
     ):
         self.user_repository = user_repository
         self.user_group_repository = user_group_repository
@@ -113,12 +117,15 @@ class UserService:
             bcrypt.gensalt()
         ).decode('utf-8')
 
+        # Create domain entity
         user = User(
-            email=email,
-            password_hash=hashed_password,
-            name=name,
-            is_admin=is_admin,
-            status="active"
+            id=UUID.generate(),
+            email=Email(email),
+            username=email.split('@')[0],  # Derive username from email
+            full_name=name,
+            hashed_password=hashed_password,
+            is_active=True,
+            is_superuser=is_admin
         )
 
         created_user = await self.user_repository.create(user)
@@ -136,9 +143,9 @@ class UserService:
 
     async def update_user(
         self,
-        user_id: int,
+        user_id: str,
         name: Optional[str] = None,
-        status: Optional[str] = None,
+        is_active: Optional[bool] = None,
         group_ids: Optional[List[int]] = None,
         updated_by: Optional[int] = None
     ) -> User:
@@ -148,12 +155,13 @@ class UserService:
         Args:
             user_id: User ID
             name: New name (optional)
+            is_active: Active status (optional)
             status: New status (optional)
             group_ids: New list of group IDs (replaces existing, optional)
             updated_by: User ID of admin updating this user
 
         Returns:
-            User: Updated user
+            User: Updated user domain entity
 
         Raises:
             NotFoundError: If user not found
@@ -161,12 +169,25 @@ class UserService:
         """
         user = await self.get_user_by_id(user_id)
 
+        # Update domain entity using its methods
         if name is not None:
-            user.name = name
-        if status is not None:
-            if status not in ["active", "disabled", "suspended"]:
-                raise ValidationError(f"Invalid status: {status}")
-            user.status = status
+            # Update the full_name attribute directly (domain entity doesn't have .name)
+            user = User(
+                id=user.id,
+                email=user.email,
+                username=user.username,
+                full_name=name,
+                hashed_password=user.hashed_password,
+                is_active=user.is_active if is_active is None else is_active,
+                is_superuser=user.is_superuser,
+                created_at=user.created_at,
+                last_login_at=user.last_login_at
+            )
+        elif is_active is not None:
+            if is_active:
+                user.activate()
+            else:
+                user.deactivate()
 
         updated_user = await self.user_repository.update(user)
 
@@ -191,7 +212,7 @@ class UserService:
 
         return updated_user
 
-    async def delete_user(self, user_id: int) -> bool:
+    async def delete_user(self, user_id: str) -> bool:
         """
         Delete user.
 
@@ -209,7 +230,7 @@ class UserService:
 
         return await self.user_repository.delete(user_id)
 
-    async def change_password(self, user_id: int, new_password: str) -> User:
+    async def change_password(self, user_id: str, new_password: str) -> User:
         """
         Change user password.
 
@@ -218,7 +239,7 @@ class UserService:
             new_password: New plain password
 
         Returns:
-            User: Updated user
+            User: Updated user domain entity
 
         Raises:
             NotFoundError: If user not found

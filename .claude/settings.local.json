@@ -15,7 +15,15 @@
       "Bash(pip --version:*)",
       "Bash(pip install alembic)",
       "Bash(python -m alembic:*)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(alembic current:*)",
+      "Bash(python -c:*)",
+      "Bash(docker-compose restart:*)",
+      "Bash(docker logs:*)",
+      "Bash(curl:*)",
+      "Bash(python -m json.tool:*)",
+      "Bash(docker exec:*)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []

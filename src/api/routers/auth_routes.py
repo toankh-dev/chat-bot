@@ -1,8 +1,8 @@
 """Authentication routes."""
 
 from fastapi import APIRouter, status
-from src.api.controllers.auth_controller import login, register, logout
-from src.schemas.auth_schema import LoginResponse
+from api.controllers.auth_controller import login, register, logout
+from schemas.auth_schema import LoginResponse
 
 router = APIRouter()
 

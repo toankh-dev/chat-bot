@@ -5,8 +5,8 @@ This handler wraps the FastAPI application for deployment on AWS Lambda with API
 """
 
 from mangum import Mangum
-from src.main import app
-from src.core.logger import logger
+from main import app
+from core.logger import logger
 
 # Create Lambda handler with API Gateway event format
 handler = Mangum(

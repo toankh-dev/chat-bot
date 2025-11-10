@@ -2,14 +2,14 @@
 
 from fastapi import APIRouter, status
 from typing import List
-from src.api.controllers.group_controller import (
+from api.controllers.group_controller import (
     list_groups,
     get_group,
     create_group,
     update_group,
     delete_group
 )
-from src.schemas.group_schema import GroupResponse
+from schemas.group_schema import GroupResponse
 
 router = APIRouter()
 

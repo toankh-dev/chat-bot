@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, status
 from typing import List
-from src.api.controllers.user_controller import (
+from api.controllers.user_controller import (
     get_current_user_profile,
     list_users,
     get_user,
@@ -10,7 +10,7 @@ from src.api.controllers.user_controller import (
     update_user,
     delete_user
 )
-from src.schemas.user_schema import UserResponse
+from schemas.user_schema import UserResponse
 
 router = APIRouter()
 

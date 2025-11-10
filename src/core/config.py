@@ -30,26 +30,26 @@ class Settings(BaseSettings):
     # AWS Configuration
     AWS_REGION: str = "us-east-1"
     AWS_ACCOUNT_ID: Optional[str] = None
+    AWS_ACCESS_KEY_ID: Optional[str] = None
+    AWS_SECRET_ACCESS_KEY: Optional[str] = None
 
     # PostgreSQL (RDS)
-    POSTGRES_HOST: str = "localhost"
-    POSTGRES_PORT: int = 5432
-    POSTGRES_DB: str = "ai_backend"
-    POSTGRES_USER: str = "postgres"
-    POSTGRES_PASSWORD: str = ""
-    POSTGRES_MAX_CONNECTIONS: int = 20
-    POSTGRES_MIN_CONNECTIONS: int = 5
+    DB_HOST: str = "localhost"
+    DB_PORT: int = 5432
+    DB_NAME: str = "ai_backend"
+    DB_USER: str = "postgres"
+    DB_PASSWORD: str = ""
+    DB_MAX_CONNECTIONS: int = 20
+    DB_MIN_CONNECTIONS: int = 5
 
     @property
     def postgres_url(self) -> str:
         """Construct PostgreSQL connection URL."""
         return (
-            f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
-            f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+            f"postgresql+asyncpg://{self.DB_USER}:{self.DB_PASSWORD}"
+            f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
         )
 
-    # DynamoDB
-    DYNAMODB_ENDPOINT: Optional[str] = None  # For local development
     CONVERSATIONS_TABLE: str = "Conversations"
     FEEDBACKS_TABLE: str = "Feedbacks"
     EMBED_INDEX_TABLE: str = "EmbedIndex"
@@ -60,6 +60,7 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    JWT_REFRESH_TOKEN_EXPIRE_MINUTES: int = 7 * 24 * 60  # Alias for compatibility
 
     # AWS Bedrock
     BEDROCK_MODEL_ID: str = "anthropic.claude-3-sonnet-20240229-v1:0"
@@ -67,7 +68,29 @@ class Settings(BaseSettings):
     BEDROCK_MAX_TOKENS: int = 4096
     BEDROCK_TEMPERATURE: float = 0.7
 
+    # LLM Configuration
+    LLM_PROVIDER: str = "bedrock"  # bedrock or gemini
+    
+    # Google Gemini
+    GEMINI_API_KEY: Optional[str] = None
+    GEMINI_MODEL: str = "gemini-1.5-pro"
+    GEMINI_MODEL_NAME: str = "gemini-1.5-pro"  # Alias for compatibility
+
+    # Embeddings
+    EMBEDDING_PROVIDER: str = "bedrock"  # bedrock or gemini
+    EMBEDDING_MODEL: Optional[str] = None  # Auto-detected from provider (e.g., models/embedding-001 for Gemini)
+    EMBEDDING_DIMENSION: int = 768  # Default for Gemini, 1536 for Bedrock Titan
+
+    # Vector Store
+    VECTOR_STORE_PROVIDER: str = "chromadb"  # chromadb or opensearch
+
+    # ChromaDB Configuration
+    CHROMADB_HOST: str = "localhost"
+    CHROMADB_PORT: int = 8000
+    CHROMADB_PERSIST_DIRECTORY: str = "./chroma_db"
+
     # S3
+    S3_BUCKET_NAME: str = "ai-backend-documents"
     S3_BUCKET_EMBEDDINGS: str = "ai-backend-embeddings"
     S3_BUCKET_DOCUMENTS: str = "ai-backend-documents"
 
@@ -104,6 +127,8 @@ class Settings(BaseSettings):
 
     GITLAB_API_TOKEN: Optional[str] = None
     GITLAB_URL: str = "https://gitlab.com"
+    GITLAB_WEBHOOK_SECRET: Optional[str] = None
+    KNOWLEDGE_BASE_GITLAB_ID: str = "kb_gitlab"
 
     BACKLOG_API_KEY: Optional[str] = None
     BACKLOG_SPACE_KEY: Optional[str] = None
