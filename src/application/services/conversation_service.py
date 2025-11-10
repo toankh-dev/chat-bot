@@ -153,7 +153,8 @@ class ConversationService:
         conversation_id: str,
         user_id: str,
         content: str,
-        role: str = "user"
+        role: str = "user",
+        metadata: dict = None
     ) -> MessageEntity:
         """
         Create new message in conversation.
@@ -163,6 +164,7 @@ class ConversationService:
             user_id: User ID to verify ownership
             content: Message content
             role: Message role (user, assistant, system, tool)
+            metadata: Optional metadata dictionary
 
         Returns:
             MessageModel: Created message
@@ -183,7 +185,8 @@ class ConversationService:
             conversation_id=UUID.from_string(conversation_id),
             session_id=UUID.generate(),
             role=MessageRole(role),
-            content=content
+            content=content,
+            metadata=metadata or {}
         )
 
         created_message = await self.message_repository.create(message)

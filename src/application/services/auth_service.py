@@ -22,11 +22,11 @@ class AuthService:
         self.user_repository = user_repository
         self.jwt_handler = jwt_handler
 
-    def verify_password(self, plain_password: str, hashed_password: str) -> bool:
+    def verify_password(self, plain_password: str, password_hash: str) -> bool:
         """Verify password against hash."""
         return bcrypt.checkpw(
             plain_password.encode('utf-8'),
-            hashed_password.encode('utf-8')
+            password_hash.encode('utf-8')
         )
 
     def hash_password(self, password: str) -> str:
@@ -57,8 +57,8 @@ class AuthService:
         if not self.verify_password(password, user.password_hash):
             raise AuthenticationError("Invalid email or password")
 
-        if user.status != "active":
-            raise AuthenticationError(f"User account is {user.status}")
+        if not user.is_active:
+            raise AuthenticationError(f"User account is inactive")
 
         return user
 
@@ -81,17 +81,17 @@ class AuthService:
         if existing_user:
             raise ValidationError("Email already registered")
 
-        hashed_password = self.hash_password(password)
+        password_hash = self.hash_password(password)
 
         # Build a domain User entity and persist via repository
         user = UserEntity(
-            id=UUID.generate(),
+            id=0,  # Will be set by database
             email=Email(email),
             username=email.split('@')[0],
-            full_name=name,
-            hashed_password=hashed_password,
-            is_active=True,
-            is_superuser=False
+            name=name,
+            password_hash=password_hash,
+            status="active",
+            is_admin=False
         )
 
         return await self.user_repository.create(user)
@@ -108,7 +108,7 @@ class AuthService:
         """
         access_token = self.jwt_handler.create_access_token(
             subject=str(user.id),
-            additional_claims={"email": str(user.email), "is_admin": user.is_superuser}
+            additional_claims={"email": str(user.email), "is_admin": user.is_admin}
         )
 
         refresh_token = self.jwt_handler.create_refresh_token(

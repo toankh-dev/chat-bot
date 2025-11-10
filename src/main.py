@@ -203,7 +203,7 @@ app.include_router(chatbot_router, prefix="/api/v1/chatbots", tags=["Chatbots"])
 app.include_router(conversation_router, prefix="/api/v1/conversations", tags=["Conversations"])
 app.include_router(document_router, prefix="/api/v1/documents", tags=["Documents"])
 app.include_router(ai_router, prefix="/api/v1/ai", tags=["AI Services"])
-app.include_router(gitlab_router, prefix="/api/v1/gitlab", tags=["GitLab Integration"])
+app.include_router(gitlab_router, prefix="/api/v1/gitlab", tags=["GitLab Sync (Admin)"])
 
 
 if __name__ == "__main__":

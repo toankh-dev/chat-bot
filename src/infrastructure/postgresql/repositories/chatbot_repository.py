@@ -24,10 +24,9 @@ class ChatbotRepositoryImpl(ChatbotRepository):
 
     async def find_by_id(self, id: int) -> Optional[ChatbotEntity]:
         """Find chatbot by ID."""
-        # Convert string ID to int for ORM query
         try:
-            chatbot_id = int(id) if id.isdigit() else int(id.replace('-', '')[:8], 16) % 2147483647
-        except:
+            chatbot_id = int(id) if isinstance(id, str) else id
+        except (ValueError, TypeError):
             return None
 
         result = await self.session.execute(
@@ -44,52 +43,54 @@ class ChatbotRepositoryImpl(ChatbotRepository):
         models = result.scalars().all()
         return [self.mapper.to_entity(model) for model in models]
 
-    async def create(self, entity: ChatbotEntity) -> ChatbotEntity:
+    async def create(self, entity: ChatbotEntity, created_by: int) -> ChatbotEntity:
         """Create new chatbot."""
-        model = self.mapper.to_model(entity)
+        model = self.mapper.to_model(entity, created_by)
         self.session.add(model)
         await self.session.flush()
         await self.session.refresh(model)
         return self.mapper.to_entity(model)
 
-    async def update(self, entity: ChatbotEntity) -> ChatbotEntity:
+    async def update(self, entity: ChatbotEntity, created_by: int) -> ChatbotEntity:
         """Update existing chatbot."""
-        # Find existing model
-        chatbot_id = int(str(entity.id).replace('-', '')[:8], 16) % 2147483647
+        # Find existing model by integer ID
         result = await self.session.execute(
-            select(ChatbotModel).where(ChatbotModel.id == chatbot_id)
+            select(ChatbotModel).where(ChatbotModel.id == entity.id)
         )
         existing_model = result.scalar_one_or_none()
 
         if existing_model:
-            updated_model = self.mapper.to_model(entity, existing_model)
+            updated_model = self.mapper.to_model(entity, created_by, existing_model)
             await self.session.flush()
             await self.session.refresh(updated_model)
             return self.mapper.to_entity(updated_model)
         else:
             # Create new if doesn't exist
-            return await self.create(entity)
+            return await self.create(entity, created_by)
 
     async def delete(self, id: int) -> bool:
         """Delete chatbot by ID."""
-        chatbot_entity = await self.find_by_id(id)
-        if chatbot_entity:
-            chatbot_id = int(id) if id.isdigit() else int(id.replace('-', '')[:8], 16) % 2147483647
-            result = await self.session.execute(
-                select(ChatbotModel).where(ChatbotModel.id == chatbot_id)
-            )
-            model = result.scalar_one_or_none()
-            if model:
-                await self.session.delete(model)
-                await self.session.flush()
-                return True
+        try:
+            chatbot_id = int(id) if isinstance(id, str) else id
+        except (ValueError, TypeError):
+            return False
+
+        result = await self.session.execute(
+            select(ChatbotModel).where(ChatbotModel.id == chatbot_id)
+        )
+        model = result.scalar_one_or_none()
+        
+        if model:
+            await self.session.delete(model)
+            await self.session.flush()
+            return True
         return False
 
     async def exists(self, id: int) -> bool:
         """Check if chatbot exists."""
         try:
-            chatbot_id = int(id) if id.isdigit() else int(id.replace('-', '')[:8], 16) % 2147483647
-        except:
+            chatbot_id = int(id) if isinstance(id, str) else id
+        except (ValueError, TypeError):
             return False
 
         result = await self.session.execute(

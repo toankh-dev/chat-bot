@@ -57,6 +57,29 @@ class GetChatbotUseCase:
         chatbot = await self.chatbot_service.get_chatbot_by_id(chatbot_id, include_assignments=True)
 
         # Build response with assignments
+        assigned_groups = getattr(chatbot, 'assigned_groups', [])
+        assigned_users = getattr(chatbot, 'assigned_users', [])
+        
+        # Convert user entities to dict format for schema validation
+        users_dict = []
+        for user in assigned_users:
+            users_dict.append({
+                "id": user.id,
+                "name": user.name,
+                "email": str(user.email)  # Convert Email value object to string
+            })
+        
+        # Convert group entities to dict format if needed
+        groups_dict = []
+        for group in assigned_groups:
+            if hasattr(group, 'to_dict'):
+                groups_dict.append(group.to_dict())
+            else:
+                groups_dict.append({
+                    "id": group.id,
+                    "name": group.name
+                })
+
         chatbot_dict = {
             "id": chatbot.id,
             "name": chatbot.name,
@@ -74,8 +97,8 @@ class GetChatbotUseCase:
             "status": chatbot.status,
             "created_at": chatbot.created_at,
             "updated_at": chatbot.updated_at,
-            "assigned_groups": getattr(chatbot, 'assigned_groups', []),
-            "assigned_users": getattr(chatbot, 'assigned_users', [])
+            "assigned_groups": groups_dict,
+            "assigned_users": users_dict
         }
         return ChatbotResponse.model_validate(chatbot_dict)
 
@@ -126,6 +149,30 @@ class CreateChatbotUseCase:
         # Load chatbot with assignments for response
         chatbot = await self.chatbot_service.get_chatbot_by_id(chatbot.id, include_assignments=True)
 
+        # Build response with assignments
+        assigned_groups = getattr(chatbot, 'assigned_groups', [])
+        assigned_users = getattr(chatbot, 'assigned_users', [])
+        
+        # Convert user entities to dict format for schema validation
+        users_dict = []
+        for user in assigned_users:
+            users_dict.append({
+                "id": user.id,
+                "name": user.name,
+                "email": str(user.email)  # Convert Email value object to string
+            })
+        
+        # Convert group entities to dict format if needed
+        groups_dict = []
+        for group in assigned_groups:
+            if hasattr(group, 'to_dict'):
+                groups_dict.append(group.to_dict())
+            else:
+                groups_dict.append({
+                    "id": group.id,
+                    "name": group.name
+                })
+
         chatbot_dict = {
             "id": chatbot.id,
             "name": chatbot.name,
@@ -143,8 +190,8 @@ class CreateChatbotUseCase:
             "status": chatbot.status,
             "created_at": chatbot.created_at,
             "updated_at": chatbot.updated_at,
-            "assigned_groups": getattr(chatbot, 'assigned_groups', []),
-            "assigned_users": getattr(chatbot, 'assigned_users', [])
+            "assigned_groups": groups_dict,
+            "assigned_users": users_dict
         }
         return ChatbotResponse.model_validate(chatbot_dict)
 
@@ -190,6 +237,30 @@ class UpdateChatbotUseCase:
         # Load chatbot with assignments for response
         chatbot = await self.chatbot_service.get_chatbot_by_id(chatbot_id, include_assignments=True)
 
+        # Build response with assignments
+        assigned_groups = getattr(chatbot, 'assigned_groups', [])
+        assigned_users = getattr(chatbot, 'assigned_users', [])
+        
+        # Convert user entities to dict format for schema validation
+        users_dict = []
+        for user in assigned_users:
+            users_dict.append({
+                "id": user.id,
+                "name": user.name,
+                "email": str(user.email)  # Convert Email value object to string
+            })
+        
+        # Convert group entities to dict format if needed
+        groups_dict = []
+        for group in assigned_groups:
+            if hasattr(group, 'to_dict'):
+                groups_dict.append(group.to_dict())
+            else:
+                groups_dict.append({
+                    "id": group.id,
+                    "name": group.name
+                })
+
         chatbot_dict = {
             "id": chatbot.id,
             "name": chatbot.name,
@@ -207,8 +278,8 @@ class UpdateChatbotUseCase:
             "status": chatbot.status,
             "created_at": chatbot.created_at,
             "updated_at": chatbot.updated_at,
-            "assigned_groups": getattr(chatbot, 'assigned_groups', []),
-            "assigned_users": getattr(chatbot, 'assigned_users', [])
+            "assigned_groups": groups_dict,
+            "assigned_users": users_dict
         }
         return ChatbotResponse.model_validate(chatbot_dict)
 

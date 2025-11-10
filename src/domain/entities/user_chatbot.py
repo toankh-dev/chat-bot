@@ -5,7 +5,7 @@ Represents the many-to-many relationship between users and chatbots.
 """
 
 from dataclasses import dataclass
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from typing import Optional
 
 
@@ -33,7 +33,7 @@ class UserChatbotEntity:
             raise ValueError("Chatbot ID must be a positive integer")
 
         if self.created_at is None:
-            self.created_at = datetime.now(UTC)
+            self.created_at = datetime.now(timezone.utc)
     
     @property
     def is_persisted(self) -> bool:

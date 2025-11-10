@@ -353,27 +353,6 @@ def get_conversation_use_case(
     return GetConversationUseCase(conversation_service)
 
 
-def get_create_conversation_use_case(
-    conversation_service: ConversationService = Depends(get_conversation_service)
-) -> CreateConversationUseCase:
-    """Get create conversation use case instance."""
-    return CreateConversationUseCase(conversation_service)
-
-
-def get_create_message_use_case(
-    conversation_service: ConversationService = Depends(get_conversation_service)
-) -> CreateMessageUseCase:
-    """Get create message use case instance."""
-    return CreateMessageUseCase(conversation_service)
-
-
-def get_delete_conversation_use_case(
-    conversation_service: ConversationService = Depends(get_conversation_service)
-) -> DeleteConversationUseCase:
-    """Get delete conversation use case instance."""
-    return DeleteConversationUseCase(conversation_service)
-
-
 def get_bedrock_client() -> BedrockClient:
     """Get Bedrock client instance (delegates to central client factory)."""
     return _create_bedrock_client()
@@ -397,6 +376,34 @@ def get_rag_service(
     from infrastructure.ai_services.llm.factory import LLMFactory
     llm_provider = LLMFactory.create()  # Direct provider
     return RAGService(knowledge_base_service, llm_provider)
+
+
+def get_create_conversation_use_case(
+    conversation_service: ConversationService = Depends(get_conversation_service)
+) -> CreateConversationUseCase:
+    """Get create conversation use case instance."""
+    return CreateConversationUseCase(conversation_service)
+
+
+def get_create_message_use_case(
+    conversation_service: ConversationService = Depends(get_conversation_service),
+    rag_service: IRAGService = Depends(get_rag_service),
+    chatbot_repository: ChatbotRepository = Depends(get_chatbot_repository)
+) -> CreateMessageUseCase:
+    """Get create message use case instance with RAG integration."""
+    return CreateMessageUseCase(
+        conversation_service,
+        rag_service,
+        chatbot_repository,
+        domain="general"  # Default domain, can be made configurable
+    )
+
+
+def get_delete_conversation_use_case(
+    conversation_service: ConversationService = Depends(get_conversation_service)
+) -> DeleteConversationUseCase:
+    """Get delete conversation use case instance."""
+    return DeleteConversationUseCase(conversation_service)
 
 # Document services and repositories
 from shared.interfaces.repositories.document_repository import DocumentRepository

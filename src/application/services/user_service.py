@@ -6,6 +6,7 @@ Handles user management business logic.
 
 from typing import List, Optional
 import bcrypt
+from datetime import datetime, timezone
 from domain.value_objects.email import Email
 from domain.value_objects.uuid_vo import UUID
 from core.errors import NotFoundError, ValidationError
@@ -112,20 +113,20 @@ class UserService:
                     if not await self.group_repository.exists(group_id):
                         raise ValidationError(f"Group with ID {group_id} not found")
 
-        hashed_password = bcrypt.hashpw(
+        password_hash = bcrypt.hashpw(
             password.encode('utf-8'),
             bcrypt.gensalt()
         ).decode('utf-8')
 
         # Create domain entity
         user = User(
-            id=UUID.generate(),
+            id=0,  # Will be set by database
             email=Email(email),
             username=email.split('@')[0],  # Derive username from email
-            full_name=name,
-            hashed_password=hashed_password,
-            is_active=True,
-            is_superuser=is_admin
+            name=name,
+            password_hash=password_hash,
+            status="active",
+            is_admin=is_admin
         )
 
         created_user = await self.user_repository.create(user)
@@ -145,7 +146,7 @@ class UserService:
         self,
         user_id: str,
         name: Optional[str] = None,
-        is_active: Optional[bool] = None,
+        status: Optional[str] = None,
         group_ids: Optional[List[int]] = None,
         updated_by: Optional[int] = None
     ) -> User:
@@ -176,18 +177,16 @@ class UserService:
                 id=user.id,
                 email=user.email,
                 username=user.username,
-                full_name=name,
-                hashed_password=user.hashed_password,
-                is_active=user.is_active if is_active is None else is_active,
-                is_superuser=user.is_superuser,
+                name=name,
+                password_hash=user.password_hash,
+                status=user.status if status is None else status,
+                is_admin=user.is_admin,
                 created_at=user.created_at,
                 last_login_at=user.last_login_at
             )
-        elif is_active is not None:
-            if is_active:
-                user.activate()
-            else:
-                user.deactivate()
+        elif status is not None:
+            user.status = status
+            user.updated_at = datetime.now(timezone.utc)
 
         updated_user = await self.user_repository.update(user)
 

@@ -1,6 +1,6 @@
 """User request/response schemas."""
 
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 from typing import Optional, List
 from datetime import datetime
 
@@ -41,3 +41,11 @@ class UserResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     groups: Optional[List[GroupInUser]] = Field(default=None, description="Groups the user belongs to")
+
+    @field_validator('email', mode='before')
+    @classmethod
+    def validate_email(cls, v):
+        """Convert Email object to string if needed."""
+        if hasattr(v, 'value'):  # Email value object
+            return str(v)
+        return v

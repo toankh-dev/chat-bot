@@ -19,37 +19,37 @@ class TestUser:
     def test_create_user(self):
         """Test creating a valid user."""
         user = UserEntity(
-            id=UUID.generate(),
+            id=1,
             email=Email("test@example.com"),
             username="testuser",
-            full_name="Test User",
-            hashed_password="hashed_password_here"
+            name="Test User",
+            password_hash="password_hash_here"
         )
 
         assert user.username == "testuser"
         assert str(user.email) == "test@example.com"
         assert user.is_active is True
-        assert user.is_superuser is False
+        assert user.is_admin is False
 
     def test_user_invalid_username(self):
         """Test user creation with invalid username."""
         with pytest.raises(ValueError):
             UserEntity(
-                id=UUID.generate(),
+                id=2,
                 email=Email("test@example.com"),
                 username="ab",  # Too short
-                full_name="Test User",
-                hashed_password="hashed"
+                name="Test User",
+                password_hash="hashed"
             )
 
     def test_user_deactivate(self):
         """Test deactivating a user."""
         user = UserEntity(
-            id=UUID.generate(),
+            id=3,
             email=Email("test@example.com"),
             username="testuser",
-            full_name="Test User",
-            hashed_password="hashed"
+            name="Test User",
+            password_hash="hashed"
         )
 
         user.deactivate()
@@ -58,11 +58,11 @@ class TestUser:
     def test_user_record_login(self):
         """Test recording user login."""
         user = UserEntity(
-            id=UUID.generate(),
+            id=4,
             email=Email("test@example.com"),
             username="testuser",
-            full_name="Test User",
-            hashed_password="hashed"
+            name="Test User",
+            password_hash="hashed"
         )
 
         assert user.last_login_at is None
@@ -146,9 +146,9 @@ class TestChatbot:
 
     def test_create_chatbot(self):
         """Test creating a valid chatbot."""
-        chatbot = MessageEntity(
-            id=UUID.generate(),
-            workspace_id=UUID.generate(),
+        chatbot = ChatbotEntity(
+            id=1,
+            workspace_id=1,
             name="Test Bot",
             description="A test chatbot",
             system_prompt="You are a helpful assistant"
@@ -161,9 +161,9 @@ class TestChatbot:
     def test_invalid_temperature(self):
         """Test chatbot with invalid temperature."""
         with pytest.raises(ValueError):
-            MessageEntity(
-                id=UUID.generate(),
-                workspace_id=UUID.generate(),
+            ChatbotEntity(
+                id=2,
+                workspace_id=1,
                 name="Test Bot",
                 description="Test",
                 system_prompt="Test",
@@ -172,9 +172,9 @@ class TestChatbot:
 
     def test_add_tool(self):
         """Test adding a tool to chatbot."""
-        chatbot = MessageEntity(
-            id=UUID.generate(),
-            workspace_id=UUID.generate(),
+        chatbot = ChatbotEntity(
+            id=3,
+            workspace_id=1,
             name="Test Bot",
             description="Test",
             system_prompt="Test"

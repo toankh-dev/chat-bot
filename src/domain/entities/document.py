@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from typing import Optional
 from domain.value_objects.uuid_vo import UUID
 @dataclass
@@ -15,7 +15,7 @@ class DocumentEntity:
     processing_status: Optional[str] = None  # pending, syncing, completed, error
     knowledge_base_id: Optional[str] = None
     error_message: Optional[str] = None
-    uploaded_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    uploaded_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     processed_at: Optional[datetime] = None
     
     def mark_as_uploaded(self):
@@ -29,7 +29,7 @@ class DocumentEntity:
     def mark_as_processed(self):
         self.upload_status = "processed"
         self.processing_status = "completed"
-        self.processed_at = datetime.now(UTC)
+        self.processed_at = datetime.now(timezone.utc)
     
     def mark_as_failed(self, error: str):
         self.upload_status = "failed"

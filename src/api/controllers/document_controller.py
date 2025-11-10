@@ -21,6 +21,8 @@ from core.dependencies import (
     get_process_document_use_case,
     get_document_status_use_case
 )
+from api.middlewares.jwt_middleware import get_current_user
+from domain.entities.user import UserEntity
 from core.logger import logger
 
 
@@ -31,7 +33,7 @@ from core.logger import logger
 async def upload_document(
     file: UploadFile = File(...),
     domain: str = Form(...),
-    user_id: str = Form(...),  # In real app, get from JWT token
+    current_user: UserEntity = Depends(get_current_user),
     use_case: UploadDocumentUseCase = Depends(get_upload_document_use_case)
 ) -> DocumentUploadResponse:
     """
@@ -40,13 +42,14 @@ async def upload_document(
     Args:
         file: File to upload
         domain: Domain classification
-        user_id: User ID (should come from JWT in production)
+        current_user: Authenticated user from JWT token
         use_case: Upload document use case instance
 
     Returns:
         DocumentUploadResponse: Upload response with document info
     """
     try:
+        user_id = str(current_user.id.value)
         logger.info(f"Uploading document: {file.filename}, domain: {domain}, user: {user_id}")
 
         document = await use_case.execute(
@@ -82,7 +85,7 @@ async def upload_document(
 
 async def delete_document(
     document_id: str,
-    user_id: str = Form(...),  # In real app, get from JWT token
+    current_user: UserEntity = Depends(get_current_user),
     use_case: DeleteDocumentUseCase = Depends(get_delete_document_use_case)
 ):
     """
@@ -90,13 +93,14 @@ async def delete_document(
 
     Args:
         document_id: Document ID to delete
-        user_id: User ID (should come from JWT in production)
+        current_user: Authenticated user from JWT token
         use_case: Delete document use case instance
 
     Returns:
         dict: Success message
     """
     try:
+        user_id = str(current_user.id.value)
         logger.info(f"Deleting document: {document_id}, user: {user_id}")
 
         success = await use_case.execute(document_id, user_id)
@@ -119,7 +123,7 @@ async def delete_document(
 
 
 async def list_documents(
-    user_id: str,  # In real app, get from JWT token
+    current_user: UserEntity = Depends(get_current_user),
     domain: str = None,
     skip: int = 0,
     limit: int = 100,
@@ -129,7 +133,7 @@ async def list_documents(
     List user documents.
 
     Args:
-        user_id: User ID (should come from JWT in production)
+        current_user: Authenticated user from JWT token
         domain: Optional domain filter
         skip: Number of records to skip
         limit: Maximum number of records to return
@@ -139,6 +143,7 @@ async def list_documents(
         DocumentListResponse: List of documents
     """
     try:
+        user_id = str(current_user.id.value)
         logger.info(f"Listing documents for user: {user_id}, domain: {domain}")
 
         documents = await use_case.execute(user_id, domain, skip, limit)
@@ -170,7 +175,7 @@ async def list_documents(
 
 async def process_document(
     document_id: str,
-    user_id: str = Form(...),  # In real app, get from JWT token
+    current_user: UserEntity = Depends(get_current_user),
     use_case: ProcessDocumentUseCase = Depends(get_process_document_use_case)
 ) -> DocumentProcessingResponse:
     """
@@ -178,13 +183,14 @@ async def process_document(
 
     Args:
         document_id: Document ID to process
-        user_id: User ID (should come from JWT in production)
+        current_user: Authenticated user from JWT token
         use_case: Process document use case instance
 
     Returns:
         DocumentProcessingResponse: Processing result
     """
     try:
+        user_id = str(current_user.id.value)
         logger.info(f"Processing document: {document_id}, user: {user_id}")
 
         result = await use_case.execute(document_id, user_id)
@@ -206,7 +212,7 @@ async def process_document(
 
 async def get_document_status(
     document_id: str,
-    user_id: str,  # In real app, get from JWT token
+    current_user: UserEntity = Depends(get_current_user),
     use_case: GetDocumentStatusUseCase = Depends(get_document_status_use_case)
 ) -> DocumentStatusResponse:
     """
@@ -214,13 +220,14 @@ async def get_document_status(
 
     Args:
         document_id: Document ID
-        user_id: User ID (should come from JWT in production)
+        current_user: Authenticated user from JWT token
         use_case: Get document status use case instance
 
     Returns:
         DocumentStatusResponse: Document status
     """
     try:
+        user_id = str(current_user.id.value)
         logger.info(f"Getting status for document: {document_id}, user: {user_id}")
 
         document = await use_case.execute(document_id, user_id)

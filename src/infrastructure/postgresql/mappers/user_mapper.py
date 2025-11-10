@@ -7,7 +7,6 @@ Handles conversion between domain User entity and SQLAlchemy User model.
 from typing import Optional
 from domain.entities.user import UserEntity
 from domain.value_objects.email import Email
-from domain.value_objects.uuid_vo import UUID as UUIDValue
 from infrastructure.postgresql.models import UserModel
 
 
@@ -30,13 +29,13 @@ class UserMapper:
             User domain entity
         """
         return UserEntity(
-            id=UUIDValue.from_string(str(model.id)),
+            id=model.id,
             email=Email(model.email),
             username=model.email.split('@')[0],  # Derive username from email for now
-            full_name=model.name,
-            hashed_password=model.password_hash,
-            is_active=model.status == "active",
-            is_superuser=model.is_admin,
+            name=model.name,
+            password_hash=model.password_hash,
+            status=model.status,
+            is_admin=model.is_admin,
             created_at=model.created_at,
             updated_at=model.updated_at,
             last_login_at=None  # Not tracked in current ORM model
@@ -57,21 +56,21 @@ class UserMapper:
         if existing_model:
             # Update existing model
             existing_model.email = str(entity.email)
-            existing_model.name = entity.full_name
-            existing_model.password_hash = entity.hashed_password
-            existing_model.status = "active" if entity.is_active else "disabled"
-            existing_model.is_admin = entity.is_superuser
+            existing_model.name = entity.name
+            existing_model.password_hash = entity.password_hash
+            existing_model.status = entity.status
+            existing_model.is_admin = entity.is_admin
             existing_model.updated_at = entity.updated_at
             return existing_model
         else:
             # Create new model
             return UserModel(
-                id=int(str(entity.id).replace('-', '')[:8], 16) % 2147483647,  # Convert UUID to int for demo
+                id=entity.id,
                 email=str(entity.email),
-                name=entity.full_name,
-                password_hash=entity.hashed_password,
-                status="active" if entity.is_active else "disabled",
-                is_admin=entity.is_superuser,
+                name=entity.name,
+                password_hash=entity.password_hash,
+                status=entity.status,
+                is_admin=entity.is_admin,
                 created_at=entity.created_at,
                 updated_at=entity.updated_at
             )
@@ -89,10 +88,10 @@ class UserMapper:
         """
         return {
             "email": str(entity.email),
-            "name": entity.full_name,
-            "password_hash": entity.hashed_password,
-            "status": "active" if entity.is_active else "disabled",
-            "is_admin": entity.is_superuser,
+            "name": entity.name,
+            "password_hash": entity.password_hash,
+            "status": entity.status,
+            "is_admin": entity.is_admin,
             "created_at": entity.created_at,
             "updated_at": entity.updated_at
         }

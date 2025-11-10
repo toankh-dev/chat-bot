@@ -1,61 +1,72 @@
-"""GitLab integration routes."""
+"""
+GitLab Routes - Admin-only repository sync (simplified).
+"""
 
 from fastapi import APIRouter, status
+
 from api.controllers.gitlab_controller import (
-    sync_repository,
-    list_repositories,
-    get_sync_status,
-    delete_repository_sync,
-    test_gitlab_connection,
+    sync_repository_admin,
+    list_repositories_admin,
+    get_repository_sync_history_admin,
+    delete_repository_admin,
+    test_gitlab_connection_admin,
+    SyncRepositoryRequest,
     SyncRepositoryResponse,
-    SyncStatusResponse
+    RepositoryListResponse,
+    SyncHistoryResponse
 )
 
 router = APIRouter()
 
+# Test GitLab connection
+router.add_api_route(
+    "/test",
+    test_gitlab_connection_admin,
+    methods=["GET"],
+    status_code=status.HTTP_200_OK,
+    summary="Test GitLab connection (Admin)",
+    description="Test GitLab API connection using admin token"
+)
+
+# Sync repository
 router.add_api_route(
     "/sync",
-    sync_repository,
+    sync_repository_admin,
     methods=["POST"],
     response_model=SyncRepositoryResponse,
     status_code=status.HTTP_200_OK,
-    summary="Sync GitLab repository",
-    description="Sync a GitLab repository to Knowledge Base"
+    summary="Sync GitLab repository (Admin)",
+    description="Sync a GitLab repository and create embeddings"
 )
 
+# List repositories
 router.add_api_route(
-    "/repos",
-    list_repositories,
+    "/repositories",
+    list_repositories_admin,
     methods=["GET"],
+    response_model=RepositoryListResponse,
     status_code=status.HTTP_200_OK,
-    summary="List synced repositories",
-    description="List all synced repositories for a group"
+    summary="List synced repositories (Admin)",
+    description="Get all synced repositories"
 )
 
+# Get repository sync history
 router.add_api_route(
-    "/status/{group_id}",
-    get_sync_status,
+    "/repositories/{repository_id}/history",
+    get_repository_sync_history_admin,
     methods=["GET"],
-    response_model=SyncStatusResponse,
+    response_model=SyncHistoryResponse,
     status_code=status.HTTP_200_OK,
-    summary="Get sync status",
-    description="Get sync status for repositories in a group"
+    summary="Get repository sync history (Admin)",
+    description="Get sync history for a repository"
 )
 
+# Delete repository
 router.add_api_route(
-    "/repos/{group_id}",
-    delete_repository_sync,
+    "/repositories/{repository_id}",
+    delete_repository_admin,
     methods=["DELETE"],
     status_code=status.HTTP_200_OK,
-    summary="Delete repository sync",
-    description="Delete all documents synced from a specific repository"
-)
-
-router.add_api_route(
-    "/test",
-    test_gitlab_connection,
-    methods=["GET"],
-    status_code=status.HTTP_200_OK,
-    summary="Test GitLab connection",
-    description="Test GitLab API connection"
+    summary="Delete repository (Admin)",
+    description="Delete repository and all synced data"
 )

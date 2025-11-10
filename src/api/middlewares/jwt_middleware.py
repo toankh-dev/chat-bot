@@ -35,7 +35,8 @@ async def get_current_user(
     try:
         payload = jwt_handler.decode_token(token)
         user_id = payload.get("sub")
-
+        print("payload:", payload)
+        print("Authenticated user ID:", user_id)
         if not user_id:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -51,7 +52,7 @@ async def get_current_user(
                 detail="User not found"
             )
 
-        if user.status != "active":
+        if not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="User account is not active"
@@ -62,6 +63,7 @@ async def get_current_user(
     except HTTPException:
         raise
     except Exception as e:
+        print("Authentication error:", str(e))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials"

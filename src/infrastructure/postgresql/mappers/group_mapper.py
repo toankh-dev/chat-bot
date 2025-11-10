@@ -30,7 +30,6 @@ class GroupMapper:
         return GroupEntity(
             id=model.id,
             name=model.name,
-            description=model.description,
             created_at=model.created_at,
             updated_at=model.updated_at
         )
@@ -50,7 +49,6 @@ class GroupMapper:
         if existing_model:
             # Update existing model
             existing_model.name = entity.name
-            existing_model.description = entity.description
             existing_model.updated_at = entity.updated_at
             return existing_model
         else:
@@ -58,7 +56,6 @@ class GroupMapper:
             return GroupModel(
                 id=entity.id,
                 name=entity.name,
-                description=entity.description,
                 created_at=entity.created_at,
                 updated_at=entity.updated_at
             )
@@ -76,7 +73,6 @@ class GroupMapper:
         """
         return {
             "name": entity.name,
-            "description": entity.description,
             "created_at": entity.created_at,
             "updated_at": entity.updated_at
         }

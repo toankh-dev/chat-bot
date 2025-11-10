@@ -5,7 +5,7 @@ Represents the many-to-many relationship between users and groups.
 """
 
 from dataclasses import dataclass
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from typing import Optional
 
 
@@ -13,32 +13,36 @@ from typing import Optional
 class UserGroupEntity:
     """
     UserGroup entity representing the relationship between a user and a group.
-    
+
     This is a junction table entity that manages the many-to-many
     relationship between users and groups.
+    Note: This is a junction table with composite primary key (user_id, group_id), no separate id column.
     """
-    
-    id: Optional[int] = None
+
     user_id: int = 0
     group_id: int = 0
-    created_at: Optional[datetime] = None
-    added_by: Optional[int] = None  # User ID who added this user to the group
-    
+    added_by: int = 0  # User ID who added this user to the group (required)
+    joined_at: Optional[datetime] = None
+
     def __post_init__(self):
         """Validate user-group relationship data after initialization."""
         if self.user_id <= 0:
             raise ValueError("User ID must be a positive integer")
-        
+
         if self.group_id <= 0:
             raise ValueError("Group ID must be a positive integer")
 
-        if self.created_at is None:
-            self.created_at = datetime.now(UTC)
-    
+        if self.added_by <= 0:
+            raise ValueError("added_by must be a positive integer")
+
+        if self.joined_at is None:
+            self.joined_at = datetime.now(timezone.utc)
+
     @property
     def is_persisted(self) -> bool:
         """Check if the user-group relationship has been persisted to database."""
-        return self.id is not None
+        # Junction table is considered persisted if it has user_id and group_id
+        return self.user_id > 0 and self.group_id > 0
     
     def __str__(self) -> str:
         """String representation of the user-group relationship."""
@@ -47,8 +51,8 @@ class UserGroupEntity:
     def __repr__(self) -> str:
         """Detailed string representation of the user-group relationship."""
         return (
-            f"UserGroup(id={self.id}, user_id={self.user_id}, "
-            f"group_id={self.group_id}, created_at={self.created_at}, "
+            f"UserGroup(user_id={self.user_id}, "
+            f"group_id={self.group_id}, joined_at={self.joined_at}, "
             f"added_by={self.added_by})"
         )
     

@@ -1,21 +1,22 @@
-"""AI routes - Unified RAG + LLM endpoints."""
+"""AI routes - Admin-only LLM management and testing endpoints.
 
-from fastapi import APIRouter, status
+Note: Regular users should use /conversations endpoints for chatting.
+RAG is now integrated into conversation messages automatically.
+"""
+
+from fastapi import APIRouter, Depends, status
 from api.controllers.ai_controller import (
     get_available_providers,
     get_ai_system_info,
-    test_llm,
-    generate_text,
-    chat_with_documents,
-    semantic_search,
-    retrieve_contexts
+    test_llm
 )
-from schemas.rag_schema import ChatResponse, SearchResponse, ContextResponse
+from api.middlewares.jwt_middleware import require_admin
+from domain.entities.user import UserEntity
 
 router = APIRouter()
 
 # ============================================================================
-# LLM Management Routes
+# LLM Management Routes (Admin Only)
 # ============================================================================
 
 router.add_api_route(
@@ -23,8 +24,9 @@ router.add_api_route(
     get_available_providers,
     methods=["GET"],
     status_code=status.HTTP_200_OK,
-    summary="Get available LLM providers",
-    description="Get list of available LLM providers and models"
+    summary="Get available LLM providers (Admin)",
+    description="Get list of available LLM providers and models",
+    dependencies=[Depends(require_admin)]
 )
 
 router.add_api_route(
@@ -32,8 +34,9 @@ router.add_api_route(
     get_ai_system_info,
     methods=["GET"],
     status_code=status.HTTP_200_OK,
-    summary="Get AI system info",
-    description="Get complete AI system information including RAG and LLM details"
+    summary="Get AI system info (Admin)",
+    description="Get complete AI system information including RAG and LLM details",
+    dependencies=[Depends(require_admin)]
 )
 
 router.add_api_route(
@@ -41,49 +44,7 @@ router.add_api_route(
     test_llm,
     methods=["POST"],
     status_code=status.HTTP_200_OK,
-    summary="Test LLM",
-    description="Test current LLM provider with a sample prompt"
-)
-
-router.add_api_route(
-    "/generate",
-    generate_text,
-    methods=["POST"],
-    status_code=status.HTTP_200_OK,
-    summary="Generate text",
-    description="Generate text using direct LLM (without RAG)"
-)
-
-# ============================================================================
-# RAG Routes
-# ============================================================================
-
-router.add_api_route(
-    "/chat",
-    chat_with_documents,
-    methods=["POST"],
-    response_model=ChatResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Chat with documents",
-    description="Chat with documents using RAG (Retrieval-Augmented Generation)"
-)
-
-router.add_api_route(
-    "/search",
-    semantic_search,
-    methods=["POST"],
-    response_model=SearchResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Semantic search",
-    description="Perform semantic search across document knowledge base"
-)
-
-router.add_api_route(
-    "/contexts",
-    retrieve_contexts,
-    methods=["POST"],
-    response_model=ContextResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Retrieve contexts",
-    description="Retrieve relevant document contexts without generating response"
+    summary="Test LLM (Admin)",
+    description="Test current LLM provider with a sample prompt",
+    dependencies=[Depends(require_admin)]
 )

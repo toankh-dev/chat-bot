@@ -3,7 +3,7 @@ Workspace domain entity.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from typing import Optional
 from ..value_objects.uuid_vo import UUID
 
@@ -33,8 +33,8 @@ class WorkspaceEntity:
     owner_id: UUID
     is_active: bool = True
     settings: dict = field(default_factory=dict)
-    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def __post_init__(self):
         """Validate workspace invariants."""
@@ -44,17 +44,17 @@ class WorkspaceEntity:
     def deactivate(self) -> None:
         """Deactivate workspace."""
         self.is_active = False
-        self.updated_at = datetime.now(UTC)
+        self.updated_at = datetime.now(timezone.utc)
 
     def activate(self) -> None:
         """Activate workspace."""
         self.is_active = True
-        self.updated_at = datetime.now(UTC)
+        self.updated_at = datetime.now(timezone.utc)
 
     def update_settings(self, settings: dict) -> None:
         """Update workspace settings."""
         self.settings.update(settings)
-        self.updated_at = datetime.now(UTC)
+        self.updated_at = datetime.now(timezone.utc)
 
     def to_dict(self) -> dict:
         """Convert to dictionary."""

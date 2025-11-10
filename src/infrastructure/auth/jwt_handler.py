@@ -42,18 +42,18 @@ class JWTHandler:
         """
         return self.pwd_context.hash(password)
 
-    def verify_password(self, plain_password: str, hashed_password: str) -> bool:
+    def verify_password(self, plain_password: str, password_hash: str) -> bool:
         """
         Verify a password against its hash.
 
         Args:
             plain_password: Plain text password
-            hashed_password: Hashed password
+            password_hash: Hashed password
 
         Returns:
             True if password matches, False otherwise
         """
-        return self.pwd_context.verify(plain_password, hashed_password)
+        return self.pwd_context.verify(plain_password, password_hash)
 
     def create_access_token(
         self,
