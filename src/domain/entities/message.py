@@ -26,7 +26,7 @@ class MessageStatus(str, Enum):
 
 
 @dataclass
-class Message:
+class MessageEntity:
     """
     Message entity representing a single message in a conversation.
 
@@ -98,10 +98,5 @@ class Message:
             "timestamp": self.timestamp.isoformat()
         }
 
-    def to_bedrock_format(self) -> Dict[str, Any]:
-        """Convert to AWS Bedrock message format."""
-        message = {
-            "role": self.role.value,
-            "content": [{"text": self.content}]
-        }
-        return message
+# Backwards compatibility alias
+Message = MessageEntity

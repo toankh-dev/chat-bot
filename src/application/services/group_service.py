@@ -5,10 +5,10 @@ Handles group management business logic.
 """
 
 from typing import List, Optional
-from src.infrastructure.postgresql.group_repository_impl import GroupRepositoryImpl
-from src.infrastructure.postgresql.user_group_repository_impl import UserGroupRepositoryImpl
-from src.infrastructure.postgresql.models import Group
-from src.core.errors import NotFoundError, ValidationError
+from domain.entities.group import Group
+from core.errors import NotFoundError, ValidationError
+from shared.interfaces.repositories.group_repository import GroupRepository
+from shared.interfaces.repositories.user_group_repository import UserGroupRepository
 
 
 class GroupService:
@@ -18,8 +18,8 @@ class GroupService:
 
     def __init__(
         self,
-        group_repository: GroupRepositoryImpl,
-        user_group_repository: Optional[UserGroupRepositoryImpl] = None
+        group_repository: GroupRepository,
+        user_group_repository: Optional[UserGroupRepository] = None
     ):
         self.group_repository = group_repository
         self.user_group_repository = user_group_repository

@@ -6,8 +6,8 @@ Handles WebSocket connection lifecycle and message routing.
 
 import json
 from typing import Dict, Any
-from src.core.logger import logger
-from src.core.config import settings
+from core.logger import logger
+from core.config import settings
 
 
 async def connect_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -37,11 +37,10 @@ async def connect_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]
             }
 
         # Validate token (implement JWT validation)
-        # from src.infrastructure.auth.jwt_handler import get_jwt_handler
+        # from infrastructure.auth.jwt_handler import get_jwt_handler
         # jwt_handler = get_jwt_handler()
         # user_id = jwt_handler.get_token_subject(token)
 
-        # Store connection in DynamoDB
         # await store_connection(connection_id, user_id)
 
         logger.info(f"WebSocket connection established: {connection_id}")
@@ -74,7 +73,6 @@ async def disconnect_handler(event: Dict[str, Any], context: Any) -> Dict[str, A
     logger.info(f"WebSocket disconnect request: {connection_id}")
 
     try:
-        # Remove connection from DynamoDB
         # await remove_connection(connection_id)
 
         logger.info(f"WebSocket connection closed: {connection_id}")

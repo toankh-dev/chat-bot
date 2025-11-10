@@ -3,13 +3,13 @@ Chatbot domain entity.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import List, Optional
 from ..value_objects.uuid_vo import UUID
 
 
 @dataclass
-class Chatbot:
+class ChatbotEntity:
     """
     Chatbot entity representing an AI assistant configuration.
 
@@ -38,8 +38,8 @@ class Chatbot:
     max_tokens: int = 4096
     tools: List[str] = field(default_factory=list)
     is_active: bool = True
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self):
         """Validate chatbot invariants."""
@@ -53,12 +53,12 @@ class Chatbot:
     def deactivate(self) -> None:
         """Deactivate chatbot."""
         self.is_active = False
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     def activate(self) -> None:
         """Activate chatbot."""
         self.is_active = True
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     def update_config(
         self,
@@ -77,19 +77,19 @@ class Chatbot:
             if max_tokens < 1:
                 raise ValueError("Max tokens must be positive")
             self.max_tokens = max_tokens
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     def add_tool(self, tool_id: str) -> None:
         """Add a tool to the chatbot."""
         if tool_id not in self.tools:
             self.tools.append(tool_id)
-            self.updated_at = datetime.utcnow()
+            self.updated_at = datetime.now(UTC)
 
     def remove_tool(self, tool_id: str) -> None:
         """Remove a tool from the chatbot."""
         if tool_id in self.tools:
             self.tools.remove(tool_id)
-            self.updated_at = datetime.utcnow()
+            self.updated_at = datetime.now(UTC)
 
     def to_dict(self) -> dict:
         """Convert to dictionary."""
@@ -107,3 +107,7 @@ class Chatbot:
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat()
         }
+
+
+# Backwards compatibility alias
+Chatbot = ChatbotEntity

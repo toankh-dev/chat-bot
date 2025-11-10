@@ -3,20 +3,19 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
-from src.infrastructure.auth.jwt_handler import JWTHandler
-from src.infrastructure.postgresql.pg_client import get_db_session
-from src.infrastructure.postgresql.models import User
-from src.infrastructure.postgresql.user_repository_impl import UserRepositoryImpl
-from src.core.dependencies import get_jwt_handler
+from infrastructure.auth.jwt_handler import JWTHandler
+from infrastructure.postgresql.connection.database import get_db_session
+from domain.entities.user import UserEntity
+from infrastructure.postgresql.repositories.user_repository import UserRepositoryImpl
+from core.dependencies import get_jwt_handler
 
 security = HTTPBearer()
-
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db_session),
     jwt_handler: JWTHandler = Depends(get_jwt_handler)
-) -> User:
+) -> UserEntity:
     """
     Get current authenticated user from JWT token.
 
@@ -26,7 +25,7 @@ async def get_current_user(
         jwt_handler: JWT handler instance
 
     Returns:
-        User: Authenticated user
+        UserModel: Authenticated user
 
     Raises:
         HTTPException: If authentication fails
@@ -70,8 +69,8 @@ async def get_current_user(
 
 
 async def require_admin(
-    current_user: User = Depends(get_current_user)
-) -> User:
+    current_user: UserEntity = Depends(get_current_user)
+) -> UserEntity:
     """
     Require user to be admin.
 
@@ -79,7 +78,7 @@ async def require_admin(
         current_user: Authenticated user
 
     Returns:
-        User: Admin user
+        UserModel: Admin user
 
     Raises:
         HTTPException: If user is not admin

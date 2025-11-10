@@ -5,8 +5,8 @@ Defines application-level use cases for group operations.
 """
 
 from typing import List
-from src.application.services.group_service import GroupService
-from src.schemas.group_schema import (
+from application.services.group_service import GroupService
+from schemas.group_schema import (
     GroupCreate,
     GroupUpdate,
     GroupResponse

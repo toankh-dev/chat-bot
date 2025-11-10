@@ -3,13 +3,13 @@ Workspace domain entity.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Optional
 from ..value_objects.uuid_vo import UUID
 
 
 @dataclass
-class Workspace:
+class WorkspaceEntity:
     """
     Workspace entity for organizing chatbots and users.
 
@@ -33,8 +33,8 @@ class Workspace:
     owner_id: UUID
     is_active: bool = True
     settings: dict = field(default_factory=dict)
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self):
         """Validate workspace invariants."""
@@ -44,17 +44,17 @@ class Workspace:
     def deactivate(self) -> None:
         """Deactivate workspace."""
         self.is_active = False
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     def activate(self) -> None:
         """Activate workspace."""
         self.is_active = True
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     def update_settings(self, settings: dict) -> None:
         """Update workspace settings."""
         self.settings.update(settings)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     def to_dict(self) -> dict:
         """Convert to dictionary."""
@@ -68,3 +68,7 @@ class Workspace:
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat()
         }
+
+
+# Backwards compatibility alias
+Workspace = WorkspaceEntity

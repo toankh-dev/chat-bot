@@ -1,7 +1,7 @@
 """Application use cases package."""
 
-from src.usecases.auth_use_cases import LoginUseCase, RegisterUseCase
-from src.usecases.user_use_cases import (
+from usecases.auth_use_cases import LoginUseCase, RegisterUseCase
+from usecases.user_use_cases import (
     GetCurrentUserUseCase,
     ListUsersUseCase,
     GetUserUseCase,
@@ -9,14 +9,14 @@ from src.usecases.user_use_cases import (
     UpdateUserUseCase,
     DeleteUserUseCase
 )
-from src.usecases.chatbot_use_cases import (
+from usecases.chatbot_use_cases import (
     ListChatbotsUseCase,
     GetChatbotUseCase,
     CreateChatbotUseCase,
     UpdateChatbotUseCase,
     DeleteChatbotUseCase
 )
-from src.usecases.conversation_use_cases import (
+from usecases.conversation_use_cases import (
     ListConversationsUseCase,
     GetConversationUseCase,
     CreateConversationUseCase,

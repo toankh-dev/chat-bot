@@ -20,7 +20,11 @@ class UUID:
     def __post_init__(self):
         """Validate UUID format."""
         try:
-            uuid.UUID(self.value)
+            if isinstance(self.value, uuid.UUID):
+                # Re-assign value to its string representation using object.__setattr__
+                object.__setattr__(self, "value", str(self.value))
+            else:
+                uuid.UUID(self.value)
         except (ValueError, AttributeError):
             raise ValueError(f"Invalid UUID format: {self.value}")
 

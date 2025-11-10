@@ -1,11 +1,11 @@
 """Authentication controller."""
 
 from fastapi import Depends, status
-from src.schemas.auth_schema import LoginRequest, LoginResponse, RegisterRequest
-from src.usecases.auth_use_cases import LoginUseCase, RegisterUseCase
-from src.core.dependencies import get_login_use_case, get_register_use_case
-from src.api.middlewares.jwt_middleware import get_current_user
-from src.infrastructure.postgresql.models import User
+from schemas.auth_schema import LoginRequest, LoginResponse, RegisterRequest
+from usecases.auth_use_cases import LoginUseCase, RegisterUseCase
+from core.dependencies import get_login_use_case, get_register_use_case
+from api.middlewares.jwt_middleware import get_current_user
+from domain.entities.user import UserEntity
 
 
 async def login(
@@ -43,7 +43,7 @@ async def register(
 
 
 async def logout(
-    current_user: User = Depends(get_current_user)
+    current_user: UserEntity = Depends(get_current_user)
 ) -> dict:
     """
     Logout current user.
