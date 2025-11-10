@@ -23,10 +23,22 @@ class UserCreate(BaseModel):
 
 
 class UserUpdate(BaseModel):
-    """User update request."""
+    """User update request (admin only)."""
     name: Optional[str] = None
-    status: Optional[str] = None
+    is_active: Optional[bool] = None
     group_ids: Optional[List[int]] = Field(default=None, description="List of group IDs to assign user to (replaces existing)")
+
+
+class UserProfileUpdate(BaseModel):
+    """User profile update request (for logged-in user)."""
+    name: Optional[str] = Field(default=None, min_length=1, description="User's full name")
+    email: Optional[EmailStr] = Field(default=None, description="User's email address")
+
+
+class ChangePasswordRequest(BaseModel):
+    """Password change request."""
+    current_password: str = Field(..., min_length=6, description="Current password for verification")
+    new_password: str = Field(..., min_length=6, description="New password")
 
 
 class UserResponse(BaseModel):

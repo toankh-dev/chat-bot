@@ -7,11 +7,28 @@ Defines application-level use cases for user operations.
 from typing import List
 from application.services.user_service import UserService
 from infrastructure.postgresql.models import UserModel
+from domain.entities.user import UserEntity
 from schemas.user_schema import (
     UserCreate,
     UserUpdate,
+    UserProfileUpdate,
+    ChangePasswordRequest,
     UserResponse
 )
+
+
+def _convert_entity_to_response(user: UserEntity) -> UserResponse:
+    """Convert UserEntity to UserResponse."""
+    return UserResponse(
+        id=user.id,
+        email=str(user.email),
+        name=user.full_name,
+        is_admin=user.is_superuser,
+        status="active" if user.is_active else "inactive",
+        created_at=user.created_at,
+        updated_at=user.updated_at,
+        groups=getattr(user, 'groups', None)
+    )
 
 
 class GetCurrentUserUseCase:
@@ -33,7 +50,7 @@ class GetCurrentUserUseCase:
             UserResponse: User profile data
         """
         user = await self.user_service.get_user_by_id(user_id)
-        return UserResponse.model_validate(user)
+        return _convert_entity_to_response(user)
 
 
 class ListUsersUseCase:
@@ -56,7 +73,17 @@ class ListUsersUseCase:
             List[UserResponse]: List of users
         """
         users = await self.user_service.list_users(skip=skip, limit=limit)
-        return [UserResponse.model_validate(user) for user in users]
+        # Load groups for each user
+        responses = []
+        for user in users:
+            # Load groups for this user using integer ID directly
+            if self.user_service.user_group_repository:
+                groups = await self.user_service.user_group_repository.get_user_groups(user.id)
+                # Attach groups to user object
+                user.groups = groups
+            
+            responses.append(_convert_entity_to_response(user))
+        return responses
 
 
 class GetUserUseCase:
@@ -78,7 +105,7 @@ class GetUserUseCase:
             UserResponse: User data
         """
         user = await self.user_service.get_user_by_id(user_id)
-        return UserResponse.model_validate(user)
+        return _convert_entity_to_response(user)
 
 
 class CreateUserUseCase:
@@ -111,7 +138,7 @@ class CreateUserUseCase:
 
         # Load groups for response
         user = await self.user_service.get_user_by_id(user.id, include_groups=True)
-        return UserResponse.model_validate(user)
+        return _convert_entity_to_response(user)
 
 
 class UpdateUserUseCase:
@@ -137,14 +164,14 @@ class UpdateUserUseCase:
         user = await self.user_service.update_user(
             user_id=user_id,
             name=request.name,
-            status=request.status,
+            is_active=request.is_active,
             group_ids=request.group_ids,
             updated_by=admin_id
         )
 
         # Load groups for response
         user = await self.user_service.get_user_by_id(user_id, include_groups=True)
-        return UserResponse.model_validate(user)
+        return _convert_entity_to_response(user)
 
 
 class DeleteUserUseCase:
@@ -166,3 +193,59 @@ class DeleteUserUseCase:
             bool: True if deleted
         """
         return await self.user_service.delete_user(user_id)
+
+
+class UpdateOwnProfileUseCase:
+    """
+    Use case for updating own profile (logged-in user).
+    """
+
+    def __init__(self, user_service: UserService):
+        self.user_service = user_service
+
+    async def execute(self, user_id: int, request: UserProfileUpdate) -> UserResponse:
+        """
+        Execute update own profile use case.
+
+        Args:
+            user_id: Current user ID (from JWT)
+            request: Profile update data
+
+        Returns:
+            UserResponse: Updated user data
+        """
+        user = await self.user_service.update_own_profile(
+            user_id=user_id,
+            name=request.name,
+            email=request.email
+        )
+
+        # Load groups for response
+        user = await self.user_service.get_user_by_id(user_id, include_groups=True)
+        return _convert_entity_to_response(user)
+
+
+class ChangePasswordUseCase:
+    """
+    Use case for changing own password.
+    """
+
+    def __init__(self, user_service: UserService):
+        self.user_service = user_service
+
+    async def execute(self, user_id: int, request: ChangePasswordRequest) -> None:
+        """
+        Execute change password use case.
+
+        Args:
+            user_id: Current user ID (from JWT)
+            request: Password change request with current and new password
+
+        Raises:
+            ValidationError: If current password is incorrect
+        """
+        await self.user_service.change_own_password(
+            user_id=user_id,
+            current_password=request.current_password,
+            new_password=request.new_password
+        )

@@ -22,7 +22,7 @@ class Group(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), unique=True, nullable=False, index=True)
-    description = Column(Text, nullable=True)
+    # description = Column(Text, nullable=True)  # Column doesn't exist in database yet
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     

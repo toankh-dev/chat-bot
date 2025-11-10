@@ -25,16 +25,10 @@ class UserRepositoryImpl(UserRepository):
         self.session = session
         self.mapper = UserMapper
 
-    async def find_by_id(self, id: str) -> Optional[UserEntity]:
+    async def find_by_id(self, id: int) -> Optional[UserEntity]:
         """Find user by ID and return domain entity."""
-        # Convert string ID to int for ORM query
-        try:
-            user_id = int(id) if id.isdigit() else int(id.replace('-', '')[:8], 16) % 2147483647
-        except:
-            return None
-
         result = await self.session.execute(
-            select(UserModel).where(UserModel.id == user_id)
+            select(UserModel).where(UserModel.id == id)
         )
         model = result.scalar_one_or_none()
         return self.mapper.to_entity(model) if model else None
@@ -57,10 +51,8 @@ class UserRepositoryImpl(UserRepository):
 
     async def update(self, entity: UserEntity) -> UserEntity:
         """Update existing user from domain entity."""
-        # Find existing model
-        user_id = int(str(entity.id).replace('-', '')[:8], 16) % 2147483647
         result = await self.session.execute(
-            select(UserModel).where(UserModel.id == user_id)
+            select(UserModel).where(UserModel.id == entity.id)
         )
         existing_model = result.scalar_one_or_none()
 
@@ -73,30 +65,22 @@ class UserRepositoryImpl(UserRepository):
             # Create new if doesn't exist
             return await self.create(entity)
 
-    async def delete(self, id: str) -> bool:
+    async def delete(self, id: int) -> bool:
         """Delete user by ID."""
-        user_entity = await self.find_by_id(id)
-        if user_entity:
-            user_id = int(id) if id.isdigit() else int(id.replace('-', '')[:8], 16) % 2147483647
-            result = await self.session.execute(
-                select(UserModel).where(UserModel.id == user_id)
-            )
-            model = result.scalar_one_or_none()
-            if model:
-                await self.session.delete(model)
-                await self.session.flush()
-                return True
+        result = await self.session.execute(
+            select(UserModel).where(UserModel.id == id)
+        )
+        model = result.scalar_one_or_none()
+        if model:
+            await self.session.delete(model)
+            await self.session.flush()
+            return True
         return False
 
-    async def exists(self, id: str) -> bool:
+    async def exists(self, id: int) -> bool:
         """Check if user exists."""
-        try:
-            user_id = int(id) if id.isdigit() else int(id.replace('-', '')[:8], 16) % 2147483647
-        except:
-            return False
-
         result = await self.session.execute(
-            select(UserModel.id).where(UserModel.id == user_id)
+            select(UserModel.id).where(UserModel.id == id)
         )
         return result.scalar_one_or_none() is not None
 

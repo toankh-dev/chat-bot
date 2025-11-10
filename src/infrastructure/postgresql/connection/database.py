@@ -21,14 +21,20 @@ class DatabaseManager:
             f"postgresql+asyncpg://{settings.DB_USER}:{settings.DB_PASSWORD}"
             f"@{settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}"
         )
-        
+
+        # Connect args for asyncpg - disable SSL for local development
+        connect_args = {}
+        if settings.ENVIRONMENT in ["development", "local"]:
+            connect_args = {"ssl": "disable"}
+
         self.engine = create_async_engine(
             database_url,
             echo=settings.DEBUG,
             pool_size=20,
             max_overflow=30,
             pool_pre_ping=True,
-            pool_recycle=3600
+            pool_recycle=3600,
+            connect_args=connect_args
         )
         
         self.session_factory = async_sessionmaker(
@@ -47,6 +53,8 @@ class DatabaseManager:
         async with self.session_factory() as session:
             try:
                 yield session
+                # Commit the transaction if no exceptions occurred
+                await session.commit()
             except Exception as e:
                 await session.rollback()
                 logger.error(f"Database session error: {e}")

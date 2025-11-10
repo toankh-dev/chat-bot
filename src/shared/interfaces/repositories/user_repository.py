@@ -10,7 +10,7 @@ from shared.interfaces.repositories.base_repository import BaseRepository
 from domain.entities.user import UserEntity
 
 
-class UserRepository(BaseRepository[UserEntity, str]):
+class UserRepository(BaseRepository[UserEntity, int]):
     """
     User repository interface.
 

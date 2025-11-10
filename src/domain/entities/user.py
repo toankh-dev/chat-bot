@@ -6,7 +6,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, UTC
 from typing import Optional
 from ..value_objects.email import Email
-from ..value_objects.uuid_vo import UUID
 
 
 @dataclass
@@ -15,7 +14,7 @@ class UserEntity:
     User entity representing a system user.
 
     Attributes:
-        id: Unique user identifier
+        id: Unique user identifier (integer)
         email: User email address
         username: Unique username
         full_name: User's full name
@@ -27,7 +26,7 @@ class UserEntity:
         last_login_at: Last login timestamp
     """
 
-    id: UUID
+    id: int
     email: Email
     username: str
     full_name: str
@@ -67,7 +66,7 @@ class UserEntity:
     def to_dict(self) -> dict:
         """Convert to dictionary (excluding sensitive data)."""
         return {
-            "id": str(self.id),
+            "id": self.id,
             "email": str(self.email),
             "username": self.username,
             "full_name": self.full_name,

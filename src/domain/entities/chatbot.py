@@ -5,7 +5,6 @@ Chatbot domain entity.
 from dataclasses import dataclass, field
 from datetime import datetime, UTC
 from typing import List, Optional
-from ..value_objects.uuid_vo import UUID
 
 
 @dataclass
@@ -14,8 +13,8 @@ class ChatbotEntity:
     Chatbot entity representing an AI assistant configuration.
 
     Attributes:
-        id: Unique chatbot identifier
-        workspace_id: Parent workspace ID
+        id: Unique chatbot identifier (integer)
+        workspace_id: Parent workspace ID (integer, using created_by as workspace for now)
         name: Chatbot name
         description: Chatbot description
         system_prompt: System prompt for the AI model
@@ -28,8 +27,8 @@ class ChatbotEntity:
         updated_at: Last update timestamp
     """
 
-    id: UUID
-    workspace_id: UUID
+    id: int
+    workspace_id: int
     name: str
     description: str
     system_prompt: str
@@ -94,8 +93,8 @@ class ChatbotEntity:
     def to_dict(self) -> dict:
         """Convert to dictionary."""
         return {
-            "id": str(self.id),
-            "workspace_id": str(self.workspace_id),
+            "id": self.id,
+            "workspace_id": self.workspace_id,
             "name": self.name,
             "description": self.description,
             "system_prompt": self.system_prompt,

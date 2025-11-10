@@ -30,7 +30,7 @@ class GroupMapper:
         return GroupEntity(
             id=model.id,
             name=model.name,
-            description=model.description,
+            description=getattr(model, 'description', None),  # Handle missing description column
             created_at=model.created_at,
             updated_at=model.updated_at
         )
@@ -50,15 +50,14 @@ class GroupMapper:
         if existing_model:
             # Update existing model
             existing_model.name = entity.name
-            existing_model.description = entity.description
+            # Note: description column doesn't exist in database yet, so we skip it
             existing_model.updated_at = entity.updated_at
             return existing_model
         else:
-            # Create new model
+            # Create new model - don't set id, let database auto-generate it
+            # Note: description column doesn't exist in database yet, so we skip it
             return GroupModel(
-                id=entity.id,
                 name=entity.name,
-                description=entity.description,
                 created_at=entity.created_at,
                 updated_at=entity.updated_at
             )

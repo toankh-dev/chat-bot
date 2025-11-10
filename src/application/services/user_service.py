@@ -7,7 +7,6 @@ Handles user management business logic.
 from typing import List, Optional
 import bcrypt
 from domain.value_objects.email import Email
-from domain.value_objects.uuid_vo import UUID
 from core.errors import NotFoundError, ValidationError
 from domain.entities.user import User
 from shared.interfaces.repositories.group_repository import GroupRepository
@@ -37,7 +36,7 @@ class UserService:
         Get user by ID.
 
         Args:
-            user_id: User ID
+            user_id: User ID (integer)
             include_groups: Whether to load user's groups
 
         Returns:
@@ -118,8 +117,9 @@ class UserService:
         ).decode('utf-8')
 
         # Create domain entity
+        # ID will be set by database auto-increment
         user = User(
-            id=UUID.generate(),
+            id=0,  # Temporary ID, will be set by database
             email=Email(email),
             username=email.split('@')[0],  # Derive username from email
             full_name=name,
@@ -143,7 +143,7 @@ class UserService:
 
     async def update_user(
         self,
-        user_id: str,
+        user_id: int,
         name: Optional[str] = None,
         is_active: Optional[bool] = None,
         group_ids: Optional[List[int]] = None,
@@ -204,6 +204,7 @@ class UserService:
                         raise ValidationError(f"Group with ID {group_id} not found")
 
             if self.user_group_repository:
+                # Use the user_id parameter directly (it's already an integer from the API)
                 await self.user_group_repository.assign_user_to_groups(
                     user_id=user_id,
                     group_ids=group_ids,
@@ -212,12 +213,12 @@ class UserService:
 
         return updated_user
 
-    async def delete_user(self, user_id: str) -> bool:
+    async def delete_user(self, user_id: int) -> bool:
         """
         Delete user.
 
         Args:
-            user_id: User ID
+            user_id: User ID (integer)
 
         Returns:
             bool: True if deleted
@@ -229,6 +230,111 @@ class UserService:
             raise NotFoundError(f"User with ID {user_id} not found")
 
         return await self.user_repository.delete(user_id)
+
+    async def update_own_profile(
+        self,
+        user_id: int,
+        name: Optional[str] = None,
+        email: Optional[str] = None
+    ) -> User:
+        """
+        Update user's own profile.
+
+        Args:
+            user_id: User ID
+            name: New name (optional)
+            email: New email (optional)
+
+        Returns:
+            User: Updated user domain entity
+
+        Raises:
+            NotFoundError: If user not found
+            ValidationError: If email already exists
+        """
+        user = await self.get_user_by_id(user_id)
+
+        # Check if email is being changed and if it already exists
+        if email is not None and str(user.email) != email:
+            existing_user = await self.user_repository.find_by_email(email)
+            if existing_user and existing_user.id != user_id:
+                raise ValidationError("Email already registered")
+
+            # Update email
+            user = User(
+                id=user.id,
+                email=Email(email),
+                username=email.split('@')[0],  # Update username from email
+                full_name=name if name is not None else user.full_name,
+                hashed_password=user.hashed_password,
+                is_active=user.is_active,
+                is_superuser=user.is_superuser,
+                created_at=user.created_at,
+                last_login_at=user.last_login_at
+            )
+        elif name is not None:
+            # Only update name
+            user = User(
+                id=user.id,
+                email=user.email,
+                username=user.username,
+                full_name=name,
+                hashed_password=user.hashed_password,
+                is_active=user.is_active,
+                is_superuser=user.is_superuser,
+                created_at=user.created_at,
+                last_login_at=user.last_login_at
+            )
+        else:
+            # No changes
+            return user
+
+        return await self.user_repository.update(user)
+
+    async def change_own_password(
+        self,
+        user_id: int,
+        current_password: str,
+        new_password: str
+    ) -> None:
+        """
+        Change user's own password.
+
+        Args:
+            user_id: User ID
+            current_password: Current password for verification
+            new_password: New plain password
+
+        Raises:
+            NotFoundError: If user not found
+            ValidationError: If current password is incorrect
+        """
+        user = await self.get_user_by_id(user_id)
+
+        # Verify current password
+        if not bcrypt.checkpw(current_password.encode('utf-8'), user.hashed_password.encode('utf-8')):
+            raise ValidationError("Current password is incorrect")
+
+        # Hash new password
+        hashed_password = bcrypt.hashpw(
+            new_password.encode('utf-8'),
+            bcrypt.gensalt()
+        ).decode('utf-8')
+
+        # Update password
+        user = User(
+            id=user.id,
+            email=user.email,
+            username=user.username,
+            full_name=user.full_name,
+            hashed_password=hashed_password,
+            is_active=user.is_active,
+            is_superuser=user.is_superuser,
+            created_at=user.created_at,
+            last_login_at=user.last_login_at
+        )
+
+        await self.user_repository.update(user)
 
     async def change_password(self, user_id: str, new_password: str) -> User:
         """

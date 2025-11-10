@@ -7,7 +7,6 @@ Handles conversion between domain User entity and SQLAlchemy User model.
 from typing import Optional
 from domain.entities.user import UserEntity
 from domain.value_objects.email import Email
-from domain.value_objects.uuid_vo import UUID as UUIDValue
 from infrastructure.postgresql.models import UserModel
 
 
@@ -30,7 +29,7 @@ class UserMapper:
             User domain entity
         """
         return UserEntity(
-            id=UUIDValue.from_string(str(model.id)),
+            id=model.id,
             email=Email(model.email),
             username=model.email.split('@')[0],  # Derive username from email for now
             full_name=model.name,
@@ -61,19 +60,24 @@ class UserMapper:
             existing_model.password_hash = entity.hashed_password
             existing_model.status = "active" if entity.is_active else "disabled"
             existing_model.is_admin = entity.is_superuser
-            existing_model.updated_at = entity.updated_at
+            # Remove timezone for database compatibility
+            existing_model.updated_at = entity.updated_at.replace(tzinfo=None) if entity.updated_at.tzinfo else entity.updated_at
             return existing_model
         else:
-            # Create new model
+            # Create new model - let database auto-generate the ID
+            # Remove timezone info for database compatibility
+            created_at = entity.created_at.replace(tzinfo=None) if entity.created_at.tzinfo else entity.created_at
+            updated_at = entity.updated_at.replace(tzinfo=None) if entity.updated_at.tzinfo else entity.updated_at
+
+            # Don't set id - let database auto-generate it
             return UserModel(
-                id=int(str(entity.id).replace('-', '')[:8], 16) % 2147483647,  # Convert UUID to int for demo
                 email=str(entity.email),
                 name=entity.full_name,
                 password_hash=entity.hashed_password,
                 status="active" if entity.is_active else "disabled",
                 is_admin=entity.is_superuser,
-                created_at=entity.created_at,
-                updated_at=entity.updated_at
+                created_at=created_at,
+                updated_at=updated_at
             )
 
     @staticmethod

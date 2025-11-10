@@ -51,15 +51,19 @@ class GroupChatbotMapper:
             existing_model.group_id = entity.group_id
             existing_model.chatbot_id = entity.chatbot_id
             existing_model.assigned_by = entity.assigned_by
-            existing_model.assigned_at = entity.created_at
+            # Remove timezone info for database compatibility
+            existing_model.assigned_at = entity.created_at.replace(tzinfo=None) if entity.created_at and entity.created_at.tzinfo else entity.created_at
+            existing_model.status = entity.status
             return existing_model
         else:
             # Create new model
+            # Remove timezone info for database compatibility
+            assigned_at = entity.created_at.replace(tzinfo=None) if entity.created_at and entity.created_at.tzinfo else entity.created_at
             return GroupChatbotModel(
                 group_id=entity.group_id,
                 chatbot_id=entity.chatbot_id,
                 assigned_by=entity.assigned_by,
-                assigned_at=entity.created_at,
+                assigned_at=assigned_at,
                 status="active"  # Default status
             )
 

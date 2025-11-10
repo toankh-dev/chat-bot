@@ -62,7 +62,9 @@ from usecases.user_use_cases import (
     GetUserUseCase,
     CreateUserUseCase,
     UpdateUserUseCase,
-    DeleteUserUseCase
+    DeleteUserUseCase,
+    UpdateOwnProfileUseCase,
+    ChangePasswordUseCase
 )
 from usecases.chatbot_use_cases import (
     ListChatbotsUseCase,
@@ -264,6 +266,20 @@ def get_delete_user_use_case(
 ) -> DeleteUserUseCase:
     """Get delete user use case instance."""
     return DeleteUserUseCase(user_service)
+
+
+def get_update_own_profile_use_case(
+    user_service: UserService = Depends(get_user_service)
+) -> UpdateOwnProfileUseCase:
+    """Get update own profile use case instance."""
+    return UpdateOwnProfileUseCase(user_service)
+
+
+def get_change_password_use_case(
+    user_service: UserService = Depends(get_user_service)
+) -> ChangePasswordUseCase:
+    """Get change password use case instance."""
+    return ChangePasswordUseCase(user_service)
 
 
 # Group use cases

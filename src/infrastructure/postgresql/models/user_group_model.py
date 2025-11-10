@@ -20,12 +20,11 @@ class UserGroup(Base):
     
     __tablename__ = "user_groups"
     __table_args__ = {'extend_existing': True}
-    
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    group_id = Column(Integer, ForeignKey("groups.id"), nullable=False, index=True)
-    added_by = Column(Integer, ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True, nullable=False)
+    group_id = Column(Integer, ForeignKey("groups.id"), primary_key=True, nullable=False)
+    added_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    joined_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     
     # Relationships
     user = relationship(UserModel, foreign_keys=[user_id])

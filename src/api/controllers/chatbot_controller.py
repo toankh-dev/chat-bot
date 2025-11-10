@@ -5,6 +5,7 @@ from typing import List
 from schemas.chatbot_schema import ChatbotResponse, ChatbotCreate, ChatbotUpdate
 from domain.entities.user import UserEntity
 from api.middlewares.jwt_middleware import get_current_user, require_admin
+from shared.utils.user_id_helper import extract_user_id_int
 from usecases.chatbot_use_cases import (
     ListChatbotsUseCase,
     GetChatbotUseCase,
@@ -77,7 +78,9 @@ async def create_chatbot(
     Returns:
         ChatbotResponse: Created chatbot data
     """
-    return await use_case.execute(chatbot_data, current_user.id)
+    # Extract integer user ID from UserEntity (temporary bridge until UserEntity uses integers)
+    creator_id = extract_user_id_int(current_user.id)
+    return await use_case.execute(chatbot_data, creator_id)
 
 
 async def update_chatbot(
@@ -98,7 +101,9 @@ async def update_chatbot(
     Returns:
         ChatbotResponse: Updated chatbot data
     """
-    return await use_case.execute(chatbot_id, chatbot_data, current_user.id)
+    # Extract integer user ID from UserEntity (temporary bridge until UserEntity uses integers)
+    admin_id = extract_user_id_int(current_user.id)
+    return await use_case.execute(chatbot_id, chatbot_data, admin_id)
 
 
 async def delete_chatbot(

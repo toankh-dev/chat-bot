@@ -43,7 +43,9 @@ async def get_current_user(
             )
 
         user_repository = UserRepositoryImpl(db)
-        user = await user_repository.find_by_id(int(user_id))
+        # Convert user_id from JWT token (string) to integer
+        user_id_int = int(user_id) if isinstance(user_id, str) and user_id.isdigit() else int(user_id)
+        user = await user_repository.find_by_id(user_id_int)
 
         if not user:
             raise HTTPException(
@@ -51,7 +53,7 @@ async def get_current_user(
                 detail="User not found"
             )
 
-        if user.status != "active":
+        if not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="User account is not active"
@@ -83,7 +85,7 @@ async def require_admin(
     Raises:
         HTTPException: If user is not admin
     """
-    if not current_user.is_admin:
+    if not current_user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin privileges required"

@@ -7,7 +7,6 @@ Handles chatbot management business logic.
 from typing import List, Optional
 from decimal import Decimal
 from core.errors import NotFoundError, ValidationError
-from domain.value_objects.uuid_vo import UUID
 from domain.entities.user import UserEntity
 from domain.entities.chatbot import ChatbotEntity
 from shared.interfaces.repositories.chatbot_repository import ChatbotRepository
@@ -62,7 +61,7 @@ class ChatbotService:
         Get chatbot by ID.
 
         Args:
-            chatbot_id: Chatbot ID
+            chatbot_id: Chatbot ID (integer)
             include_assignments: Whether to load assigned groups and users
 
         Returns:
@@ -81,6 +80,64 @@ class ChatbotService:
             chatbot.assigned_users = await self.get_chatbot_assigned_users(chatbot_id)
 
         return chatbot
+    
+    async def get_chatbot_model_data(self, chatbot_id: int) -> dict:
+        """
+        Get chatbot model data with all fields from database.
+
+        This is a helper method to get the full model data including
+        fields not in the domain entity (provider, model, top_p, etc.)
+
+        Args:
+            chatbot_id: Chatbot ID (integer)
+
+        Returns:
+            Dictionary with all chatbot model fields
+
+        Raises:
+            NotFoundError: If chatbot not found
+        """
+        from sqlalchemy import select
+        from infrastructure.postgresql.models import ChatbotModel
+
+        # Access the session from repository to query model directly
+        if hasattr(self.chatbot_repository, 'session'):
+            result = await self.chatbot_repository.session.execute(
+                select(ChatbotModel).where(ChatbotModel.id == chatbot_id)
+            )
+            model = result.scalar_one_or_none()
+            if model:
+                return {
+                    "id": model.id,
+                    "provider": model.provider,
+                    "model": model.model,
+                    "top_p": model.top_p,
+                    "welcome_message": model.welcome_message,
+                    "fallback_message": model.fallback_message,
+                    "max_conversation_length": model.max_conversation_length,
+                    "enable_function_calling": model.enable_function_calling,
+                    "api_key_encrypted": model.api_key_encrypted,
+                    "api_base_url": model.api_base_url,
+                    "created_by": model.created_by,
+                    "status": model.status
+                }
+
+        raise NotFoundError(f"Chatbot model with ID {chatbot_id} not found")
+
+    async def get_chatbot_creator(self, created_by_id: int) -> Optional[UserEntity]:
+        """
+        Get the user who created the chatbot.
+
+        Args:
+            created_by_id: User ID of creator
+
+        Returns:
+            UserEntity or None if not found
+        """
+        if not self.user_repository:
+            return None
+
+        return await self.user_repository.find_by_id(created_by_id)
 
     async def list_chatbots(self, skip: int = 0, limit: int = 100) -> List[ChatbotEntity]:
         """
@@ -110,7 +167,7 @@ class ChatbotService:
 
     async def create_chatbot(
         self,
-        workspace_id: str,
+        workspace_id: int,
         name: str,
         model_id: str,
         description: Optional[str] = None,
@@ -120,7 +177,15 @@ class ChatbotService:
         tools: List[str] = [],
         group_ids: Optional[List[int]] = None,
         user_ids: Optional[List[int]] = None,
-        assigned_by: Optional[int] = None
+        assigned_by: Optional[int] = None,
+        provider: str = "anthropic",
+        top_p: Decimal = Decimal("1.0"),
+        welcome_message: Optional[str] = None,
+        fallback_message: Optional[str] = None,
+        max_conversation_length: int = 50,
+        enable_function_calling: bool = True,
+        api_key_encrypted: str = "",
+        api_base_url: Optional[str] = None
     ) -> ChatbotEntity:
         """
         Create new chatbot.
@@ -163,27 +228,43 @@ class ChatbotService:
                     if not await self.user_repository.exists(user_id):
                         raise ValidationError(f"User with ID {user_id} not found")
 
+        # Use assigned_by as created_by (the user creating the chatbot)
+        if not assigned_by:
+            raise ValidationError("assigned_by is required to create a chatbot")
+        
+        # Create entity with temporary ID (will be replaced by database)
         chatbot = ChatbotEntity(
-            id=UUID.generate(),
+            id=0,  # Temporary ID, will be set by database
             workspace_id=workspace_id,
             name=name,
-            description=description,
-            system_prompt=system_prompt,
+            description=description or "",
+            system_prompt=system_prompt or "",
             model_id=model_id,
             temperature=temperature,
             max_tokens=max_tokens,
             tools=tools,
             is_active=True,
         )
-
-        created_chatbot = await self.chatbot_repository.create(chatbot)
+        
+        created_chatbot = await self.chatbot_repository.create(
+            chatbot,
+            created_by=assigned_by,
+            provider=provider,
+            top_p=top_p,
+            welcome_message=welcome_message,
+            fallback_message=fallback_message,
+            max_conversation_length=max_conversation_length,
+            enable_function_calling=enable_function_calling,
+            api_key_encrypted=api_key_encrypted,
+            api_base_url=api_base_url
+        )
 
         # Assign to groups if provided
         if group_ids and self.group_chatbot_repository:
             await self.group_chatbot_repository.assign_chatbot_to_groups(
                 chatbot_id=created_chatbot.id,
                 group_ids=group_ids,
-                assigned_by=assigned_by  # type: ignore
+                assigned_by=assigned_by
             )
 
         # Assign to users if provided
@@ -191,15 +272,15 @@ class ChatbotService:
             await self.user_chatbot_repository.assign_chatbot_to_users(
                 chatbot_id=created_chatbot.id,
                 user_ids=user_ids,
-                assigned_by=assigned_by  # type: ignore
+                assigned_by=assigned_by
             )
 
         return created_chatbot
 
     async def update_chatbot(
         self,
-        chatbot_id: str,
-        workspace_id: str,
+        chatbot_id: int,
+        workspace_id: int,
         name: str,
         model_id: str,
         description: Optional[str] = None,
@@ -210,27 +291,41 @@ class ChatbotService:
         is_active: Optional[bool] = None,
         group_ids: Optional[List[int]] = None,
         user_ids: Optional[List[int]] = None,
-        assigned_by: Optional[int] = None
+        assigned_by: Optional[int] = None,
+        provider: str = "anthropic",
+        top_p: Optional[Decimal] = None,
+        welcome_message: Optional[str] = None,
+        fallback_message: Optional[str] = None,
+        max_conversation_length: Optional[int] = None,
+        enable_function_calling: Optional[bool] = None,
+        api_key_encrypted: Optional[str] = None,
+        api_base_url: Optional[str] = None
     ) -> ChatbotEntity:
         """
         Update chatbot configuration.
 
         Args:
-            chatbot_id: Chatbot ID
-            name: New name (optional)
+            chatbot_id: Chatbot ID (integer)
+            workspace_id: Workspace ID (integer)
+            name: New name
+            model_id: Model identifier
             description: New description (optional)
+            system_prompt: New system prompt (optional)
             temperature: New temperature (optional)
             max_tokens: New max tokens (optional)
-            system_prompt: New system prompt (optional)
+            tools: List of tools (optional)
             is_active: Active status (optional)
+            group_ids: New list of group IDs (replaces existing, optional)
+            user_ids: New list of user IDs (replaces existing, optional)
+            assigned_by: Admin ID who is making the assignments
+            provider: AI provider name
+            top_p: Top-p sampling parameter (optional)
             welcome_message: New welcome message (optional)
             fallback_message: New fallback message (optional)
             max_conversation_length: New context window (optional)
             enable_function_calling: Enable/disable tools (optional)
-            status: New status (optional)
-            group_ids: New list of group IDs (replaces existing, optional)
-            user_ids: New list of user IDs (replaces existing, optional)
-            assigned_by: Admin ID who is making the assignments
+            api_key_encrypted: Encrypted API key (optional)
+            api_base_url: API base URL (optional)
 
         Returns:
             Chatbot: Updated chatbot domain entity
@@ -262,7 +357,61 @@ class ChatbotService:
             else:
                 chatbot.deactivate()
 
-        updated_chatbot = await self.chatbot_repository.update(chatbot)
+        # Get existing model to preserve fields not in entity
+        from sqlalchemy import select
+        from infrastructure.postgresql.models import ChatbotModel
+        if hasattr(self.chatbot_repository, 'session'):
+            result = await self.chatbot_repository.session.execute(
+                select(ChatbotModel).where(ChatbotModel.id == chatbot_id)
+            )
+            existing_model = result.scalar_one_or_none()
+            if existing_model:
+                # Preserve fields from existing model if not provided
+                final_provider = provider if provider else existing_model.provider
+                final_top_p = top_p if top_p is not None else existing_model.top_p
+                final_welcome_message = welcome_message if welcome_message is not None else existing_model.welcome_message
+                final_fallback_message = fallback_message if fallback_message is not None else existing_model.fallback_message
+                final_max_conversation_length = max_conversation_length if max_conversation_length is not None else existing_model.max_conversation_length
+                final_enable_function_calling = enable_function_calling if enable_function_calling is not None else existing_model.enable_function_calling
+                final_api_key_encrypted = api_key_encrypted if api_key_encrypted is not None else existing_model.api_key_encrypted
+                final_api_base_url = api_base_url if api_base_url is not None else existing_model.api_base_url
+            else:
+                # Use defaults if model not found
+                from decimal import Decimal
+                final_provider = provider
+                final_top_p = top_p if top_p is not None else Decimal("1.0")
+                final_welcome_message = welcome_message
+                final_fallback_message = fallback_message
+                final_max_conversation_length = max_conversation_length if max_conversation_length is not None else 50
+                final_enable_function_calling = enable_function_calling if enable_function_calling is not None else True
+                final_api_key_encrypted = api_key_encrypted or ""
+                final_api_base_url = api_base_url
+        else:
+            from decimal import Decimal
+            final_provider = provider
+            final_top_p = top_p if top_p is not None else Decimal("1.0")
+            final_welcome_message = welcome_message
+            final_fallback_message = fallback_message
+            final_max_conversation_length = max_conversation_length if max_conversation_length is not None else 50
+            final_enable_function_calling = enable_function_calling if enable_function_calling is not None else True
+            final_api_key_encrypted = api_key_encrypted or ""
+            final_api_base_url = api_base_url
+        
+        # Use assigned_by as created_by for update
+        created_by = assigned_by if assigned_by else chatbot.workspace_id
+        
+        updated_chatbot = await self.chatbot_repository.update(
+            chatbot,
+            created_by=created_by,
+            provider=final_provider,
+            top_p=final_top_p,
+            welcome_message=final_welcome_message,
+            fallback_message=final_fallback_message,
+            max_conversation_length=final_max_conversation_length,
+            enable_function_calling=final_enable_function_calling,
+            api_key_encrypted=final_api_key_encrypted,
+            api_base_url=final_api_base_url
+        )
 
         # Update group assignments if provided
         if group_ids is not None:
@@ -302,12 +451,12 @@ class ChatbotService:
 
         return updated_chatbot
 
-    async def delete_chatbot(self, chatbot_id: str) -> bool:
+    async def delete_chatbot(self, chatbot_id: int) -> bool:
         """
         Delete chatbot.
 
         Args:
-            chatbot_id: Chatbot ID
+            chatbot_id: Chatbot ID (integer)
 
         Returns:
             bool: True if deleted

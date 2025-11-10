@@ -24,12 +24,9 @@ class ChatbotRepositoryImpl(ChatbotRepository):
 
     async def find_by_id(self, id: int) -> Optional[ChatbotEntity]:
         """Find chatbot by ID."""
-        # Convert string ID to int for ORM query
-        try:
-            chatbot_id = int(id) if id.isdigit() else int(id.replace('-', '')[:8], 16) % 2147483647
-        except:
-            return None
-
+        # Ensure ID is an integer
+        chatbot_id = int(id)
+        
         result = await self.session.execute(
             select(ChatbotModel).where(ChatbotModel.id == chatbot_id)
         )
@@ -44,54 +41,102 @@ class ChatbotRepositoryImpl(ChatbotRepository):
         models = result.scalars().all()
         return [self.mapper.to_entity(model) for model in models]
 
-    async def create(self, entity: ChatbotEntity) -> ChatbotEntity:
-        """Create new chatbot."""
-        model = self.mapper.to_model(entity)
+    async def create(self, entity: ChatbotEntity, created_by: int, 
+                     provider: str = "anthropic", top_p = None,
+                     welcome_message: str = None, fallback_message: str = None,
+                     max_conversation_length: int = 50, enable_function_calling: bool = True,
+                     api_key_encrypted: str = "", api_base_url: str = None) -> ChatbotEntity:
+        """
+        Create new chatbot.
+        
+        Args:
+            entity: Chatbot domain entity
+            created_by: User ID who created the chatbot
+            provider: AI provider name
+            top_p: Top-p sampling parameter
+            welcome_message: Welcome message
+            fallback_message: Fallback message
+            max_conversation_length: Max conversation length
+            enable_function_calling: Enable function calling
+            api_key_encrypted: Encrypted API key
+            api_base_url: API base URL
+        """
+        from decimal import Decimal
+        if top_p is None:
+            top_p = Decimal("1.0")
+        model = self.mapper.to_model(
+            entity, 
+            created_by=created_by,
+            provider=provider,
+            top_p=top_p,
+            welcome_message=welcome_message,
+            fallback_message=fallback_message,
+            max_conversation_length=max_conversation_length,
+            enable_function_calling=enable_function_calling,
+            api_key_encrypted=api_key_encrypted,
+            api_base_url=api_base_url
+        )
         self.session.add(model)
         await self.session.flush()
         await self.session.refresh(model)
         return self.mapper.to_entity(model)
 
-    async def update(self, entity: ChatbotEntity) -> ChatbotEntity:
+    async def update(self, entity: ChatbotEntity, created_by: int,
+                     provider: str = "anthropic", top_p = None,
+                     welcome_message: str = None, fallback_message: str = None,
+                     max_conversation_length: int = 50, enable_function_calling: bool = True,
+                     api_key_encrypted: str = "", api_base_url: str = None) -> ChatbotEntity:
         """Update existing chatbot."""
-        # Find existing model
-        chatbot_id = int(str(entity.id).replace('-', '')[:8], 16) % 2147483647
+        # Find existing model using integer ID
         result = await self.session.execute(
-            select(ChatbotModel).where(ChatbotModel.id == chatbot_id)
+            select(ChatbotModel).where(ChatbotModel.id == entity.id)
         )
         existing_model = result.scalar_one_or_none()
 
         if existing_model:
-            updated_model = self.mapper.to_model(entity, existing_model)
+            from decimal import Decimal
+            if top_p is None:
+                top_p = Decimal("1.0")
+            updated_model = self.mapper.to_model(
+                entity, 
+                created_by=created_by,
+                existing_model=existing_model,
+                provider=provider,
+                top_p=top_p,
+                welcome_message=welcome_message,
+                fallback_message=fallback_message,
+                max_conversation_length=max_conversation_length,
+                enable_function_calling=enable_function_calling,
+                api_key_encrypted=api_key_encrypted,
+                api_base_url=api_base_url
+            )
             await self.session.flush()
             await self.session.refresh(updated_model)
             return self.mapper.to_entity(updated_model)
         else:
             # Create new if doesn't exist
-            return await self.create(entity)
+            return await self.create(
+                entity, created_by, provider, top_p, welcome_message,
+                fallback_message, max_conversation_length, enable_function_calling,
+                api_key_encrypted, api_base_url
+            )
 
     async def delete(self, id: int) -> bool:
         """Delete chatbot by ID."""
-        chatbot_entity = await self.find_by_id(id)
-        if chatbot_entity:
-            chatbot_id = int(id) if id.isdigit() else int(id.replace('-', '')[:8], 16) % 2147483647
-            result = await self.session.execute(
-                select(ChatbotModel).where(ChatbotModel.id == chatbot_id)
-            )
-            model = result.scalar_one_or_none()
-            if model:
-                await self.session.delete(model)
-                await self.session.flush()
-                return True
+        chatbot_id = int(id)
+        result = await self.session.execute(
+            select(ChatbotModel).where(ChatbotModel.id == chatbot_id)
+        )
+        model = result.scalar_one_or_none()
+        if model:
+            await self.session.delete(model)
+            await self.session.flush()
+            return True
         return False
 
     async def exists(self, id: int) -> bool:
         """Check if chatbot exists."""
-        try:
-            chatbot_id = int(id) if id.isdigit() else int(id.replace('-', '')[:8], 16) % 2147483647
-        except:
-            return False
-
+        chatbot_id = int(id)
         result = await self.session.execute(
             select(ChatbotModel.id).where(ChatbotModel.id == chatbot_id)
         )
@@ -105,11 +150,21 @@ class ChatbotRepositoryImpl(ChatbotRepository):
         models = result.scalars().all()
         return [self.mapper.to_entity(model) for model in models]
 
-    async def find_by_workspace(self, workspace_id: str, skip: int = 0, limit: int = 100) -> List[ChatbotEntity]:
-        """Find chatbots in a specific workspace."""
+    async def find_by_workspace(self, workspace_id: int, skip: int = 0, limit: int = 100) -> List[ChatbotEntity]:
+        """
+        Find chatbots in a specific workspace.
+        
+        Args:
+            workspace_id: Workspace identifier (integer, using created_by as workspace for now)
+            skip: Number of records to skip
+            limit: Maximum number of records to return
+            
+        Returns:
+            List of chatbot entities in the workspace
+        """
         # Note: Using created_by as workspace for now - update when workspace model is ready
         result = await self.session.execute(
-            select(ChatbotModel).where(ChatbotModel.created_by == int(workspace_id)).offset(skip).limit(limit)
+            select(ChatbotModel).where(ChatbotModel.created_by == workspace_id).offset(skip).limit(limit)
         )
         models = result.scalars().all()
         return [self.mapper.to_entity(model) for model in models]

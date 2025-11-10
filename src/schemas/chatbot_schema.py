@@ -1,6 +1,6 @@
 """Chatbot request/response schemas."""
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from typing import Optional, List
 from datetime import datetime
 from decimal import Decimal
@@ -15,6 +15,14 @@ class GroupInChatbot(BaseModel):
 
 class UserInChatbot(BaseModel):
     """User information in chatbot response."""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    email: str
+
+
+class CreatorInfo(BaseModel):
+    """Creator information in chatbot response."""
     model_config = ConfigDict(from_attributes=True)
     id: int
     name: str
@@ -53,9 +61,19 @@ class ChatbotUpdate(BaseModel):
     fallback_message: Optional[str] = None
     max_conversation_length: Optional[int] = Field(None, gt=0)
     enable_function_calling: Optional[bool] = None
+    api_key: Optional[str] = Field(None, min_length=1, description="New API key (full key required, not masked)")
+    api_base_url: Optional[str] = Field(None, description="Custom API base URL")
     status: Optional[str] = None
     group_ids: Optional[List[int]] = Field(default=None, description="List of group IDs to assign chatbot to (replaces existing)")
     user_ids: Optional[List[int]] = Field(default=None, description="List of user IDs to assign chatbot to (replaces existing)")
+
+    @field_validator('api_key')
+    @classmethod
+    def validate_api_key(cls, v: Optional[str]) -> Optional[str]:
+        """Validate that API key is not a masked key."""
+        if v is not None and '*' in v:
+            raise ValueError("Cannot update with a masked API key. Please provide the full API key.")
+        return v
 
 
 class ChatbotResponse(BaseModel):
@@ -75,6 +93,9 @@ class ChatbotResponse(BaseModel):
     fallback_message: Optional[str]
     max_conversation_length: int
     enable_function_calling: bool
+    api_key_masked: Optional[str] = Field(default=None, description="Masked API key (shows first 4 and last 4 characters)")
+    api_base_url: Optional[str] = Field(default=None, description="Custom API base URL")
+    created_by: Optional[CreatorInfo] = Field(default=None, description="User who created this chatbot")
     status: str
     created_at: datetime
     updated_at: datetime
