@@ -2,23 +2,20 @@
 GitLab Controller - API endpoints for GitLab repository synchronization.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Body, BackgroundTasks
+from fastapi import Depends, HTTPException, status
 from typing import List, Optional
 from pydantic import BaseModel, Field
-import asyncio
 
-from src.application.services.gitlab_sync_service import GitLabSyncService
-from src.infrastructure.external.gitlab_service import GitLabService
-from src.application.services.code_chunking_service import CodeChunkingService
-from src.application.services.kb_sync_service import KBSyncService
-from src.shared.interfaces.repositories.document_repository import DocumentRepository
-from src.api.middlewares.jwt_middleware import get_current_user
-from src.core.dependencies import get_document_repository
-from src.domain.entities.user import User
+from application.services.gitlab_sync_service import GitLabSyncService
+from infrastructure.external.gitlab_service import GitLabService
+from application.services.code_chunking_service import CodeChunkingService
+from application.services.kb_sync_service import KBSyncService
+from shared.interfaces.repositories.document_repository import DocumentRepository
+from api.middlewares.jwt_middleware import get_current_user
+from core.dependencies import get_document_repository, get_embedding_service, get_vector_store_service
+from domain.entities.user import User
 from core.config import settings
-
-
-router = APIRouter(prefix="/api/v1/gitlab", tags=["GitLab Integration"])
+from core.logger import logger
 
 
 # ============================================================================
@@ -47,16 +44,6 @@ class SyncRepositoryResponse(BaseModel):
     total_bytes: int
 
 
-class WebhookPushEvent(BaseModel):
-    """GitLab push event from webhook."""
-    project: dict
-    ref: str
-    commits: List[dict]
-    user_name: str
-    user_email: str
-    user_username: str
-
-
 class RepositoryInfo(BaseModel):
     """Repository information."""
     id: str
@@ -79,7 +66,7 @@ class SyncStatusResponse(BaseModel):
 
 
 # ============================================================================
-# Dependency Injection
+# Dependency Injection Functions
 # ============================================================================
 
 def get_gitlab_service() -> GitLabService:
@@ -95,17 +82,14 @@ def get_gitlab_sync_service(
     document_repository: DocumentRepository = Depends(get_document_repository)
 ) -> GitLabSyncService:
     """Get GitLab sync service instance."""
-    from src.infrastructure.ai_services.embeddings.embedding_service_factory import get_embedding_service
-    from src.infrastructure.vector_stores.vector_store_factory import get_vector_store
-
     # Create dependencies
     code_chunking_service = CodeChunkingService(max_file_size=50000)
     embedding_service = get_embedding_service()
-    vector_store = get_vector_store()
+    vector_store_service = get_vector_store_service()
 
     kb_sync_service = KBSyncService(
         embedding_service=embedding_service,
-        vector_store=vector_store,
+        vector_store=vector_store_service.vector_store,
         document_repository=document_repository
     )
 
@@ -118,15 +102,14 @@ def get_gitlab_sync_service(
 
 
 # ============================================================================
-# Endpoints
+# Controller Functions
 # ============================================================================
 
-@router.post("/sync", response_model=SyncRepositoryResponse, status_code=status.HTTP_200_OK)
 async def sync_repository(
     request: SyncRepositoryRequest,
     current_user: User = Depends(get_current_user),
     gitlab_sync_service: GitLabSyncService = Depends(get_gitlab_sync_service)
-):
+) -> SyncRepositoryResponse:
     """
     Sync a GitLab repository to Knowledge Base.
 
@@ -137,7 +120,7 @@ async def sync_repository(
     """
     try:
         # TODO: Verify user has access to the group
-        # For now, we'll use the current user's ID
+        logger.info(f"Starting GitLab sync for repo: {request.repo_url}, branch: {request.branch}")
 
         result = await gitlab_sync_service.sync_repository(
             repo_url=request.repo_url,
@@ -148,16 +131,17 @@ async def sync_repository(
             domain=request.domain
         )
 
+        logger.info(f"GitLab sync completed: {result['files_processed']} files processed")
         return SyncRepositoryResponse(**result)
 
     except Exception as e:
+        logger.error(f"Failed to sync repository: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to sync repository: {str(e)}"
         )
 
 
-@router.get("/repos", status_code=status.HTTP_200_OK)
 async def list_repositories(
     group_id: str,
     current_user: User = Depends(get_current_user),
@@ -170,6 +154,7 @@ async def list_repositories(
     """
     try:
         # TODO: Verify user has access to the group
+        logger.info(f"Listing repositories for group: {group_id}")
 
         status_info = await gitlab_sync_service.get_sync_status(
             group_id=group_id
@@ -182,19 +167,19 @@ async def list_repositories(
         }
 
     except Exception as e:
+        logger.error(f"Failed to list repositories: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to list repositories: {str(e)}"
         )
 
 
-@router.get("/status/{group_id}", response_model=SyncStatusResponse, status_code=status.HTTP_200_OK)
 async def get_sync_status(
     group_id: str,
     repo_url: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     gitlab_sync_service: GitLabSyncService = Depends(get_gitlab_sync_service)
-):
+) -> SyncStatusResponse:
     """
     Get sync status for repositories in a group.
 
@@ -204,6 +189,7 @@ async def get_sync_status(
     """
     try:
         # TODO: Verify user has access to the group
+        logger.info(f"Getting sync status for group: {group_id}")
 
         status_info = await gitlab_sync_service.get_sync_status(
             group_id=group_id,
@@ -213,13 +199,13 @@ async def get_sync_status(
         return SyncStatusResponse(**status_info)
 
     except Exception as e:
+        logger.error(f"Failed to get sync status: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get sync status: {str(e)}"
         )
 
 
-@router.delete("/repos/{group_id}", status_code=status.HTTP_200_OK)
 async def delete_repository_sync(
     group_id: str,
     repo_url: str,
@@ -235,10 +221,8 @@ async def delete_repository_sync(
     """
     try:
         # TODO: Verify user is admin or group owner
-
-        # Delete all documents with matching repo_url in metadata
-        # Note: This is a placeholder - you'll need to implement batch delete
-        # in the document repository
+        # TODO: Implement batch delete in document repository
+        logger.info(f"Deleting repository sync for: {repo_url}")
 
         return {
             "success": True,
@@ -247,135 +231,13 @@ async def delete_repository_sync(
         }
 
     except Exception as e:
+        logger.error(f"Failed to delete repository sync: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete repository sync: {str(e)}"
         )
 
 
-async def _process_webhook_sync(
-    repo_url: str,
-    branch: str,
-    changed_files: List[str],
-    commit_sha: str,
-    knowledge_base_id: str,
-    group_id: str,
-    user_id: str,
-    domain: str,
-    gitlab_sync_service: GitLabSyncService
-):
-    """
-    Background task to process webhook sync.
-
-    This runs asynchronously after webhook response is returned to GitLab.
-    """
-    try:
-        print(f"🔄 [Background] Starting webhook sync for {repo_url} (commit: {commit_sha[:8]})")
-
-        result = await gitlab_sync_service.sync_changed_files(
-            repo_url=repo_url,
-            branch=branch,
-            changed_files=changed_files,
-            commit_sha=commit_sha,
-            knowledge_base_id=knowledge_base_id,
-            group_id=group_id,
-            user_id=user_id,
-            domain=domain
-        )
-
-        print(f"✅ [Background] Webhook sync completed: {result['files_processed']} files, {result['total_chunks']} chunks")
-
-    except Exception as e:
-        print(f"❌ [Background] Webhook sync failed: {str(e)}")
-        # TODO: Add error notification/logging system
-
-
-@router.post("/webhook/push", status_code=status.HTTP_202_ACCEPTED)
-async def handle_push_webhook(
-    background_tasks: BackgroundTasks,
-    webhook_token: str,
-    event: WebhookPushEvent = Body(...),
-    gitlab_service: GitLabService = Depends(get_gitlab_service),
-    gitlab_sync_service: GitLabSyncService = Depends(get_gitlab_sync_service)
-):
-    """
-    Handle GitLab push webhook events.
-
-    This endpoint is called by GitLab when code is pushed to a repository.
-    It queues a background job to sync changed files to the Knowledge Base.
-
-    **Flow:**
-    1. Validate webhook signature
-    2. Parse push event
-    3. Queue background sync job
-    4. Return immediately (202 Accepted)
-    5. Background job processes files and creates embeddings
-
-    **Authentication:** Requires webhook token validation.
-    """
-    try:
-        # Validate webhook signature
-        # Note: GitLab uses X-Gitlab-Token header for authentication
-        # For now, we'll validate using a simple token comparison
-
-        if webhook_token != settings.GITLAB_WEBHOOK_SECRET:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid webhook token"
-            )
-
-        # Parse push event
-        parsed_event = gitlab_service.parse_push_event(event.dict())
-
-        # Get changed files
-        changed_files = gitlab_service.get_changed_files(parsed_event)
-
-        # Extract repository info
-        repo_url = parsed_event["repository"]["url"]
-        branch = parsed_event["branch"]
-        commit_sha = parsed_event["after"]
-
-        # TODO: Look up group_id and knowledge_base_id from repository configuration
-        # For now, use default Knowledge Base for GitLab code
-        group_id = "system"  # System group for webhook-triggered syncs
-        knowledge_base_id = getattr(settings, 'KNOWLEDGE_BASE_GITLAB_ID', 'kb_gitlab')
-        user_id = "system"  # System user for webhook events
-
-        # Add background task to sync changed files
-        background_tasks.add_task(
-            _process_webhook_sync,
-            repo_url=repo_url,
-            branch=branch,
-            changed_files=changed_files,
-            commit_sha=commit_sha,
-            knowledge_base_id=knowledge_base_id,
-            group_id=group_id,
-            user_id=user_id,
-            domain="general",
-            gitlab_sync_service=gitlab_sync_service
-        )
-
-        # Return immediately to GitLab (don't make them wait)
-        return {
-            "status": "accepted",
-            "message": "Webhook received, sync job queued",
-            "event_type": "push",
-            "repository": parsed_event["repository"]["name"],
-            "branch": branch,
-            "commit": commit_sha[:8],
-            "files_changed": len(changed_files)
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process webhook: {str(e)}"
-        )
-
-
-@router.get("/test", status_code=status.HTTP_200_OK)
 async def test_gitlab_connection(
     gitlab_service: GitLabService = Depends(get_gitlab_service)
 ):
@@ -393,9 +255,11 @@ async def test_gitlab_connection(
             "connection": "success"
         }
 
+        logger.info(f"GitLab connection test successful: {user_info['username']}")
         return user_info
 
     except Exception as e:
+        logger.error(f"GitLab connection failed: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"GitLab connection failed: {str(e)}"

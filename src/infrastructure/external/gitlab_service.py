@@ -8,8 +8,6 @@ import os
 import tempfile
 import shutil
 from pathlib import Path
-import hashlib
-import hmac
 
 
 class GitLabService:
@@ -229,93 +227,6 @@ class GitLabService:
 
         except Exception as e:
             raise ValueError(f"Failed to get commit info: {str(e)}")
-
-    def validate_webhook_signature(
-        self,
-        secret: str,
-        payload: bytes,
-        signature: str
-    ) -> bool:
-        """
-        Validate GitLab webhook signature.
-
-        Args:
-            secret: Webhook secret token
-            payload: Request payload (bytes)
-            signature: X-Gitlab-Token header value
-
-        Returns:
-            True if signature is valid, False otherwise
-        """
-        # GitLab uses simple token comparison (not HMAC like GitHub)
-        return signature == secret
-
-    def parse_push_event(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Parse GitLab push event payload.
-
-        Args:
-            payload: Push event payload from webhook
-
-        Returns:
-            Dictionary with parsed event information
-        """
-        try:
-            return {
-                "event_type": "push",
-                "repository": {
-                    "name": payload["project"]["name"],
-                    "path": payload["project"]["path_with_namespace"],
-                    "url": payload["project"]["web_url"],
-                    "id": payload["project"]["id"]
-                },
-                "ref": payload["ref"],
-                "branch": payload["ref"].replace("refs/heads/", ""),
-                "before": payload["before"],
-                "after": payload["after"],
-                "commits": [
-                    {
-                        "id": commit["id"],
-                        "message": commit["message"],
-                        "author": {
-                            "name": commit["author"]["name"],
-                            "email": commit["author"]["email"]
-                        },
-                        "timestamp": commit["timestamp"],
-                        "added": commit.get("added", []),
-                        "modified": commit.get("modified", []),
-                        "removed": commit.get("removed", [])
-                    }
-                    for commit in payload["commits"]
-                ],
-                "user": {
-                    "name": payload["user_name"],
-                    "email": payload["user_email"],
-                    "username": payload["user_username"]
-                }
-            }
-
-        except KeyError as e:
-            raise ValueError(f"Invalid push event payload: missing key {e}")
-
-    def get_changed_files(self, parsed_event: Dict[str, Any]) -> List[str]:
-        """
-        Extract list of changed files from push event.
-
-        Args:
-            parsed_event: Parsed push event from parse_push_event()
-
-        Returns:
-            List of file paths that were changed
-        """
-        changed_files = set()
-
-        for commit in parsed_event["commits"]:
-            changed_files.update(commit.get("added", []))
-            changed_files.update(commit.get("modified", []))
-            # Note: We might want to handle removed files differently
-
-        return list(changed_files)
 
     def _extract_project_path(self, repo_url: str) -> str:
         """
