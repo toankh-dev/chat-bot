@@ -12,6 +12,7 @@ from infrastructure.postgresql.models.user_group_model import UserGroup
 from infrastructure.postgresql.models.user_chatbot import UserChatbotModel
 from infrastructure.postgresql.models.group_chatbot import GroupChatbotModel
 from infrastructure.postgresql.models.chatbot_tool_model import ChatbotToolModel
+from infrastructure.postgresql.models.ai_model_model import AiModelModel
 
 __all__ = [
     "Base",
@@ -24,5 +25,6 @@ __all__ = [
     "UserGroup", 
     "UserChatbotModel",
     "GroupChatbotModel",
-    "ChatbotToolModel"
+    "ChatbotToolModel",
+    "AiModelModel"
 ]

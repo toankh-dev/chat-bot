@@ -15,6 +15,7 @@ from .user_chatbot import UserChatbotEntity
 from .user_group import UserGroupEntity
 from .workspace import WorkspaceEntity
 from .document import DocumentEntity
+from .ai_model import AiModelEntity
 
 __all__ = [
     "ChatbotEntity",
@@ -27,5 +28,6 @@ __all__ = [
     "UserChatbotEntity",
     "UserGroupEntity",
     "WorkspaceEntity",
-    "DocumentEntity"
+    "DocumentEntity",
+    "AiModelEntity"
 ]

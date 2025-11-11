@@ -86,7 +86,7 @@ class ChatbotService:
         Get chatbot model data with all fields from database.
 
         This is a helper method to get the full model data including
-        fields not in the domain entity (provider, model, top_p, etc.)
+        fields not in the domain entity (model_id, top_p, etc.)
 
         Args:
             chatbot_id: Chatbot ID (integer)
@@ -102,22 +102,27 @@ class ChatbotService:
 
         # Access the session from repository to query model directly
         if hasattr(self.chatbot_repository, 'session'):
+            from sqlalchemy.orm import selectinload
             result = await self.chatbot_repository.session.execute(
-                select(ChatbotModel).where(ChatbotModel.id == chatbot_id)
+                select(ChatbotModel)
+                .options(selectinload(ChatbotModel.ai_model))
+                .where(ChatbotModel.id == chatbot_id)
             )
             model = result.scalar_one_or_none()
             if model:
+                # Get model name from relationship
+                if not model.ai_model:
+                    raise NotFoundError(f"AI model with ID {model.model_id} not found for chatbot {chatbot_id}")
+                model_name = model.ai_model.name
                 return {
                     "id": model.id,
-                    "provider": model.provider,
-                    "model": model.model,
+                    "model_id": model.model_id,
+                    "model_name": model_name,
                     "top_p": model.top_p,
                     "welcome_message": model.welcome_message,
                     "fallback_message": model.fallback_message,
                     "max_conversation_length": model.max_conversation_length,
                     "enable_function_calling": model.enable_function_calling,
-                    "api_key_encrypted": model.api_key_encrypted,
-                    "api_base_url": model.api_base_url,
                     "created_by": model.created_by,
                     "status": model.status
                 }
@@ -169,7 +174,7 @@ class ChatbotService:
         self,
         workspace_id: int,
         name: str,
-        model_id: str,
+        model_id: int,
         description: Optional[str] = None,
         system_prompt: Optional[str] = None,
         temperature: Decimal = Decimal("0.7"),
@@ -178,14 +183,11 @@ class ChatbotService:
         group_ids: Optional[List[int]] = None,
         user_ids: Optional[List[int]] = None,
         assigned_by: Optional[int] = None,
-        provider: str = "anthropic",
         top_p: Decimal = Decimal("1.0"),
         welcome_message: Optional[str] = None,
         fallback_message: Optional[str] = None,
         max_conversation_length: int = 50,
-        enable_function_calling: bool = True,
-        api_key_encrypted: str = "",
-        api_base_url: Optional[str] = None
+        enable_function_calling: bool = True
     ) -> ChatbotEntity:
         """
         Create new chatbot.
@@ -201,7 +203,6 @@ class ChatbotService:
             fallback_message: Error fallback message
             max_conversation_length: Context window size
             enable_function_calling: Enable tool use
-            api_base_url: Custom API endpoint
             group_ids: Optional list of group IDs to assign chatbot to
             user_ids: Optional list of user IDs to assign chatbot to
             assigned_by: Admin ID who is making the assignments
@@ -249,14 +250,12 @@ class ChatbotService:
         created_chatbot = await self.chatbot_repository.create(
             chatbot,
             created_by=assigned_by,
-            provider=provider,
+            model_id=model_id,
             top_p=top_p,
             welcome_message=welcome_message,
             fallback_message=fallback_message,
             max_conversation_length=max_conversation_length,
-            enable_function_calling=enable_function_calling,
-            api_key_encrypted=api_key_encrypted,
-            api_base_url=api_base_url
+            enable_function_calling=enable_function_calling
         )
 
         # Assign to groups if provided
@@ -282,7 +281,7 @@ class ChatbotService:
         chatbot_id: int,
         workspace_id: int,
         name: str,
-        model_id: str,
+        model_id: Optional[int] = None,
         description: Optional[str] = None,
         system_prompt: Optional[str] = None,
         temperature: Decimal = Decimal("0.7"),
@@ -292,14 +291,11 @@ class ChatbotService:
         group_ids: Optional[List[int]] = None,
         user_ids: Optional[List[int]] = None,
         assigned_by: Optional[int] = None,
-        provider: str = "anthropic",
         top_p: Optional[Decimal] = None,
         welcome_message: Optional[str] = None,
         fallback_message: Optional[str] = None,
         max_conversation_length: Optional[int] = None,
-        enable_function_calling: Optional[bool] = None,
-        api_key_encrypted: Optional[str] = None,
-        api_base_url: Optional[str] = None
+        enable_function_calling: Optional[bool] = None
     ) -> ChatbotEntity:
         """
         Update chatbot configuration.
@@ -318,14 +314,12 @@ class ChatbotService:
             group_ids: New list of group IDs (replaces existing, optional)
             user_ids: New list of user IDs (replaces existing, optional)
             assigned_by: Admin ID who is making the assignments
-            provider: AI provider name
+            model_id: AI model ID (optional, preserves existing if not provided)
             top_p: Top-p sampling parameter (optional)
             welcome_message: New welcome message (optional)
             fallback_message: New fallback message (optional)
             max_conversation_length: New context window (optional)
             enable_function_calling: Enable/disable tools (optional)
-            api_key_encrypted: Encrypted API key (optional)
-            api_base_url: API base URL (optional)
 
         Returns:
             Chatbot: Updated chatbot domain entity
@@ -367,35 +361,29 @@ class ChatbotService:
             existing_model = result.scalar_one_or_none()
             if existing_model:
                 # Preserve fields from existing model if not provided
-                final_provider = provider if provider else existing_model.provider
+                final_model_id = model_id if model_id is not None else existing_model.model_id
                 final_top_p = top_p if top_p is not None else existing_model.top_p
                 final_welcome_message = welcome_message if welcome_message is not None else existing_model.welcome_message
                 final_fallback_message = fallback_message if fallback_message is not None else existing_model.fallback_message
                 final_max_conversation_length = max_conversation_length if max_conversation_length is not None else existing_model.max_conversation_length
                 final_enable_function_calling = enable_function_calling if enable_function_calling is not None else existing_model.enable_function_calling
-                final_api_key_encrypted = api_key_encrypted if api_key_encrypted is not None else existing_model.api_key_encrypted
-                final_api_base_url = api_base_url if api_base_url is not None else existing_model.api_base_url
             else:
                 # Use defaults if model not found
                 from decimal import Decimal
-                final_provider = provider
+                final_model_id = model_id
                 final_top_p = top_p if top_p is not None else Decimal("1.0")
                 final_welcome_message = welcome_message
                 final_fallback_message = fallback_message
                 final_max_conversation_length = max_conversation_length if max_conversation_length is not None else 50
                 final_enable_function_calling = enable_function_calling if enable_function_calling is not None else True
-                final_api_key_encrypted = api_key_encrypted or ""
-                final_api_base_url = api_base_url
         else:
             from decimal import Decimal
-            final_provider = provider
+            final_model_id = model_id
             final_top_p = top_p if top_p is not None else Decimal("1.0")
             final_welcome_message = welcome_message
             final_fallback_message = fallback_message
             final_max_conversation_length = max_conversation_length if max_conversation_length is not None else 50
             final_enable_function_calling = enable_function_calling if enable_function_calling is not None else True
-            final_api_key_encrypted = api_key_encrypted or ""
-            final_api_base_url = api_base_url
         
         # Use assigned_by as created_by for update
         created_by = assigned_by if assigned_by else chatbot.workspace_id
@@ -403,14 +391,12 @@ class ChatbotService:
         updated_chatbot = await self.chatbot_repository.update(
             chatbot,
             created_by=created_by,
-            provider=final_provider,
+            model_id=final_model_id,
             top_p=final_top_p,
             welcome_message=final_welcome_message,
             fallback_message=final_fallback_message,
             max_conversation_length=final_max_conversation_length,
-            enable_function_calling=final_enable_function_calling,
-            api_key_encrypted=final_api_key_encrypted,
-            api_base_url=final_api_base_url
+            enable_function_calling=final_enable_function_calling
         )
 
         # Update group assignments if provided

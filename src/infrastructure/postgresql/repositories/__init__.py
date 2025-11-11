@@ -12,6 +12,7 @@ from .group_chatbot_repository import GroupChatbotRepositoryImpl
 from .ingestion_job_repository import IngestionJobRepositoryImpl
 from .user_group_repository import UserGroupRepositoryImpl
 from .user_chatbot_repository import UserChatbotRepositoryImpl
+from .ai_model_repository import AiModelRepositoryImpl
 
 __all__ = [
     "UserRepositoryImpl",
@@ -24,5 +25,6 @@ __all__ = [
     "GroupChatbotRepositoryImpl",
     "IngestionJobRepositoryImpl",
     "UserGroupRepositoryImpl",
-    "UserChatbotRepositoryImpl"
+    "UserChatbotRepositoryImpl",
+    "AiModelRepositoryImpl"
 ]

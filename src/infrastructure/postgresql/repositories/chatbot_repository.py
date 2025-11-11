@@ -42,24 +42,21 @@ class ChatbotRepositoryImpl(ChatbotRepository):
         return [self.mapper.to_entity(model) for model in models]
 
     async def create(self, entity: ChatbotEntity, created_by: int, 
-                     provider: str = "anthropic", top_p = None,
+                     model_id: int, top_p = None,
                      welcome_message: str = None, fallback_message: str = None,
-                     max_conversation_length: int = 50, enable_function_calling: bool = True,
-                     api_key_encrypted: str = "", api_base_url: str = None) -> ChatbotEntity:
+                     max_conversation_length: int = 50, enable_function_calling: bool = True) -> ChatbotEntity:
         """
         Create new chatbot.
         
         Args:
             entity: Chatbot domain entity
             created_by: User ID who created the chatbot
-            provider: AI provider name
+            model_id: AI model ID
             top_p: Top-p sampling parameter
             welcome_message: Welcome message
             fallback_message: Fallback message
             max_conversation_length: Max conversation length
             enable_function_calling: Enable function calling
-            api_key_encrypted: Encrypted API key
-            api_base_url: API base URL
         """
         from decimal import Decimal
         if top_p is None:
@@ -67,14 +64,12 @@ class ChatbotRepositoryImpl(ChatbotRepository):
         model = self.mapper.to_model(
             entity, 
             created_by=created_by,
-            provider=provider,
+            model_id=model_id,
             top_p=top_p,
             welcome_message=welcome_message,
             fallback_message=fallback_message,
             max_conversation_length=max_conversation_length,
-            enable_function_calling=enable_function_calling,
-            api_key_encrypted=api_key_encrypted,
-            api_base_url=api_base_url
+            enable_function_calling=enable_function_calling
         )
         self.session.add(model)
         await self.session.flush()
@@ -82,10 +77,9 @@ class ChatbotRepositoryImpl(ChatbotRepository):
         return self.mapper.to_entity(model)
 
     async def update(self, entity: ChatbotEntity, created_by: int,
-                     provider: str = "anthropic", top_p = None,
+                     model_id: Optional[int] = None, top_p = None,
                      welcome_message: str = None, fallback_message: str = None,
-                     max_conversation_length: int = 50, enable_function_calling: bool = True,
-                     api_key_encrypted: str = "", api_base_url: str = None) -> ChatbotEntity:
+                     max_conversation_length: int = 50, enable_function_calling: bool = True) -> ChatbotEntity:
         """Update existing chatbot."""
         # Find existing model using integer ID
         result = await self.session.execute(
@@ -101,14 +95,12 @@ class ChatbotRepositoryImpl(ChatbotRepository):
                 entity, 
                 created_by=created_by,
                 existing_model=existing_model,
-                provider=provider,
+                model_id=model_id,
                 top_p=top_p,
                 welcome_message=welcome_message,
                 fallback_message=fallback_message,
                 max_conversation_length=max_conversation_length,
-                enable_function_calling=enable_function_calling,
-                api_key_encrypted=api_key_encrypted,
-                api_base_url=api_base_url
+                enable_function_calling=enable_function_calling
             )
             await self.session.flush()
             await self.session.refresh(updated_model)
@@ -116,9 +108,8 @@ class ChatbotRepositoryImpl(ChatbotRepository):
         else:
             # Create new if doesn't exist
             return await self.create(
-                entity, created_by, provider, top_p, welcome_message,
-                fallback_message, max_conversation_length, enable_function_calling,
-                api_key_encrypted, api_base_url
+                entity, created_by, model_id or int(entity.model_id), top_p, welcome_message,
+                fallback_message, max_conversation_length, enable_function_calling
             )
 
     async def delete(self, id: int) -> bool:

@@ -17,7 +17,6 @@ from schemas.chatbot_schema import (
 from domain.entities.user import UserEntity
 from domain.entities.group import GroupEntity
 from shared.utils.user_id_helper import extract_user_id_int
-from shared.utils.security_helper import mask_api_key
 
 
 def _convert_user_to_chatbot_user(user: UserEntity) -> UserInChatbot:
@@ -94,21 +93,12 @@ class ListChatbotsUseCase:
                 if creator_user:
                     creator = _convert_user_to_creator_info(creator_user)
 
-            # Mask API key
-            api_key_masked = None
-            if model_data.get("api_key_encrypted"):
-                # Remove "encrypted_" prefix if it exists
-                raw_key = model_data["api_key_encrypted"]
-                if raw_key.startswith("encrypted_"):
-                    raw_key = raw_key.replace("encrypted_", "", 1)
-                api_key_masked = mask_api_key(raw_key)
-
             chatbot_dict = {
                 "id": chatbot.id,
                 "name": chatbot.name,
                 "description": chatbot.description or "",
-                "provider": model_data["provider"],
-                "model": model_data["model"],
+                "model_id": model_data["model_id"],
+                "model_name": model_data["model_name"],
                 "temperature": chatbot.temperature,
                 "max_tokens": chatbot.max_tokens,
                 "top_p": model_data["top_p"],
@@ -117,8 +107,6 @@ class ListChatbotsUseCase:
                 "fallback_message": model_data.get("fallback_message"),
                 "max_conversation_length": model_data["max_conversation_length"],
                 "enable_function_calling": model_data["enable_function_calling"],
-                "api_key_masked": api_key_masked,
-                "api_base_url": model_data.get("api_base_url"),
                 "created_by": creator,
                 "status": model_data["status"],
                 "created_at": chatbot.created_at,
@@ -163,22 +151,13 @@ class GetChatbotUseCase:
             if creator_user:
                 creator = _convert_user_to_creator_info(creator_user)
 
-        # Mask API key
-        api_key_masked = None
-        if model_data.get("api_key_encrypted"):
-            # Remove "encrypted_" prefix if it exists
-            raw_key = model_data["api_key_encrypted"]
-            if raw_key.startswith("encrypted_"):
-                raw_key = raw_key.replace("encrypted_", "", 1)
-            api_key_masked = mask_api_key(raw_key)
-
         # Build response with assignments
         chatbot_dict = {
             "id": chatbot.id,
             "name": chatbot.name,
             "description": chatbot.description or "",
-            "provider": model_data["provider"],
-            "model": model_data["model"],
+            "model_id": model_data["model_id"],
+            "model_name": model_data["model_name"],
             "temperature": chatbot.temperature,
             "max_tokens": chatbot.max_tokens,
             "top_p": model_data["top_p"],
@@ -187,8 +166,6 @@ class GetChatbotUseCase:
             "fallback_message": model_data.get("fallback_message"),
             "max_conversation_length": model_data["max_conversation_length"],
             "enable_function_calling": model_data["enable_function_calling"],
-            "api_key_masked": api_key_masked,
-            "api_base_url": model_data.get("api_base_url"),
             "created_by": creator,
             "status": model_data["status"],
             "created_at": chatbot.created_at,
@@ -218,16 +195,13 @@ class CreateChatbotUseCase:
         Returns:
             ChatbotResponse: Created chatbot data with assignments
         """
-        # For now, use simple "encryption" - in production, use proper encryption
-        api_key_encrypted = f"encrypted_{request.api_key}"
-
         # Use creator_id as workspace_id (temporary until workspace model is ready)
         workspace_id = creator_id
         
         chatbot = await self.chatbot_service.create_chatbot(
             workspace_id=workspace_id,
             name=request.name,
-            model_id=request.model,
+            model_id=request.model_id,
             description=request.description,
             system_prompt=request.system_prompt,
             temperature=request.temperature,
@@ -236,14 +210,11 @@ class CreateChatbotUseCase:
             group_ids=request.group_ids,
             user_ids=request.user_ids,
             assigned_by=creator_id,
-            provider=request.provider,
             top_p=request.top_p,
             welcome_message=request.welcome_message,
             fallback_message=request.fallback_message,
             max_conversation_length=request.max_conversation_length,
-            enable_function_calling=request.enable_function_calling,
-            api_key_encrypted=api_key_encrypted,
-            api_base_url=request.api_base_url
+            enable_function_calling=request.enable_function_calling
         )
 
         # Load chatbot with assignments for response
@@ -262,20 +233,12 @@ class CreateChatbotUseCase:
             if creator_user:
                 creator = _convert_user_to_creator_info(creator_user)
 
-        # Mask API key
-        api_key_masked = None
-        if model_data.get("api_key_encrypted"):
-            raw_key = model_data["api_key_encrypted"]
-            if raw_key.startswith("encrypted_"):
-                raw_key = raw_key.replace("encrypted_", "", 1)
-            api_key_masked = mask_api_key(raw_key)
-
         chatbot_dict = {
             "id": chatbot.id,
             "name": chatbot.name,
             "description": chatbot.description or "",
-            "provider": model_data["provider"],
-            "model": model_data["model"],
+            "model_id": model_data["model_id"],
+            "model_name": model_data["model_name"],
             "temperature": chatbot.temperature,
             "max_tokens": chatbot.max_tokens,
             "top_p": model_data["top_p"],
@@ -284,8 +247,6 @@ class CreateChatbotUseCase:
             "fallback_message": model_data.get("fallback_message"),
             "max_conversation_length": model_data["max_conversation_length"],
             "enable_function_calling": model_data["enable_function_calling"],
-            "api_key_masked": api_key_masked,
-            "api_base_url": model_data.get("api_base_url"),
             "created_by": creator,
             "status": model_data["status"],
             "created_at": chatbot.created_at,
@@ -319,17 +280,11 @@ class UpdateChatbotUseCase:
         # Get existing chatbot to preserve workspace_id and model_id
         existing_chatbot = await self.chatbot_service.get_chatbot_by_id(chatbot_id)
 
-        # Handle API key encryption if provided
-        api_key_encrypted = None
-        if request.api_key is not None:
-            # Encrypt the new API key (use simple "encryption" for now, replace with proper encryption in production)
-            api_key_encrypted = f"encrypted_{request.api_key}"
-
         chatbot = await self.chatbot_service.update_chatbot(
             chatbot_id=chatbot_id,
             workspace_id=existing_chatbot.workspace_id,
             name=request.name if request.name is not None else existing_chatbot.name,
-            model_id=existing_chatbot.model_id,  # Model ID not updatable in this version
+            model_id=request.model_id if request.model_id is not None else int(existing_chatbot.model_id),
             description=request.description if request.description is not None else existing_chatbot.description,
             system_prompt=request.system_prompt if request.system_prompt is not None else existing_chatbot.system_prompt,
             temperature=request.temperature if request.temperature is not None else existing_chatbot.temperature,
@@ -343,9 +298,7 @@ class UpdateChatbotUseCase:
             welcome_message=request.welcome_message if request.welcome_message is not None else None,
             fallback_message=request.fallback_message if request.fallback_message is not None else None,
             max_conversation_length=request.max_conversation_length if request.max_conversation_length is not None else None,
-            enable_function_calling=request.enable_function_calling if request.enable_function_calling is not None else None,
-            api_key_encrypted=api_key_encrypted,
-            api_base_url=request.api_base_url if request.api_base_url is not None else None
+            enable_function_calling=request.enable_function_calling if request.enable_function_calling is not None else None
         )
 
         # Load chatbot with assignments for response
@@ -364,20 +317,12 @@ class UpdateChatbotUseCase:
             if creator_user:
                 creator = _convert_user_to_creator_info(creator_user)
 
-        # Mask API key
-        api_key_masked = None
-        if model_data.get("api_key_encrypted"):
-            raw_key = model_data["api_key_encrypted"]
-            if raw_key.startswith("encrypted_"):
-                raw_key = raw_key.replace("encrypted_", "", 1)
-            api_key_masked = mask_api_key(raw_key)
-
         chatbot_dict = {
             "id": chatbot.id,
             "name": chatbot.name,
             "description": chatbot.description or "",
-            "provider": model_data["provider"],
-            "model": model_data["model"],
+            "model_id": model_data["model_id"],
+            "model_name": model_data["model_name"],
             "temperature": chatbot.temperature,
             "max_tokens": chatbot.max_tokens,
             "top_p": model_data["top_p"],
@@ -386,8 +331,6 @@ class UpdateChatbotUseCase:
             "fallback_message": model_data.get("fallback_message"),
             "max_conversation_length": model_data["max_conversation_length"],
             "enable_function_calling": model_data["enable_function_calling"],
-            "api_key_masked": api_key_masked,
-            "api_base_url": model_data.get("api_base_url"),
             "created_by": creator,
             "status": model_data["status"],
             "created_at": chatbot.created_at,

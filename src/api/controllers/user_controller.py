@@ -139,7 +139,8 @@ async def delete_user(
         current_user: Authenticated admin user
         use_case: Delete user use case instance
     """
-    await use_case.execute(user_id)
+    admin_id = current_user.id
+    await use_case.execute(user_id, admin_id=admin_id)
 
 
 async def update_own_profile(

@@ -182,17 +182,18 @@ class DeleteUserUseCase:
     def __init__(self, user_service: UserService):
         self.user_service = user_service
 
-    async def execute(self, user_id: int) -> bool:
+    async def execute(self, user_id: int, admin_id: int) -> bool:
         """
         Execute delete user use case.
 
         Args:
-            user_id: User ID
+            user_id: User ID to delete
+            admin_id: ID of admin performing the deletion
 
         Returns:
             bool: True if deleted
         """
-        return await self.user_service.delete_user(user_id)
+        return await self.user_service.delete_user(user_id, deleted_by=admin_id)
 
 
 class UpdateOwnProfileUseCase:
