@@ -111,7 +111,6 @@ class ChatbotService:
         self,
         name: str,
         description: Optional[str] = None,
-        provider: str = "anthropic",
         model: str = "claude-3-sonnet-20240229",
         temperature: Decimal = Decimal("0.7"),
         max_tokens: int = 2048,
@@ -121,8 +120,6 @@ class ChatbotService:
         fallback_message: Optional[str] = None,
         max_conversation_length: int = 50,
         enable_function_calling: bool = True,
-        api_key_encrypted: str = "",
-        api_base_url: Optional[str] = None,
         created_by: int = 1,
         group_ids: Optional[List[int]] = None,
         user_ids: Optional[List[int]] = None,
@@ -173,7 +170,6 @@ class ChatbotService:
             id=None,  # Will be assigned by database
             name=name,
             description=description,
-            provider=provider,
             model=model,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -183,8 +179,6 @@ class ChatbotService:
             fallback_message=fallback_message,
             max_conversation_length=max_conversation_length,
             enable_function_calling=enable_function_calling,
-            api_key_encrypted=api_key_encrypted,
-            api_base_url=api_base_url,
             created_by=created_by,
             status="active"
         )

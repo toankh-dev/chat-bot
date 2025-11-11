@@ -84,7 +84,6 @@ class GetChatbotUseCase:
             "id": chatbot.id,
             "name": chatbot.name,
             "description": chatbot.description,
-            "provider": chatbot.provider,
             "model": chatbot.model,
             "temperature": chatbot.temperature,
             "max_tokens": chatbot.max_tokens,
@@ -122,13 +121,9 @@ class CreateChatbotUseCase:
         Returns:
             ChatbotResponse: Created chatbot data with assignments
         """
-        # For now, use simple "encryption" - in production, use proper encryption
-        api_key_encrypted = f"encrypted_{request.api_key}"
-
         chatbot = await self.chatbot_service.create_chatbot(
             name=request.name,
             description=request.description,
-            provider=request.provider,
             model=request.model,
             temperature=request.temperature,
             max_tokens=request.max_tokens,
@@ -138,8 +133,6 @@ class CreateChatbotUseCase:
             fallback_message=request.fallback_message,
             max_conversation_length=request.max_conversation_length,
             enable_function_calling=request.enable_function_calling,
-            api_key_encrypted=api_key_encrypted,
-            api_base_url=request.api_base_url,
             created_by=creator_id,
             group_ids=request.group_ids,
             user_ids=request.user_ids,
@@ -177,7 +170,6 @@ class CreateChatbotUseCase:
             "id": chatbot.id,
             "name": chatbot.name,
             "description": chatbot.description,
-            "provider": chatbot.provider,
             "model": chatbot.model,
             "temperature": chatbot.temperature,
             "max_tokens": chatbot.max_tokens,
@@ -265,7 +257,6 @@ class UpdateChatbotUseCase:
             "id": chatbot.id,
             "name": chatbot.name,
             "description": chatbot.description,
-            "provider": chatbot.provider,
             "model": chatbot.model,
             "temperature": chatbot.temperature,
             "max_tokens": chatbot.max_tokens,

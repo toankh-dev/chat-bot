@@ -26,15 +26,15 @@ class UserEntity:
         last_login_at: Last login timestamp
     """
 
-    id: int
+    id: Optional[int]
     email: Email
     username: str
     name: str
     password_hash: str
     status: str = "active"
     is_admin: bool = False
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=datetime.now)
+    updated_at: datetime = field(default_factory=datetime.now)
     last_login_at: Optional[datetime] = None
 
     def __post_init__(self):
@@ -47,21 +47,21 @@ class UserEntity:
     def deactivate(self) -> None:
         """Deactivate user account."""
         self.status = "inactive"
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now()
 
     def activate(self) -> None:
         """Activate user account."""
         self.status = "active"
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now()
 
     def record_login(self) -> None:
         """Record user login event."""
-        self.last_login_at = datetime.now(timezone.utc)
+        self.last_login_at = datetime.now()
 
     def update_password(self, new_password_hash: str) -> None:
         """Update user password."""
         self.password_hash = new_password_hash
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now()
 
     @property
     def is_active(self) -> bool:

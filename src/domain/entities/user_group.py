@@ -19,9 +19,9 @@ class UserGroupEntity:
     Note: This is a junction table with composite primary key (user_id, group_id), no separate id column.
     """
 
-    user_id: int = 0
-    group_id: int = 0
-    added_by: int = 0  # User ID who added this user to the group (required)
+    user_id: int
+    group_id: int
+    added_by: int  # User ID who added this user to the group (required)
     joined_at: Optional[datetime] = None
 
     def __post_init__(self):
@@ -36,7 +36,7 @@ class UserGroupEntity:
             raise ValueError("added_by must be a positive integer")
 
         if self.joined_at is None:
-            self.joined_at = datetime.now(timezone.utc)
+            self.joined_at = datetime.now()
 
     @property
     def is_persisted(self) -> bool:

@@ -51,7 +51,7 @@ class GroupEntity:
                 raise ValueError("Group name cannot be empty")
             self.name = name.strip()
 
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now()
 
     def __str__(self) -> str:
         """String representation of the group."""

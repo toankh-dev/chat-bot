@@ -34,7 +34,6 @@ from infrastructure.postgresql.models.user_group_model import UserGroup
 from infrastructure.postgresql.models.group_chatbot import GroupChatbotModel
 from infrastructure.postgresql.models.user_chatbot import UserChatbotModel
 from infrastructure.postgresql.models.conversation_model import ConversationModel
-from infrastructure.security.token_encryption import TokenEncryptionService
 from core.config import settings
 
 
@@ -60,7 +59,6 @@ def seed_database():
             print("Use 'python scripts/reset_database.py' to reset and seed.\n")
             return
 
-        token_encryption = TokenEncryptionService()
 
         print("\n👤 Creating users...")
 
@@ -119,13 +117,10 @@ def seed_database():
 
         # Chatbot
         print("\n🤖 Creating chatbot...")
-        dummy_api_key = "sk-dummy-key-for-testing-12345"
-        encrypted_api_key = token_encryption.encrypt_token(dummy_api_key)
 
         chatbot = ChatbotModel(
             name="Code Assistant",
             description="AI assistant that helps with code questions using repository knowledge",
-            provider="anthropic",
             model="claude-3-5-sonnet-20241022",
             temperature=0.7,
             max_tokens=2048,
@@ -142,7 +137,6 @@ Always cite specific files or functions when answering questions.""",
             fallback_message="I'm having trouble accessing my knowledge base right now. Please try again in a moment.",
             max_conversation_length=50,
             enable_function_calling=True,
-            api_key_encrypted=encrypted_api_key,
             created_by=admin_user.id,
             status="active"
         )

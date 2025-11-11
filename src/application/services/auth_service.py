@@ -85,7 +85,6 @@ class AuthService:
 
         # Build a domain User entity and persist via repository
         user = UserEntity(
-            id=0,  # Will be set by database
             email=Email(email),
             username=email.split('@')[0],
             name=name,

@@ -43,15 +43,15 @@ class ChatbotRepositoryImpl(ChatbotRepository):
         models = result.scalars().all()
         return [self.mapper.to_entity(model) for model in models]
 
-    async def create(self, entity: ChatbotEntity, created_by: int) -> ChatbotEntity:
+    async def create(self, entity: ChatbotEntity) -> ChatbotEntity:
         """Create new chatbot."""
-        model = self.mapper.to_model(entity, created_by)
+        model = self.mapper.to_model(entity)
         self.session.add(model)
         await self.session.flush()
         await self.session.refresh(model)
         return self.mapper.to_entity(model)
 
-    async def update(self, entity: ChatbotEntity, created_by: int) -> ChatbotEntity:
+    async def update(self, entity: ChatbotEntity) -> ChatbotEntity:
         """Update existing chatbot."""
         # Find existing model by integer ID
         result = await self.session.execute(
@@ -60,13 +60,13 @@ class ChatbotRepositoryImpl(ChatbotRepository):
         existing_model = result.scalar_one_or_none()
 
         if existing_model:
-            updated_model = self.mapper.to_model(entity, created_by, existing_model)
+            updated_model = self.mapper.to_model(entity, existing_model)
             await self.session.flush()
             await self.session.refresh(updated_model)
             return self.mapper.to_entity(updated_model)
         else:
             # Create new if doesn't exist
-            return await self.create(entity, created_by)
+            return await self.create(entity)
 
     async def delete(self, id: int) -> bool:
         """Delete chatbot by ID."""

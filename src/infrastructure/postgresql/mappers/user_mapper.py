@@ -63,17 +63,21 @@ class UserMapper:
             existing_model.updated_at = entity.updated_at
             return existing_model
         else:
-            # Create new model
-            return UserModel(
-                id=entity.id,
-                email=str(entity.email),
-                name=entity.name,
-                password_hash=entity.password_hash,
-                status=entity.status,
-                is_admin=entity.is_admin,
-                created_at=entity.created_at,
-                updated_at=entity.updated_at
-            )
+            # Create new model - skip id if None to allow auto-generation
+            model_data = {
+                "email": str(entity.email),
+                "name": entity.name,
+                "password_hash": entity.password_hash,
+                "status": entity.status,
+                "is_admin": entity.is_admin,
+                "created_at": entity.created_at,
+                "updated_at": entity.updated_at
+            }
+            # Only set id if entity has a valid id
+            if entity.id is not None:
+                model_data["id"] = entity.id
+            
+            return UserModel(**model_data)
 
     @staticmethod
     def to_model_dict(entity: UserEntity) -> dict:

@@ -69,10 +69,11 @@ class DatabaseManager:
         """Get database session."""
         if not self.session_factory:
             self.initialize()
-        
+
         async with self.session_factory() as session:
             try:
                 yield session
+                await session.commit()
             except Exception as e:
                 await session.rollback()
                 logger.error(f"Database session error: {e}")
@@ -88,6 +89,7 @@ class DatabaseManager:
         session = self.sync_session_factory()
         try:
             yield session
+            session.commit()
         except Exception as e:
             session.rollback()
             logger.error(f"Database session error: {e}")

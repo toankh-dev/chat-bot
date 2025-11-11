@@ -33,8 +33,8 @@ class WorkspaceEntity:
     owner_id: UUID
     is_active: bool = True
     settings: dict = field(default_factory=dict)
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=datetime.now)
+    updated_at: datetime = field(default_factory=datetime.now)
 
     def __post_init__(self):
         """Validate workspace invariants."""
@@ -44,17 +44,17 @@ class WorkspaceEntity:
     def deactivate(self) -> None:
         """Deactivate workspace."""
         self.is_active = False
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now()
 
     def activate(self) -> None:
         """Activate workspace."""
         self.is_active = True
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now()
 
     def update_settings(self, settings: dict) -> None:
         """Update workspace settings."""
         self.settings.update(settings)
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now()
 
     def to_dict(self) -> dict:
         """Convert to dictionary."""

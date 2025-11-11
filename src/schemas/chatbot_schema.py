@@ -25,7 +25,6 @@ class ChatbotCreate(BaseModel):
     """Chatbot creation request."""
     name: str = Field(..., min_length=3)
     description: Optional[str] = None
-    provider: str = Field(..., pattern="^(openai|anthropic|google)$")
     model: str = Field(..., min_length=1)
     temperature: Decimal = Field(default=0.7, ge=0, le=2)
     max_tokens: int = Field(default=2048, gt=0)
@@ -35,8 +34,6 @@ class ChatbotCreate(BaseModel):
     fallback_message: Optional[str] = None
     max_conversation_length: int = Field(default=50, gt=0)
     enable_function_calling: bool = True
-    api_key: str = Field(..., min_length=1)
-    api_base_url: Optional[str] = None
     group_ids: Optional[List[int]] = Field(default=None, description="List of group IDs to assign chatbot to")
     user_ids: Optional[List[int]] = Field(default=None, description="List of user IDs to assign chatbot to")
 
@@ -65,7 +62,6 @@ class ChatbotResponse(BaseModel):
     id: int
     name: str
     description: Optional[str]
-    provider: str
     model: str
     temperature: Decimal
     max_tokens: int

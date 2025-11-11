@@ -18,9 +18,9 @@ class UserChatbotEntity:
     relationship between users and chatbots.
     """
     
+    user_id: int
+    chatbot_id: int
     id: Optional[int] = None
-    user_id: int = 0
-    chatbot_id: int = 0
     created_at: Optional[datetime] = None
     assigned_by: Optional[int] = None  # User ID who assigned this chatbot to the user
     
@@ -33,7 +33,7 @@ class UserChatbotEntity:
             raise ValueError("Chatbot ID must be a positive integer")
 
         if self.created_at is None:
-            self.created_at = datetime.now(timezone.utc)
+            self.created_at = datetime.now()
     
     @property
     def is_persisted(self) -> bool:

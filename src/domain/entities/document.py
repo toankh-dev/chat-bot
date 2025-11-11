@@ -15,7 +15,7 @@ class DocumentEntity:
     processing_status: Optional[str] = None  # pending, syncing, completed, error
     knowledge_base_id: Optional[str] = None
     error_message: Optional[str] = None
-    uploaded_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    uploaded_at: datetime = field(default_factory=datetime.now)
     processed_at: Optional[datetime] = None
     
     def mark_as_uploaded(self):
@@ -29,7 +29,7 @@ class DocumentEntity:
     def mark_as_processed(self):
         self.upload_status = "processed"
         self.processing_status = "completed"
-        self.processed_at = datetime.now(timezone.utc)
+        self.processed_at = datetime.now()
     
     def mark_as_failed(self, error: str):
         self.upload_status = "failed"

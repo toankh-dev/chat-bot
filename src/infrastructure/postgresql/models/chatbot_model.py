@@ -20,7 +20,6 @@ class ChatbotModel(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(255), nullable=False)
     description = Column(Text)
-    provider = Column(String(50), nullable=False, comment="openai, anthropic, google")
     model = Column(String(100), nullable=False, comment="gpt-4o, claude-3-5-sonnet, gemini-pro")
     temperature = Column(Numeric(3, 2), default=0.7, comment="0.0-2.0, controls randomness")
     max_tokens = Column(Integer, default=2048, comment="Maximum response length")
@@ -37,11 +36,6 @@ class ChatbotModel(Base):
         Boolean,
         default=True,
         comment="Allow AI to use available tools"
-    )
-    api_key_encrypted = Column(Text, nullable=False, comment="Encrypted API credentials")
-    api_base_url = Column(
-        String(500),
-        comment="Custom API endpoint for Azure/custom deployments"
     )
     created_by = Column(
         Integer,
