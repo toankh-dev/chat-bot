@@ -69,37 +69,7 @@ deploy:
     - docker compose -f $DOCKER_COMPOSE_FILE ps
     # Run database migrations (if needed)
     - echo "Running database migrations..."
-    # Try to upgrade, and if it fails due to missing revision, check schema and stamp to head
-    - |
-      docker compose -f $DOCKER_COMPOSE_FILE exec -T api sh -c "
-        ERROR_OUTPUT=\$(alembic upgrade head 2>&1)
-        EXIT_CODE=\$?
-        if [ \$EXIT_CODE -ne 0 ]; then
-          if echo \"\$ERROR_OUTPUT\" | grep -q \"Can't locate revision\"; then
-            echo \"WARNING: Migration chain mismatch detected (missing revision in migration history)\"
-            echo \"Checking if database schema is already at the correct state...\"
-            # Use the fix_migration_chain script to validate schema
-            if python3 /app/scripts/fix_migration_chain.py 2>/dev/null | grep -q \"Schema validation passed\"; then
-              echo \"Schema is correct. Stamping database to head revision to fix migration history...\"
-              alembic stamp head
-              echo \"Database stamped successfully to head revision\"
-              # Try upgrade again after stamping
-              echo \"Verifying migration state...\"
-              alembic current
-            else
-              echo \"ERROR: Schema validation failed. Database may need manual migration.\"
-              echo \"Error output: \$ERROR_OUTPUT\"
-              exit 1
-            fi
-          else
-            echo \"Migration failed with error:\"
-            echo \"\$ERROR_OUTPUT\"
-            exit 1
-          fi
-        else
-          echo \"Migrations applied successfully\"
-        fi
-      " || echo "Migration skipped or failed (container may not be ready yet)"
+    - docker compose -f $DOCKER_COMPOSE_FILE exec -T api alembic upgrade head || echo "Migration skipped or failed (container may not be ready yet)"
     # Clean up old images to save space (keep last 2 versions)
     - docker image prune -f
     - echo "Deployment completed successfully!"
