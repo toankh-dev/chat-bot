@@ -4,9 +4,12 @@ Dependency injection container.
 Provides dependencies for controllers and use cases following Clean Architecture.
 """
 
-from fastapi import Depends
+from typing import Generator
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
-from infrastructure.postgresql.connection import get_db_session
+from sqlalchemy.orm import Session
+from infrastructure.postgresql.connection import get_db_session, get_sync_db_session
 from infrastructure.auth.jwt_handler import JWTHandler
 from core.config import settings
 
@@ -556,3 +559,61 @@ def get_retrieve_contexts_use_case(
     """Get retrieve contexts use case."""
     from usecases.rag_use_cases import RetrieveContextsUseCase
     return RetrieveContextsUseCase(rag_service)
+
+
+# Connector management dependencies
+
+def get_db() -> Generator[Session, None, None]:
+    """
+    Get synchronous database session for connector management.
+
+    Yields:
+        Session: SQLAlchemy synchronous session
+    """
+    yield from get_sync_db_session()
+
+
+security = HTTPBearer()
+
+# Connector management dependencies
+def get_connector_use_cases(
+    db_session: Session = Depends(get_db)
+):
+    """Get connector use cases instance."""
+    from usecases.connector_use_cases import ConnectorUseCases
+    return ConnectorUseCases(db_session)
+
+
+async def get_current_admin_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    jwt_handler: JWTHandler = Depends(get_jwt_handler),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """
+    Get current authenticated admin user and return as UserResponse schema.
+
+    Returns:
+        UserResponse: Current authenticated admin user
+
+    Raises:
+        HTTPException: If user is not authenticated or not admin
+    """
+    from api.middlewares.jwt_middleware import get_current_user
+    from schemas.user_schema import UserResponse
+
+    # Get authenticated user entity
+    user_entity = await get_current_user(
+        credentials=credentials,
+        db=session,
+        jwt_handler=jwt_handler
+    )
+
+    # Check admin privileges
+    if not user_entity.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required"
+        )
+
+    # Convert to UserResponse schema
+    return UserResponse.model_validate(user_entity)

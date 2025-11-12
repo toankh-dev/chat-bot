@@ -44,7 +44,7 @@ class FileChangeHistoryRepository:
         Args:
             file_changes: List of FileChangeHistory model instances
         """
-        self.db_session.bulk_save_objects(file_changes)
+        self.db_session.add_all(file_changes)
         self.db_session.commit()
 
     def get_by_id(self, change_id: int) -> Optional[FileChangeHistoryModel]:

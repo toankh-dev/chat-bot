@@ -239,6 +239,59 @@ class KBSyncService:
                 "error": str(e)
             }
 
+    async def sync_documents(self, documents: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Synchronously sync documents to vector store (for GitLab sync).
+
+        Args:
+            documents: List of documents with 'content' and 'metadata' keys
+
+        Returns:
+            Dictionary with sync results
+        """
+        try:
+            # Extract texts and metadata
+            texts = [doc["content"] for doc in documents]
+            metadatas = [doc["metadata"] for doc in documents]
+
+            # Get knowledge_base_id from first document's metadata
+            knowledge_base_id = metadatas[0].get("knowledge_base_id") if metadatas else "default"
+
+            # Create embeddings asynchronously
+            embeddings = await self.embedding_service.create_embeddings(texts)
+
+            # Add vectors to vector store
+            vector_ids = []
+            for i, (text, metadata, embedding) in enumerate(zip(texts, metadatas, embeddings)):
+                try:
+                    # Add text to metadata
+                    full_metadata = {
+                        **metadata,
+                        "text": text,
+                        "chunk_index": i
+                    }
+
+                    # Add vector to store
+                    vector_id = self.vector_store.add_vector(embedding, full_metadata)
+                    vector_ids.append(vector_id)
+
+                except Exception as e:
+                    print(f"Error adding vector {i} to store: {e}")
+                    continue
+
+            return {
+                "success": True,
+                "kb_id": knowledge_base_id,
+                "total_documents": len(documents),
+                "vectors_added": len(vector_ids)
+            }
+
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
     def get_kb_id_for_domain(self, domain: str, kb_config: Dict[str, str]) -> str:
         """
         Get Knowledge Base ID for a given domain.

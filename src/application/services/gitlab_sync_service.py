@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from infrastructure.external.gitlab_service import GitLabService
 from application.services.code_chunking_service import CodeChunkingService
 from application.services.kb_sync_service import KBSyncService
+from application.services.connector_service import ConnectorService
 from infrastructure.postgresql.repositories.repository_repository import RepositoryRepository
 from infrastructure.postgresql.repositories.user_connection_repository import UserConnectionRepository
 from infrastructure.postgresql.repositories.sync_history_repository import SyncHistoryRepository
@@ -54,10 +55,12 @@ class GitLabSyncService:
         self.sync_history_repo = SyncHistoryRepository(db_session)
         self.sync_queue_repo = SyncQueueRepository(db_session)
         self.file_change_repo = FileChangeHistoryRepository(db_session)
+        
+        # Initialize connector service
+        self.connector_service = ConnectorService(db_session)
 
-    def sync_repository_full(
+    async def sync_repository_full(
         self,
-        connection_id: int,
         repository_external_id: str,
         knowledge_base_id: str,
         group_id: str,
@@ -68,7 +71,6 @@ class GitLabSyncService:
         Perform full repository sync.
 
         Args:
-            connection_id: User connection ID
             repository_external_id: External repository ID (GitLab project ID)
             knowledge_base_id: Knowledge Base ID
             group_id: Group ID
@@ -80,46 +82,29 @@ class GitLabSyncService:
         """
         logger.info(f"Starting full sync for repo {repository_external_id}")
 
-        # 1. Get or create system connection (simplified - just for tracking)
-        connection = self.connection_repo.get_by_id(connection_id)
-        if not connection:
-            # Auto-create system connection if not exists
-            from infrastructure.postgresql.models.user_connection_model import UserConnectionModel
-            from infrastructure.postgresql.models.connector_model import ConnectorModel
+        try:
+            # 1. Get or create GitLab connector with proper config
+            gitlab_connector = self.connector_service.get_or_create_gitlab_connector()
+            logger.info(f"Using GitLab connector: ID={gitlab_connector.id}, Name='{gitlab_connector.name}'")
 
-            # Get or create GitLab connector
-            connector = self.db_session.query(ConnectorModel).filter(
-                ConnectorModel.provider_type == "gitlab"
-            ).first()
-
-            if not connector:
-                connector = ConnectorModel(
-                    name="GitLab",
-                    provider_type="gitlab",
-                    auth_type="pat",
-                    is_active=True
-                )
-                self.db_session.add(connector)
-                self.db_session.commit()
-                self.db_session.refresh(connector)
-
-            # Create system connection
-            connection = UserConnectionModel(
-                user_id=user_id,  # Admin user
-                connector_id=connector.id,
-                is_active=True,
-                connection_metadata={"system": True, "gitlab_url": "settings"}
+            # 2. Get or create system connection properly
+            connection = await self.connector_service.get_or_create_system_connection(
+                user_id=user_id,
+                connector=gitlab_connector
             )
-            connection.id = connection_id  # Force ID = 1
-            self.db_session.add(connection)
-            self.db_session.commit()
+            logger.info(f"Using system connection: ID={connection.id}")
 
-        # Get GitLab service (uses admin token from settings)
-        gitlab_service = self._get_gitlab_service()
+            # 3. Get GitLab service from connector
+            gitlab_service = self.connector_service.get_gitlab_service(gitlab_connector)
+            logger.info(f"GitLab service initialized successfully")
+
+        except Exception as e:
+            logger.error(f"Failed to initialize GitLab connector/service: {str(e)}")
+            raise ValueError(f"GitLab initialization failed: {str(e)}")
 
         # 2. Get or create repository record
         repo, created = self.repository_repo.get_or_create(
-            connection_id=connection_id,
+            connection_id=connection.id,  # Use actual connection ID
             external_id=repository_external_id,
             defaults={
                 "name": f"repo_{repository_external_id}",
@@ -174,18 +159,45 @@ class GitLabSyncService:
             # 6. Create a dummy commit for full sync
             # In full sync, we treat all files as "added" in one commit
             from infrastructure.postgresql.models.commit_model import CommitModel
-            commit = CommitModel(
-                repo_id=repo.id,
-                external_id=f"full_sync_{datetime.utcnow().isoformat()}",
-                sha="full_sync",
-                author_name="System",
-                message="Full repository sync",
-                committed_at=datetime.utcnow(),
-                files_changed=len(code_files)
-            )
-            self.db_session.add(commit)
-            self.db_session.commit()
-            self.db_session.refresh(commit)
+            sync_timestamp = datetime.utcnow().isoformat()
+            
+            # Check if there's already a full sync commit for this repo
+            existing_commit = self.db_session.query(CommitModel).filter(
+                CommitModel.repo_id == repo.id,
+                CommitModel.sha.like("full_sync_%")
+            ).first()
+            
+            if existing_commit:
+                logger.info(f"Using existing full sync commit: {existing_commit.sha}")
+                commit = existing_commit
+            else:
+                try:
+                    commit = CommitModel(
+                        repo_id=repo.id,
+                        external_id=f"full_sync_{sync_timestamp}",
+                        sha=f"full_sync_{sync_timestamp}",  # Make SHA unique
+                        author_name="System",
+                        message="Full repository sync",
+                        committed_at=datetime.utcnow(),
+                        files_changed=len(code_files)
+                    )
+                    self.db_session.add(commit)
+                    self.db_session.commit()
+                    self.db_session.refresh(commit)
+                    logger.info(f"Created new full sync commit: {commit.sha}")
+                except Exception as commit_error:
+                    logger.error(f"Failed to create commit: {commit_error}")
+                    self.db_session.rollback()
+                    # Try to find the commit that might have been created by another process
+                    existing_commit = self.db_session.query(CommitModel).filter(
+                        CommitModel.repo_id == repo.id,
+                        CommitModel.sha.like("full_sync_%")
+                    ).first()
+                    if existing_commit:
+                        logger.info(f"Found existing commit after rollback: {existing_commit.sha}")
+                        commit = existing_commit
+                    else:
+                        raise commit_error
 
             # 7. Queue all files for processing
             queue_items = []
@@ -205,6 +217,10 @@ class GitLabSyncService:
 
             # Bulk insert file history
             self.file_change_repo.create_batch(file_history_items)
+
+            # Refresh file_history_items to get IDs after bulk insert
+            for file_change in file_history_items:
+                self.db_session.refresh(file_change)
 
             # Create queue items
             for i, file_change in enumerate(file_history_items):
@@ -228,15 +244,19 @@ class GitLabSyncService:
 
             logger.info(f"Queued {len(queue_items)} files")
 
-            # 8. Process queue in batches
-            result = self._process_queue(
+            # 8. Process queue in batches with connector config
+            sync_config = self.connector_service.get_sync_config(gitlab_connector)
+            batch_size = sync_config.get("batch_size", 10)
+            
+            result = await self._process_queue(
                 repo=repo,
                 sync_history=sync_history,
                 gitlab_service=gitlab_service,
                 knowledge_base_id=knowledge_base_id,
                 group_id=group_id,
                 user_id=user_id,
-                branch=branch
+                branch=branch,
+                batch_size=batch_size
             )
 
             # 9. Mark sync as completed
@@ -249,6 +269,13 @@ class GitLabSyncService:
 
         except Exception as e:
             logger.error(f"Full sync failed: {str(e)}")
+            # Ensure session is rolled back on error
+            try:
+                self.db_session.rollback()
+            except Exception as rollback_error:
+                logger.error(f"Failed to rollback session: {rollback_error}")
+            
+            # Update sync status
             self.sync_history_repo.complete_sync(
                 sync_history.id,
                 "failed",
@@ -257,7 +284,7 @@ class GitLabSyncService:
             self.repository_repo.mark_failed(repo.id)
             raise
 
-    def sync_repository_incremental(
+    async def sync_repository_incremental(
         self,
         repository_id: int,
         user_id: int
@@ -327,7 +354,7 @@ class GitLabSyncService:
             self.repository_repo.mark_failed(repo.id)
             raise
 
-    def _process_queue(
+    async def _process_queue(
         self,
         repo: RepositoryModel,
         sync_history: SyncHistoryModel,
@@ -384,32 +411,43 @@ class GitLabSyncService:
                         ref=branch
                     )
 
-                    # Chunk code
+                    # Chunk code with proper metadata
+                    repo_info = {
+                        "repo": repo.name,
+                        "repo_url": repo.html_url or "",
+                        "branch": branch,
+                        "commit": "",
+                        "author": "System"
+                    }
+                    metadata = self.code_chunking_service.extract_metadata(
+                        file_path=queue_item.file_path,
+                        content=content,
+                        repo_info=repo_info
+                    )
                     chunks = self.code_chunking_service.chunk_code(
-                        content,
-                        queue_item.file_path
+                        file_path=queue_item.file_path,
+                        content=content,
+                        metadata=metadata
                     )
 
                     # Create documents
                     documents = []
-                    for i, chunk in enumerate(chunks):
+                    for chunk in chunks:
                         doc_metadata = {
+                            **chunk.metadata,
                             "source": "gitlab",
                             "repository": repo.full_name or repo.name,
-                            "file_path": queue_item.file_path,
-                            "chunk_index": i,
-                            "language": chunk.language,
                             "knowledge_base_id": knowledge_base_id,
                             "group_id": group_id,
                             "user_id": user_id
                         }
                         documents.append({
-                            "content": chunk.content,
+                            "content": chunk.text,
                             "metadata": doc_metadata
                         })
 
                     # Sync to vector store
-                    self.kb_sync_service.sync_documents(documents)
+                    await self.kb_sync_service.sync_documents(documents)
 
                     # Calculate process time
                     process_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
@@ -446,6 +484,7 @@ class GitLabSyncService:
                 batches_completed=1
             )
 
+        # Return final results after all batches processed
         return {
             "success": True,
             "repository": repo.name,
@@ -454,17 +493,3 @@ class GitLabSyncService:
             "files_failed": total_failed,
             "total_embeddings": total_embeddings
         }
-
-    def _get_gitlab_service(self, connection=None) -> GitLabService:
-        """
-        Get GitLab service using admin token from settings.
-
-        Connection parameter is ignored - always use admin token.
-        """
-        from core.config import settings
-
-        # Always use admin token from settings
-        return GitLabService(
-            gitlab_url=settings.GITLAB_URL,
-            private_token=settings.GITLAB_API_TOKEN
-        )

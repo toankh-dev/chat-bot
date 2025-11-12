@@ -44,7 +44,7 @@ class SyncQueueRepository:
         Args:
             queue_items: List of SyncQueue model instances
         """
-        self.db_session.bulk_save_objects(queue_items)
+        self.db_session.add_all(queue_items)
         self.db_session.commit()
 
     def get_by_id(self, queue_id: int) -> Optional[SyncQueueModel]:

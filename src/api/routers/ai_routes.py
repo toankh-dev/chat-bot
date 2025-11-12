@@ -11,7 +11,6 @@ from api.controllers.ai_controller import (
     test_llm
 )
 from api.middlewares.jwt_middleware import require_admin
-from domain.entities.user import UserEntity
 
 router = APIRouter()
 

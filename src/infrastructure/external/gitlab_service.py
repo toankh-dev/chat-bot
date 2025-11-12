@@ -167,6 +167,81 @@ class GitLabService:
         except Exception as e:
             raise ValueError(f"Failed to get file content: {str(e)}")
 
+    def list_repositories(
+        self,
+        visibility: Optional[str] = None,
+        owned: bool = False,
+        membership: bool = True,
+        search: Optional[str] = None,
+        order_by: str = "last_activity_at",
+        sort: str = "desc",
+        per_page: int = 100,
+        page: int = 1
+    ) -> List[Dict[str, Any]]:
+        """
+        List GitLab repositories accessible to the authenticated user.
+
+        Args:
+            visibility: Filter by visibility (public, internal, private)
+            owned: Limit to owned projects only
+            membership: Limit to projects user is a member of
+            search: Search term to filter repositories by name/description
+            order_by: Sort by field (id, name, path, created_at, updated_at, last_activity_at)
+            sort: Sort order (asc or desc)
+            per_page: Number of results per page (max 100)
+            page: Page number
+
+        Returns:
+            List of repository information dictionaries
+        """
+        try:
+            # Build query parameters
+            list_params = {
+                "order_by": order_by,
+                "sort": sort,
+                "per_page": min(per_page, 100),  # GitLab max is 100
+                "page": page
+            }
+
+            if visibility:
+                list_params["visibility"] = visibility
+            if owned:
+                list_params["owned"] = True
+            if membership:
+                list_params["membership"] = True
+            if search:
+                list_params["search"] = search
+
+            # Get projects from GitLab API
+            projects = self.gl.projects.list(**list_params)
+
+            # Transform to simplified format
+            repositories = []
+            for project in projects:
+                repositories.append({
+                    "id": str(project.id),
+                    "external_id": str(project.id),
+                    "name": project.name,
+                    "path": project.path,
+                    "full_name": project.path_with_namespace,
+                    "description": project.description or "",
+                    "visibility": project.visibility,
+                    "web_url": project.web_url,
+                    "http_url_to_repo": project.http_url_to_repo,
+                    "default_branch": project.default_branch or "main",
+                    "created_at": project.created_at,
+                    "last_activity_at": project.last_activity_at,
+                    "star_count": getattr(project, "star_count", 0),
+                    "forks_count": getattr(project, "forks_count", 0),
+                    "archived": getattr(project, "archived", False),
+                    "empty_repo": getattr(project, "empty_repo", False)
+                })
+
+            return repositories
+
+        except Exception as e:
+            raise ValueError(f"Failed to list repositories: {str(e)}")
+
     def get_project_info(self, project_id: str) -> Dict[str, Any]:
         """
         Get project information.
@@ -314,6 +389,56 @@ class GitLabService:
             filtered_files.append(file_path)
 
         return filtered_files
+
+    def get_current_user(self) -> Dict[str, Any]:
+        """
+        Get current authenticated user information.
+
+        Returns:
+            Dictionary with user information
+        """
+        try:
+            user = self.gl.user
+            return {
+                "id": user.id,
+                "username": user.username,
+                "name": user.name,
+                "email": getattr(user, 'email', ''),
+                "avatar_url": getattr(user, 'avatar_url', ''),
+                "web_url": getattr(user, 'web_url', '')
+            }
+        except Exception as e:
+            raise ValueError(f"Failed to get current user: {str(e)}")
+
+    def get_projects(
+        self,
+        per_page: int = 20,
+        page: int = 1,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """
+        Get projects (alias for list_repositories with pagination info).
+
+        Args:
+            per_page: Number of projects per page
+            page: Page number
+            **kwargs: Additional parameters for list_repositories
+
+        Returns:
+            Dictionary with repositories and pagination info
+        """
+        repositories = self.list_repositories(
+            per_page=per_page,
+            page=page,
+            **kwargs
+        )
+
+        return {
+            "repositories": repositories,
+            "total": len(repositories),
+            "page": page,
+            "per_page": per_page
+        }
 
     def cleanup_clone(self, clone_path: str):
         """

@@ -19,6 +19,8 @@ from infrastructure.postgresql.models.commit_model import CommitModel
 from infrastructure.postgresql.models.sync_history_model import SyncHistoryModel
 from infrastructure.postgresql.models.sync_queue_model import SyncQueueModel
 from infrastructure.postgresql.models.file_change_history_model import FileChangeHistoryModel
+from infrastructure.postgresql.models.knowledge_base_model import KnowledgeBaseModel
+from infrastructure.postgresql.models.knowledge_base_source_model import KnowledgeBaseSourceModel
 
 __all__ = [
     "Base",
@@ -38,5 +40,7 @@ __all__ = [
     "CommitModel",
     "SyncHistoryModel",
     "SyncQueueModel",
-    "FileChangeHistoryModel"
+    "FileChangeHistoryModel",
+    "KnowledgeBaseModel",
+    "KnowledgeBaseSourceModel"
 ]

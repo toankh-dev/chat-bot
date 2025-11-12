@@ -35,8 +35,6 @@ async def get_current_user(
     try:
         payload = jwt_handler.decode_token(token)
         user_id = payload.get("sub")
-        print("payload:", payload)
-        print("Authenticated user ID:", user_id)
         if not user_id:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -90,4 +88,28 @@ async def require_admin(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin privileges required"
         )
+    return current_user
+
+
+async def get_current_admin_user(
+    current_user: UserEntity = Depends(get_current_user)
+) -> UserEntity:
+    """
+    Get current authenticated admin user.
+    
+    Args:
+        current_user: Current authenticated user
+        
+    Returns:
+        UserEntity: Current authenticated admin user
+        
+    Raises:
+        HTTPException: If user is not admin
+    """
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required"
+        )
+    
     return current_user
