@@ -7,10 +7,12 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc
 
+from shared.interfaces.repositories.sync_history_repository import ISyncHistoryRepository
 from infrastructure.postgresql.models.sync_history_model import SyncHistoryModel
+from core.logger import logger
 
 
-class SyncHistoryRepository:
+class SyncHistoryRepository(ISyncHistoryRepository):
     """Repository for managing sync history records."""
 
     def __init__(self, db_session: Session):
@@ -251,3 +253,20 @@ class SyncHistoryRepository:
         ).delete()
         self.db_session.commit()
         return deleted
+
+    def commit(self) -> None:
+        """Commit the current transaction."""
+        try:
+            self.db_session.commit()
+        except Exception as e:
+            self.db_session.rollback()
+            logger.error(f"Error committing transaction: {e}")
+            raise
+
+    def rollback(self) -> None:
+        """Rollback the current transaction."""
+        try:
+            self.db_session.rollback()
+        except Exception as e:
+            logger.error(f"Error rolling back transaction: {e}")
+            raise

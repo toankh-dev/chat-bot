@@ -2,16 +2,16 @@
 Connector Service - Centralized connector management with caching.
 """
 
-from typing import Dict, Optional, Any, List
+from typing import Dict, Optional, Any, List, Callable
 from functools import lru_cache
 from datetime import datetime
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
 
+from shared.interfaces.repositories.connector_repository import IConnectorRepository
+from shared.interfaces.repositories.user_connection_repository import IUserConnectionRepository
+from shared.interfaces.services.security.encryption_service import IEncryptionService
+from shared.interfaces.services.external.gitlab_service import IGitLabService
 from infrastructure.postgresql.models.connector_model import ConnectorModel
 from infrastructure.postgresql.models.user_connection_model import UserConnectionModel
-from infrastructure.external.gitlab_service import GitLabService
-from infrastructure.security.encryption_service import EncryptionService
 from core.config import settings
 from core.logger import logger
 
@@ -19,7 +19,7 @@ from core.logger import logger
 class ConnectorService:
     """
     Centralized service for managing connectors and their configurations.
-    
+
     Features:
     - Connector caching for performance
     - GitLab service creation from connector config
@@ -27,25 +27,36 @@ class ConnectorService:
     - Support for multiple connector instances
     """
 
-    def __init__(self, db_session: Session):
+    def __init__(
+        self,
+        connector_repository: IConnectorRepository,
+        user_connection_repository: IUserConnectionRepository,
+        encryption_service: IEncryptionService,
+        gitlab_service_factory: Callable[[str, str], IGitLabService]
+    ):
         """
-        Initialize connector service.
-        
+        Initialize connector service with dependency injection.
+
         Args:
-            db_session: SQLAlchemy database session
+            connector_repository: Connector repository interface
+            user_connection_repository: User connection repository interface
+            encryption_service: Encryption service interface
+            gitlab_service_factory: Factory function to create GitLab service
         """
-        self.db_session = db_session
-        self.encryption_service = EncryptionService()
+        self.connector_repository = connector_repository
+        self.user_connection_repository = user_connection_repository
+        self.encryption_service = encryption_service
+        self.gitlab_service_factory = gitlab_service_factory
         self._connector_cache: Dict[str, Optional[ConnectorModel]] = {}
-        self._gitlab_service_cache: Dict[int, GitLabService] = {}
+        self._gitlab_service_cache: Dict[int, IGitLabService] = {}
 
     def get_connector(self, provider_type: str) -> Optional[ConnectorModel]:
         """
         Get connector by provider type with caching.
-        
+
         Args:
             provider_type: Provider type (gitlab, github, jira, etc.)
-            
+
         Returns:
             ConnectorModel instance or None if not found
         """
@@ -54,15 +65,12 @@ class ConnectorService:
             return self._connector_cache[provider_type]
 
         try:
-            # Query database
-            connector = self.db_session.query(ConnectorModel).filter(
-                ConnectorModel.provider_type == provider_type,
-                ConnectorModel.is_active == True
-            ).first()
+            # Query via repository
+            connector = self.connector_repository.get_by_provider_type(provider_type)
 
             # Cache result (even None)
             self._connector_cache[provider_type] = connector
-            
+
             if connector:
                 logger.info(f"Loaded connector: {connector.name} (type: {provider_type})")
             else:
@@ -99,16 +107,16 @@ class ConnectorService:
             "Please setup connector via API: POST /api/v1/connectors/gitlab/token"
         )
 
-    def get_gitlab_service(self, connector: Optional[ConnectorModel] = None) -> GitLabService:
+    def get_gitlab_service(self, connector: Optional[ConnectorModel] = None) -> IGitLabService:
         """
         Create GitLab service instance from connector configuration.
-        
+
         Args:
             connector: ConnectorModel instance (optional)
-            
+
         Returns:
-            GitLabService configured with connector settings
-            
+            IGitLabService configured with connector settings
+
         Raises:
             ValueError: If GitLab configuration is invalid
         """
@@ -126,9 +134,9 @@ class ConnectorService:
                 config = connector.config_schema
                 instance_config = config.get("instance_config", {})
                 auth_config = config.get("auth_config", {})
-                
+
                 gitlab_url = instance_config.get("gitlab_url", settings.GITLAB_URL if hasattr(settings, 'GITLAB_URL') else "https://gitlab.com")
-                
+
                 # Try to get token from connector first (encrypted)
                 private_token = None
                 if connector.auth_type == "personal_token" and connector.client_id:
@@ -137,12 +145,12 @@ class ConnectorService:
                         logger.info("Using encrypted token from connector database")
                     except Exception as e:
                         logger.warning(f"Failed to decrypt token from connector: {e}")
-                
+
                 # Fallback to environment variable (backward compatibility)
                 if not private_token and hasattr(settings, 'GITLAB_API_TOKEN'):
                     private_token = settings.GITLAB_API_TOKEN
                     logger.info("Using token from environment variable (legacy mode)")
-                
+
                 logger.info(f"Creating GitLab service from connector config: {gitlab_url}")
             else:
                 # Fallback to settings (backward compatibility)
@@ -158,11 +166,8 @@ class ConnectorService:
             if not private_token:
                 raise ValueError("GitLab API token is not configured")
 
-            # Create GitLab service
-            gitlab_service = GitLabService(
-                gitlab_url=gitlab_url,
-                private_token=private_token
-            )
+            # Create GitLab service using factory
+            gitlab_service = self.gitlab_service_factory(gitlab_url, private_token)
 
             # Cache the service
             if connector and connector.id:
@@ -192,13 +197,10 @@ class ConnectorService:
         """
         try:
             # Look for existing system connection
-            connection = self.db_session.query(UserConnectionModel).filter(
-                UserConnectionModel.user_id == user_id,
-                UserConnectionModel.connector_id == connector.id,
-                UserConnectionModel.is_active == True
-            ).filter(
-                UserConnectionModel.connection_metadata.op('->>')('system') == 'true'
-            ).first()
+            connection = self.user_connection_repository.get_system_connection(
+                user_id=user_id,
+                connector_id=connector.id
+            )
 
             if connection:
                 logger.info(f"Using existing system connection: ID={connection.id}")
@@ -207,7 +209,7 @@ class ConnectorService:
             # Create new system connection
             logger.info(f"Creating system connection for user {user_id} and connector {connector.id}")
             
-            connection = UserConnectionModel(
+            connection = self.user_connection_repository.create_connection(
                 user_id=user_id,
                 connector_id=connector.id,
                 is_active=True,
@@ -221,16 +223,12 @@ class ConnectorService:
                 }
             )
 
-            self.db_session.add(connection)
-            self.db_session.commit()
-            self.db_session.refresh(connection)
-
             logger.info(f"Created system connection successfully: ID={connection.id}")
             return connection
 
         except Exception as e:
             logger.error(f"Failed to create system connection: {str(e)}")
-            self.db_session.rollback()
+            self.user_connection_repository.rollback()
             raise ValueError(f"Failed to create system connection: {str(e)}")
 
     def get_sync_config(self, connector: ConnectorModel) -> Dict[str, Any]:
@@ -401,14 +399,13 @@ class ConnectorService:
                 # UPDATE existing connector (keeps same ID)
                 logger.info(f"Updating existing GitLab connector: ID={existing.id}")
 
-                existing.name = name
-                existing.client_id = encrypted_admin_token
-                existing.config_schema = config_schema
-                existing.is_active = True
-                existing.updated_at = datetime.utcnow()
-
-                self.db_session.commit()
-                self.db_session.refresh(existing)
+                self.connector_repository.update_connector(
+                    connector=existing,
+                    name=name,
+                    client_id=encrypted_admin_token,
+                    config_schema=config_schema,
+                    is_active=True
+                )
 
                 # Clear and update caches
                 self._connector_cache.pop("gitlab", None)
@@ -420,19 +417,14 @@ class ConnectorService:
                 return existing
 
             # CREATE new connector
-            connector = ConnectorModel(
+            connector = self.connector_repository.create_connector(
                 name=name,
                 provider_type="gitlab",
                 auth_type="personal_token",
                 client_id=encrypted_admin_token,
-                client_secret=None,
                 config_schema=config_schema,
                 is_active=True
             )
-
-            self.db_session.add(connector)
-            self.db_session.commit()
-            self.db_session.refresh(connector)
 
             # Update cache
             self._connector_cache["gitlab"] = connector
@@ -442,7 +434,7 @@ class ConnectorService:
             
         except Exception as e:
             logger.error(f"Failed to setup GitLab personal token connector: {e}")
-            self.db_session.rollback()
+            self.connector_repository.rollback()
             raise ValueError(f"Failed to setup GitLab personal token connector: {e}")
 
     def get_decrypted_credentials(self, connector: ConnectorModel) -> Dict[str, str]:
@@ -485,9 +477,7 @@ class ConnectorService:
             Updated ConnectorModel
         """
         try:
-            connector = self.db_session.query(ConnectorModel).filter(
-                ConnectorModel.id == connector_id
-            ).first()
+            connector = self.connector_repository.get_by_id(connector_id)
             
             if not connector:
                 raise ValueError(f"Connector {connector_id} not found")
@@ -495,22 +485,25 @@ class ConnectorService:
             if connector.auth_type != "personal_token":
                 raise ValueError(f"Connector {connector_id} is not using personal token authentication")
             
-            # Encrypt and store the personal token
-            connector.client_id = self.encryption_service.encrypt(personal_token)
+            # Encrypt the personal token
+            encrypted_token = self.encryption_service.encrypt(personal_token)
             
-            self.db_session.commit()
-            self.db_session.refresh(connector)
+            # Update the connector using repository
+            updated_connector = self.connector_repository.update_connector(
+                connector=connector,
+                client_id=encrypted_token
+            )
             
             # Clear caches
             self._connector_cache.pop(connector.provider_type, None)
             self._gitlab_service_cache.pop(connector_id, None)
             
             logger.info(f"Updated credentials for connector {connector_id}")
-            return connector
+            return updated_connector
             
         except Exception as e:
             logger.error(f"Failed to update connector credentials: {e}")
-            self.db_session.rollback()
+            self.connector_repository.rollback()
             raise ValueError(f"Failed to update credentials: {e}")
 
     def test_connector_credentials(self, connector: ConnectorModel) -> Dict[str, Any]:
@@ -561,7 +554,7 @@ class ConnectorService:
             List of all ConnectorModel instances
         """
         try:
-            return self.db_session.query(ConnectorModel).all()
+            return self.connector_repository.list_all(only_active=False)
         except Exception as e:
             logger.error(f"Failed to list connectors: {e}")
             raise ValueError(f"Failed to retrieve connectors: {e}")
@@ -589,9 +582,7 @@ class ConnectorService:
             ConnectorModel or None if not found
         """
         try:
-            return self.db_session.query(ConnectorModel).filter(
-                ConnectorModel.id == connector_id
-            ).first()
+            return self.connector_repository.get_by_id(connector_id)
         except Exception as e:
             logger.error(f"Failed to get connector {connector_id}: {e}")
             return None
@@ -607,10 +598,7 @@ class ConnectorService:
             Number of active connections
         """
         try:
-            return self.db_session.query(UserConnectionModel).filter(
-                UserConnectionModel.connector_id == connector_id,
-                UserConnectionModel.is_active == True
-            ).count()
+            return self.user_connection_repository.count_active_connections(connector_id)
         except Exception as e:
             logger.error(f"Failed to count active connections for connector {connector_id}: {e}")
             return 0
@@ -631,21 +619,21 @@ class ConnectorService:
                 raise ValueError(f"Connector {connector_id} not found")
 
             # Delete all user connections first
-            self.db_session.query(UserConnectionModel).filter(
-                UserConnectionModel.connector_id == connector_id
-            ).delete()
+            deleted_connections = self.user_connection_repository.delete_by_connector(connector_id)
 
             # Delete the connector
-            self.db_session.delete(connector)
-            self.db_session.commit()
+            success = self.connector_repository.delete(connector_id)
+            if not success:
+                raise ValueError(f"Failed to delete connector {connector_id}")
 
             # Clear caches
             self._connector_cache.pop(connector.provider_type, None)
             self._gitlab_service_cache.pop(connector_id, None)
 
-            logger.info(f"Successfully deleted connector {connector_id} and its connections")
+            logger.info(f"Successfully deleted connector {connector_id} and {deleted_connections} connections")
 
         except Exception as e:
             logger.error(f"Failed to delete connector {connector_id}: {e}")
-            self.db_session.rollback()
+            self.connector_repository.rollback()
+            self.user_connection_repository.rollback()
             raise ValueError(f"Failed to delete connector: {e}")

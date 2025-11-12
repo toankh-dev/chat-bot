@@ -6,10 +6,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from infrastructure.auth.jwt_handler import JWTHandler
 from infrastructure.postgresql.connection.database import get_db_session
 from domain.entities.user import UserEntity
-from infrastructure.postgresql.repositories.user_repository import UserRepositoryImpl
-from core.dependencies import get_jwt_handler
+from shared.interfaces.repositories.user_repository import UserRepository
+from core.dependencies import get_user_repository
 
 security = HTTPBearer()
+
+
+def get_jwt_handler() -> JWTHandler:
+    """Get JWT handler instance."""
+    return JWTHandler()
+
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -17,7 +23,7 @@ async def get_current_user(
     jwt_handler: JWTHandler = Depends(get_jwt_handler)
 ) -> UserEntity:
     """
-    Get current authenticated user from JWT token.
+    Get current authenticated user from JWT token using Clean Architecture.
 
     Args:
         credentials: HTTP bearer token credentials
@@ -25,11 +31,13 @@ async def get_current_user(
         jwt_handler: JWT handler instance
 
     Returns:
-        UserModel: Authenticated user
+        UserEntity: Authenticated user
 
     Raises:
         HTTPException: If authentication fails
     """
+    # Import here to avoid circular dependency
+    
     token = credentials.credentials
 
     try:
@@ -41,7 +49,8 @@ async def get_current_user(
                 detail="Invalid token"
             )
 
-        user_repository = UserRepositoryImpl(db)
+        # Use dependency injection for repository
+        user_repository: UserRepository = get_user_repository(db)
         user = await user_repository.find_by_id(int(user_id))
 
         if not user:
@@ -78,7 +87,7 @@ async def require_admin(
         current_user: Authenticated user
 
     Returns:
-        UserModel: Admin user
+        UserEntity: Admin user
 
     Raises:
         HTTPException: If user is not admin
@@ -88,28 +97,4 @@ async def require_admin(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin privileges required"
         )
-    return current_user
-
-
-async def get_current_admin_user(
-    current_user: UserEntity = Depends(get_current_user)
-) -> UserEntity:
-    """
-    Get current authenticated admin user.
-    
-    Args:
-        current_user: Current authenticated user
-        
-    Returns:
-        UserEntity: Current authenticated admin user
-        
-    Raises:
-        HTTPException: If user is not admin
-    """
-    if not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin privileges required"
-        )
-    
     return current_user

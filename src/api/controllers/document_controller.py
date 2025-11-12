@@ -5,7 +5,8 @@ from schemas.document_schema import (
     DocumentUploadResponse,
     DocumentListResponse,
     DocumentStatusResponse,
-    DocumentProcessingResponse
+    DocumentProcessingResponse,
+    DocumentDeleteResponse
 )
 from usecases.document_use_cases import (
     UploadDocumentUseCase,
@@ -87,7 +88,7 @@ async def delete_document(
     document_id: str,
     current_user: UserEntity = Depends(get_current_user),
     use_case: DeleteDocumentUseCase = Depends(get_delete_document_use_case)
-):
+) -> DocumentDeleteResponse:
     """
     Delete a document.
 
@@ -97,7 +98,7 @@ async def delete_document(
         use_case: Delete document use case instance
 
     Returns:
-        dict: Success message
+        DocumentDeleteResponse: Success message
     """
     try:
         user_id = str(current_user.id.value)
@@ -110,7 +111,7 @@ async def delete_document(
                 detail="Document not found"
             )
 
-        return {"message": "Document deleted successfully"}
+        return DocumentDeleteResponse(message="Document deleted successfully")
 
     except HTTPException:
         raise

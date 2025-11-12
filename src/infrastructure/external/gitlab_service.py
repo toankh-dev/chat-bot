@@ -9,8 +9,10 @@ import tempfile
 import shutil
 from pathlib import Path
 
+from shared.interfaces.services.external.gitlab_service import IGitLabService
 
-class GitLabService:
+
+class GitLabService(IGitLabService):
     """Service for interacting with GitLab repositories."""
 
     def __init__(self, gitlab_url: str, private_token: str):

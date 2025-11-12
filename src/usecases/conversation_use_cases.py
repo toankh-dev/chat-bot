@@ -4,7 +4,7 @@ Conversation use cases.
 Defines application-level use cases for conversation operations.
 """
 
-from typing import List, Dict, Any
+from typing import List
 from application.services.conversation_service import ConversationService
 from shared.interfaces.services.ai_services.rag_service import IRAGService
 from shared.interfaces.repositories.chatbot_repository import ChatbotRepository

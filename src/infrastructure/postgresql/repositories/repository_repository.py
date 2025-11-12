@@ -7,10 +7,12 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
+from shared.interfaces.repositories.repository_repository import IRepositoryRepository
 from infrastructure.postgresql.models.repository_model import RepositoryModel
+from core.logger import logger
 
 
-class RepositoryRepository:
+class RepositoryRepository(IRepositoryRepository):
     """Repository for managing repository records."""
 
     def __init__(self, db_session: Session):
@@ -307,3 +309,20 @@ class RepositoryRepository:
                 RepositoryModel.updated_at < stale_time
             )
         ).all()
+
+    def commit(self) -> None:
+        """Commit the current transaction."""
+        try:
+            self.db_session.commit()
+        except Exception as e:
+            self.db_session.rollback()
+            logger.error(f"Error committing transaction: {e}")
+            raise
+
+    def rollback(self) -> None:
+        """Rollback the current transaction."""
+        try:
+            self.db_session.rollback()
+        except Exception as e:
+            logger.error(f"Error rolling back transaction: {e}")
+            raise

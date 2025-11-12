@@ -1,6 +1,6 @@
 """User management controller."""
 
-from fastapi import Depends, status
+from fastapi import Depends
 from typing import List
 from schemas.user_schema import UserResponse, UserCreate, UserUpdate
 from domain.entities.user import UserEntity

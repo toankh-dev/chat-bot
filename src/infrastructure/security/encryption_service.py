@@ -9,8 +9,10 @@ from cryptography.fernet import Fernet
 from core.config import settings
 from core.logger import logger
 
+from shared.interfaces.services.security.encryption_service import IEncryptionService
 
-class EncryptionService:
+
+class EncryptionService(IEncryptionService):
     """
     Service for encrypting/decrypting sensitive data like OAuth credentials.
     

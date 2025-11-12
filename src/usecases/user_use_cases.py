@@ -6,7 +6,6 @@ Defines application-level use cases for user operations.
 
 from typing import List
 from application.services.user_service import UserService
-from infrastructure.postgresql.models import UserModel
 from schemas.user_schema import (
     UserCreate,
     UserUpdate,

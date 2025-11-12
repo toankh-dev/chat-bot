@@ -10,9 +10,14 @@ from application.services.gitlab_sync_service import GitLabSyncService
 from application.services.code_chunking_service import CodeChunkingService
 from application.services.kb_sync_service import KBSyncService
 from application.services.knowledge_base_service import KnowledgeBaseService
-from usecases.gitlab_use_cases import GitLabUseCases
 from api.middlewares.jwt_middleware import get_current_user
-from core.dependencies import get_document_repository, get_embedding_service, get_vector_store_service
+from core.dependencies import (
+    get_document_repository,
+    get_embedding_service,
+    get_vector_store_service,
+    get_test_gitlab_connection_use_case,
+    get_fetch_gitlab_repositories_use_case
+)
 from infrastructure.postgresql.connection.database import get_sync_db_session
 from infrastructure.postgresql.connection import get_db_session
 from infrastructure.postgresql.repositories.repository_repository import RepositoryRepository
@@ -266,26 +271,14 @@ async def sync_repository_admin(
 
 async def test_gitlab_connection_admin(
     current_user: User = Depends(require_admin),
-    db_session: Session = Depends(get_sync_db_session),
-    document_repository = Depends(get_document_repository),
-    embedding_service = Depends(get_embedding_service),
-    vector_store_service = Depends(get_vector_store_service)
+    use_case = Depends(get_test_gitlab_connection_use_case)
 ):
     """
     Test GitLab connection using GitLab use cases.
     """
     try:
-        # Use GitLab use cases for consistent service management
-        gitlab_use_cases = GitLabUseCases(
-            sync_session=db_session,
-            async_session=None,  # Not needed for connection test
-            document_repository=document_repository,
-            embedding_service=embedding_service,
-            vector_store_service=vector_store_service
-        )
-        
-        result = gitlab_use_cases.test_gitlab_connection()
-        
+        result = use_case.execute()
+
         if result["success"]:
             logger.info(f"GitLab connection test successful: {result['details'].get('user', 'Unknown')}")
             return result["details"]
@@ -313,10 +306,7 @@ async def fetch_gitlab_repositories_admin(
     per_page: int = 100,
     page: int = 1,
     current_user: User = Depends(require_admin),
-    db_session: Session = Depends(get_sync_db_session),
-    document_repository = Depends(get_document_repository),
-    embedding_service = Depends(get_embedding_service),
-    vector_store_service = Depends(get_vector_store_service)
+    use_case = Depends(get_fetch_gitlab_repositories_use_case)
 ) -> GitLabRepositoryListResponse:
     """
     Fetch all repositories from GitLab API (Admin only).
@@ -339,35 +329,16 @@ async def fetch_gitlab_repositories_admin(
         List of GitLab repositories with metadata
     """
     try:
-        from infrastructure.external.gitlab_service import GitLabService
-
         logger.info(f"Admin fetching GitLab repositories - page {page}, per_page {per_page}")
 
-        # Use GitLab use cases for consistent service management
-        try:
-            gitlab_use_cases = GitLabUseCases(
-                sync_session=db_session,
-                async_session=None,  # Not needed for repository fetching
-                document_repository=document_repository,
-                embedding_service=embedding_service,
-                vector_store_service=vector_store_service
-            )
-            
-            result = gitlab_use_cases.fetch_repositories(per_page=per_page, page=page)
-            logger.info("GitLab repositories fetched successfully via GitLab use cases")
-            
-            return result["repositories"]
-        except Exception as e:
-            logger.error(f"GitLab API error: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"GitLab API error: {str(e)}. Please check token permissions."
-            )
+        # Use GitLab use case to fetch repositories
+        result = use_case.execute(per_page=per_page, page=page)
+        logger.info("GitLab repositories fetched successfully via GitLab use cases")
 
         # Transform to response model
         repo_infos = [
             GitLabRepositoryInfo(**repo)
-            for repo in repositories
+            for repo in result["repositories"]
         ]
 
         logger.info(f"Returning {len(repo_infos)} repositories to client")

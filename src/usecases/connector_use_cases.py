@@ -1,55 +1,61 @@
 """
 Connector use cases for admin management.
-Handles business logic for connector operations.
+Handles business logic for connector operations following Clean Architecture.
 """
 
 import logging
-from typing import List, Dict, Any
-from sqlalchemy.orm import Session
+from typing import List
 
 from application.services.connector_service import ConnectorService
 from infrastructure.postgresql.models.connector_model import ConnectorModel
 from schemas.connector_schema import (
     GitLabPersonalTokenSetupRequest,
-    ConnectorCredentialsUpdateRequest
+    ConnectorCredentialsUpdateRequest,
 )
 
 logger = logging.getLogger(__name__)
 
 
-class ConnectorUseCases:
+class ListConnectorsUseCase:
     """
-    Use cases for connector management.
-    Encapsulates business logic for admin connector operations.
+    Use case for listing all connectors.
     """
-    
-    def __init__(self, db_session: Session):
-        self.db_session = db_session
-        self.connector_service = ConnectorService(db_session)
-    
-    def list_connectors(self) -> List[ConnectorModel]:
+
+    def __init__(self, connector_service: ConnectorService):
+        self.connector_service = connector_service
+
+    def execute(self) -> List[ConnectorModel]:
         """
-        List all configured connectors.
-        
+        Execute list connectors use case.
+
         Returns:
-            List of ConnectorModel instances
+            List[ConnectorModel]: List of all configured connectors
         """
         try:
             return self.connector_service.list_all_connectors()
         except Exception as e:
             logger.error(f"Failed to list connectors: {e}")
             raise ValueError(f"Failed to list connectors: {e}")
-    
-    def get_connector_by_id(self, connector_id: int) -> ConnectorModel:
+
+
+class GetConnectorUseCase:
+    """
+    Use case for getting connector by ID.
+    """
+
+    def __init__(self, connector_service: ConnectorService):
+        self.connector_service = connector_service
+
+    def execute(self, connector_id: int) -> ConnectorModel:
         """
-        Get connector by ID.
-        
+        Execute get connector use case.
+
         Args:
             connector_id: Connector ID to retrieve
-            
+
         Returns:
-            ConnectorModel instance
-            
+            ConnectorModel: Connector instance
+
         Raises:
             ValueError: If connector not found
         """
@@ -61,20 +67,26 @@ class ConnectorUseCases:
         except Exception as e:
             logger.error(f"Failed to get connector {connector_id}: {e}")
             raise ValueError(f"Failed to get connector: {e}")
-    
-    def setup_gitlab_personal_token_connector(
-        self, 
-        request: GitLabPersonalTokenSetupRequest
-    ) -> ConnectorModel:
+
+
+class SetupGitLabConnectorUseCase:
+    """
+    Use case for setting up GitLab personal token connector.
+    This is idempotent - updates existing or creates new connector.
+    """
+
+    def __init__(self, connector_service: ConnectorService):
+        self.connector_service = connector_service
+
+    def execute(self, request: GitLabPersonalTokenSetupRequest) -> ConnectorModel:
         """
-        Set up GitLab personal token connector.
-        This is idempotent - it will update existing connector or create new one.
+        Execute GitLab connector setup use case.
 
         Args:
             request: GitLab setup request with token and configuration
 
         Returns:
-            ConnectorModel instance (with stable ID)
+            ConnectorModel: Configured connector with stable ID
         """
         try:
             # Validate GitLab URL format
@@ -90,58 +102,86 @@ class ConnectorUseCases:
 
             logger.info(f"Successfully configured GitLab connector: ID={connector.id}")
             return connector
-            
+
         except Exception as e:
             logger.error(f"Failed to setup GitLab connector: {e}")
             raise ValueError(f"Failed to setup GitLab connector: {e}")
-    
-    def update_connector_credentials(
+
+
+class UpdateConnectorCredentialsUseCase:
+    """
+    Use case for updating connector credentials.
+    """
+
+    def __init__(self, connector_service: ConnectorService):
+        self.connector_service = connector_service
+
+    def execute(
         self,
         connector_id: int,
         request: ConnectorCredentialsUpdateRequest
     ) -> ConnectorModel:
         """
-        Update connector credentials.
-        
+        Execute update connector credentials use case.
+
         Args:
             connector_id: Connector ID to update
             request: Request with new credentials
-            
+
         Returns:
-            Updated ConnectorModel instance
+            ConnectorModel: Updated connector instance
         """
         try:
             # Validate connector exists and is personal token type
-            connector = self.get_connector_by_id(connector_id)
+            connector = self.connector_service.get_connector_by_id(connector_id)
+            if not connector:
+                raise ValueError(f"Connector {connector_id} not found")
+
             if connector.auth_type != "personal_token":
-                raise ValueError(f"Connector {connector_id} is not using personal token authentication")
-            
+                raise ValueError(
+                    f"Connector {connector_id} is not using personal token authentication"
+                )
+
             # Update credentials
             updated_connector = self.connector_service.update_connector_credentials(
                 connector_id=connector_id,
                 personal_token=request.personal_token
             )
-            
+
             logger.info(f"Successfully updated credentials for connector {connector_id}")
             return updated_connector
-            
+
         except Exception as e:
             logger.error(f"Failed to update connector credentials: {e}")
             raise ValueError(f"Failed to update connector credentials: {e}")
 
-    def delete_connector(self, connector_id: int) -> None:
+
+class DeleteConnectorUseCase:
+    """
+    Use case for deleting a connector.
+    """
+
+    def __init__(self, connector_service: ConnectorService):
+        self.connector_service = connector_service
+
+    def execute(self, connector_id: int) -> None:
         """
-        Delete a connector.
-        
+        Execute delete connector use case.
+
         Args:
             connector_id: Connector ID to delete
         """
         try:
-            connector = self.get_connector_by_id(connector_id)
+            # Validate connector exists
+            connector = self.connector_service.get_connector_by_id(connector_id)
+            if not connector:
+                raise ValueError(f"Connector {connector_id} not found")
+
+            # Delete connector
             self.connector_service.delete_connector(connector_id)
-            
+
             logger.info(f"Successfully deleted connector {connector_id}")
-            
+
         except Exception as e:
             logger.error(f"Failed to delete connector {connector_id}: {e}")
             raise ValueError(f"Failed to delete connector: {e}")

@@ -62,22 +62,30 @@ class ConnectorCredentialsUpdateRequest(BaseModel):
 
 class ConnectorCreateRequest(BaseModel):
     """Generic request schema for creating connectors."""
-    
+
     name: str = Field(..., min_length=1, max_length=100)
     provider_type: str = Field(..., description="Provider type (gitlab)")
     auth_type: str = Field(..., description="Authentication type (personal_token)")
     config_schema: Dict[str, Any] = Field(..., description="Connector configuration")
-    
+
     @validator('provider_type')
     def validate_provider_type(cls, v):
         allowed_providers = ['gitlab']  # Only GitLab for now
         if v.lower() not in allowed_providers:
             raise ValueError(f'Provider type must be one of: {", ".join(allowed_providers)}')
         return v.lower()
-    
+
     @validator('auth_type')
     def validate_auth_type(cls, v):
         allowed_auth_types = ['personal_token']  # Only personal token for now
         if v.lower() not in allowed_auth_types:
             raise ValueError(f'Auth type must be one of: {", ".join(allowed_auth_types)}')
         return v.lower()
+
+
+class MessageResponse(BaseModel):
+    """Generic response schema for simple success messages."""
+    message: str = Field(..., description="Success or status message")
+
+    class Config:
+        from_attributes = True

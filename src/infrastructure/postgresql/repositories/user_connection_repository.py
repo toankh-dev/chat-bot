@@ -7,10 +7,12 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
+from shared.interfaces.repositories.user_connection_repository import IUserConnectionRepository
 from infrastructure.postgresql.models.user_connection_model import UserConnectionModel
+from core.logger import logger
 
 
-class UserConnectionRepository:
+class UserConnectionRepository(IUserConnectionRepository):
     """Repository for managing user connection records."""
 
     def __init__(self, db_session: Session):
@@ -252,3 +254,108 @@ class UserConnectionRepository:
         """
         connection = self.get_by_id(connection_id)
         return connection is not None and connection.user_id == user_id
+
+    def get_system_connection(
+        self,
+        user_id: int,
+        connector_id: int
+    ) -> Optional[UserConnectionModel]:
+        """
+        Get system connection for admin operations.
+
+        Args:
+            user_id: User ID
+            connector_id: Connector ID
+
+        Returns:
+            System connection model or None
+        """
+        return self.db_session.query(UserConnectionModel).filter(
+            and_(
+                UserConnectionModel.user_id == user_id,
+                UserConnectionModel.connector_id == connector_id,
+                UserConnectionModel.is_active == True
+            )
+        ).filter(
+            UserConnectionModel.connection_metadata.op('->>')('system') == 'true'
+        ).first()
+
+    def create_connection(
+        self,
+        user_id: int,
+        connector_id: int,
+        is_active: bool = True,
+        connection_metadata: Optional[dict] = None,
+        **kwargs
+    ) -> UserConnectionModel:
+        """
+        Create a connection with metadata.
+
+        Args:
+            user_id: User ID
+            connector_id: Connector ID
+            is_active: Whether connection is active
+            connection_metadata: Connection metadata
+            **kwargs: Additional fields
+
+        Returns:
+            Created connection model
+        """
+        connection = UserConnectionModel(
+            user_id=user_id,
+            connector_id=connector_id,
+            is_active=is_active,
+            connection_metadata=connection_metadata or {},
+            **kwargs
+        )
+        return self.create(connection)
+
+    def delete_by_connector(self, connector_id: int) -> int:
+        """
+        Delete all connections for a connector.
+
+        Args:
+            connector_id: Connector ID
+
+        Returns:
+            Number of connections deleted
+        """
+        deleted_count = self.db_session.query(UserConnectionModel).filter(
+            UserConnectionModel.connector_id == connector_id
+        ).delete(synchronize_session=False)
+        self.db_session.commit()
+        return deleted_count
+
+    def count_active_connections(self, connector_id: int) -> int:
+        """
+        Count active connections for a connector.
+
+        Args:
+            connector_id: Connector ID
+
+        Returns:
+            Number of active connections
+        """
+        return self.db_session.query(UserConnectionModel).filter(
+            and_(
+                UserConnectionModel.connector_id == connector_id,
+                UserConnectionModel.is_active == True
+            )
+        ).count()
+
+    def commit(self) -> None:
+        """Commit the current transaction."""
+        try:
+            self.db_session.commit()
+        except Exception as e:
+            self.db_session.rollback()
+            logger.error(f"Error committing transaction: {e}")
+            raise
+
+    def rollback(self) -> None:
+        """Rollback the current transaction."""
+        try:
+            self.db_session.rollback()
+        except Exception as e:
+            logger.error(f"Error rolling back transaction: {e}")
+            raise
