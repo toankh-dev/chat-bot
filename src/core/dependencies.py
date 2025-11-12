@@ -54,6 +54,7 @@ from infrastructure.postgresql.repositories import (
 )
 from infrastructure.postgresql.repositories.connector_repository import ConnectorRepository
 from infrastructure.postgresql.repositories.user_connection_repository import UserConnectionRepository
+from infrastructure.postgresql.repositories.repository_repository import RepositoryRepository
 
 # Service Implementations
 from application.services.auth_service import AuthService
@@ -66,6 +67,7 @@ from application.services.rag_service import RAGService
 from application.services.document_upload_service import DocumentUploadService
 from application.services.document_processing_service import DocumentProcessingService
 from application.services.document_chunking_service import DocumentChunkingService
+from application.services.gitlab_sync_service import GitLabSyncService
 from application.services.kb_sync_service import KBSyncService
 from application.services.connector_service import ConnectorService
 
@@ -131,7 +133,8 @@ from usecases.connector_use_cases import (
 )
 from usecases.gitlab_use_cases import (
     TestGitLabConnectionUseCase,
-    FetchGitLabRepositoriesUseCase
+    FetchGitLabRepositoriesUseCase,
+    SyncRepositoryUseCase
 )
 
 # Schemas
@@ -357,6 +360,13 @@ def get_kb_sync_service(
         vector_store_service.vector_store,
         document_repository
     )
+
+
+def get_gitlab_sync_service(
+    kb_sync_service: KBSyncService = Depends(get_kb_sync_service)
+) -> GitLabSyncService:
+    """Get GitLab sync service instance."""
+    return GitLabSyncService(kb_sync_service=kb_sync_service)
 
 
 def get_connector_service(
@@ -627,6 +637,23 @@ def get_test_gitlab_connection_use_case(connector_service: ConnectorService = De
 def get_fetch_gitlab_repositories_use_case(connector_service: ConnectorService = Depends(get_connector_service)) -> FetchGitLabRepositoriesUseCase:
     """Get fetch GitLab repositories use case."""
     return FetchGitLabRepositoriesUseCase(connector_service)
+
+
+def get_sync_repository_use_case(
+    connector_service: ConnectorService = Depends(get_connector_service),
+    gitlab_sync_service: GitLabSyncService = Depends(get_gitlab_sync_service),
+    async_session: AsyncSession = Depends(get_db_session),
+    sync_session: Session = Depends(get_db)
+) -> SyncRepositoryUseCase:
+    """Get sync repository use case."""
+    repository_repository = RepositoryRepository(sync_session)
+    
+    return SyncRepositoryUseCase(
+        connector_service=connector_service,
+        gitlab_sync_service=gitlab_sync_service,
+        repository_repository=repository_repository,
+        async_session=async_session
+    )
 
 
 # ============================================================================

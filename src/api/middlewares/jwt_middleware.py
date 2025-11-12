@@ -1,6 +1,6 @@
 """JWT authentication middleware."""
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from infrastructure.auth.jwt_handler import JWTHandler
@@ -8,6 +8,11 @@ from infrastructure.postgresql.connection.database import get_db_session
 from domain.entities.user import UserEntity
 from shared.interfaces.repositories.user_repository import UserRepository
 from core.dependencies import get_user_repository
+from core.errors import (
+    AuthenticationError,
+    InvalidTokenError,
+    AuthorizationError
+)
 
 security = HTTPBearer()
 
@@ -34,7 +39,9 @@ async def get_current_user(
         UserEntity: Authenticated user
 
     Raises:
-        HTTPException: If authentication fails
+        AuthenticationError: If authentication fails
+        InvalidTokenError: If token is invalid
+        AuthorizationError: If user account is not active
     """
     # Import here to avoid circular dependency
     
@@ -44,37 +51,25 @@ async def get_current_user(
         payload = jwt_handler.decode_token(token)
         user_id = payload.get("sub")
         if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token"
-            )
+            raise InvalidTokenError("Token does not contain user ID")
 
         # Use dependency injection for repository
         user_repository: UserRepository = get_user_repository(db)
         user = await user_repository.find_by_id(int(user_id))
 
         if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found"
-            )
+            raise AuthenticationError("User not found")
 
         if not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="User account is not active"
-            )
+            raise AuthorizationError("User account is not active")
 
         return user
 
-    except HTTPException:
+    except (AuthenticationError, InvalidTokenError, AuthorizationError):
         raise
     except Exception as e:
         print("Authentication error:", str(e))
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials"
-        )
+        raise AuthenticationError("Could not validate credentials")
 
 
 async def require_admin(
@@ -90,11 +85,8 @@ async def require_admin(
         UserEntity: Admin user
 
     Raises:
-        HTTPException: If user is not admin
+        AuthorizationError: If user is not admin
     """
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin privileges required"
-        )
+        raise AuthorizationError("Admin privileges required")
     return current_user
