@@ -24,7 +24,7 @@ def get_jwt_handler() -> JWTHandler:
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
     jwt_handler: JWTHandler = Depends(get_jwt_handler)
 ) -> UserEntity:
     """
@@ -54,7 +54,7 @@ async def get_current_user(
             raise InvalidTokenError("Token does not contain user ID")
 
         # Use dependency injection for repository
-        user_repository: UserRepository = get_user_repository(db)
+        user_repository: UserRepository = get_user_repository(session)
         user = await user_repository.find_by_id(int(user_id))
 
         if not user:
