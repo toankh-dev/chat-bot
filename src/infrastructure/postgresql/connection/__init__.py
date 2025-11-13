@@ -7,7 +7,7 @@ from .base import Base
 
 __all__ = [
     "db_manager",
-    "get_db_session", 
     "get_sync_db_session",
+    "get_db_session",
     "Base",
 ]

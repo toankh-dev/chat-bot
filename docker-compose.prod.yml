@@ -1,0 +1,84 @@
+services:
+  # FastAPI Application
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: ai-backend-api
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - LOG_LEVEL=INFO
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=ai_backend
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:8000
+      - AUTO_MIGRATE=true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      chromadb:
+        condition: service_started
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000
+    networks:
+      - default
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:17-alpine
+    container_name: ai-backend-postgres
+    environment:
+      POSTGRES_DB: ai_backend
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis (for caching/rate limiting)
+  redis:
+    image: redis:7-alpine
+    container_name: ai-backend-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ChromaDB (Vector Database)
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: ai-backend-chromadb
+    ports:
+      - "8002:8000"
+    volumes:
+      - chromadb_data:/chroma/.chroma/index
+    environment:
+      - IS_PERSISTENT=TRUE
+    networks:
+      - default
+
+volumes:
+  postgres_data:
+  redis_data:
+  chromadb_data:
+
+networks:
+  default:
+    name: ai-backend-network

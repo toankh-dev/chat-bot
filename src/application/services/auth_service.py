@@ -10,7 +10,6 @@ from shared.interfaces.repositories.user_repository import UserRepository
 from shared.interfaces.services.auth.jwt_handler import IJWTHandler
 from domain.entities.user import UserEntity
 from domain.value_objects.email import Email
-from domain.value_objects.uuid_vo import UUID
 from core.errors import AuthenticationError, ValidationError
 
 class AuthService:
@@ -58,7 +57,7 @@ class AuthService:
             raise AuthenticationError("Invalid email or password")
 
         if not user.is_active:
-            raise AuthenticationError(f"User account is inactive")
+            raise AuthenticationError("User account is not active")
 
         return user
 
@@ -84,13 +83,15 @@ class AuthService:
         password_hash = self.hash_password(password)
 
         # Build a domain User entity and persist via repository
+        # ID will be set by database auto-increment
         user = UserEntity(
+            id=0,  # Temporary ID, will be set by database
             email=Email(email),
             username=email.split('@')[0],
-            name=name,
-            password_hash=password_hash,
-            status="active",
-            is_admin=False
+            full_name=name,
+            hashed_password=password_hash,
+            is_active=True,
+            is_superuser=False
         )
 
         return await self.user_repository.create(user)

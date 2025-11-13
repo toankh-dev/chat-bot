@@ -39,6 +39,7 @@ from shared.interfaces.services.storage.file_storage_service import IFileStorage
 from shared.interfaces.services.upload.document_upload_service import IDocumentUploadService
 from shared.interfaces.services.security.encryption_service import IEncryptionService
 from shared.interfaces.services.external.gitlab_service import IGitLabService
+from shared.interfaces.repositories.ai_model_repository import AiModelRepository
 
 # Repository Implementations
 from infrastructure.postgresql.repositories import (
@@ -50,16 +51,17 @@ from infrastructure.postgresql.repositories import (
     UserGroupRepositoryImpl,
     GroupChatbotRepositoryImpl,
     UserChatbotRepositoryImpl,
-    DocumentRepositoryImpl
+    DocumentRepositoryImpl,
+    AiModelRepositoryImpl
 )
 from infrastructure.postgresql.repositories.connector_repository import ConnectorRepository
 from infrastructure.postgresql.repositories.user_connection_repository import UserConnectionRepository
 from infrastructure.postgresql.repositories.repository_repository import RepositoryRepository
 
 # Service Implementations
+# Services
 from application.services.auth_service import AuthService
 from application.services.user_service import UserService
-from application.services.group_service import GroupService
 from application.services.chatbot_service import ChatbotService
 from application.services.conversation_service import ConversationService
 from application.services.vector_store_service import VectorStoreService
@@ -80,8 +82,10 @@ from infrastructure.ai_services.llm.factory import LLMFactory
 from infrastructure.s3.s3_file_storage_service import S3FileStorageService
 from infrastructure.security.encryption_service import EncryptionService
 from infrastructure.external.gitlab_service import GitLabService
+from application.services.ai_model_service import AiModelService
 
 # Use Cases
+from src.application.services.group_service import GroupService
 from usecases.auth_use_cases import LoginUseCase, RegisterUseCase
 from usecases.user_use_cases import (
     GetCurrentUserUseCase,
@@ -89,7 +93,9 @@ from usecases.user_use_cases import (
     GetUserUseCase,
     CreateUserUseCase,
     UpdateUserUseCase,
-    DeleteUserUseCase
+    DeleteUserUseCase,
+    UpdateOwnProfileUseCase,
+    ChangePasswordUseCase
 )
 from usecases.group_use_cases import (
     ListGroupsUseCase,
@@ -104,6 +110,13 @@ from usecases.chatbot_use_cases import (
     CreateChatbotUseCase,
     UpdateChatbotUseCase,
     DeleteChatbotUseCase
+)
+from usecases.ai_model_use_cases import (
+    ListAiModelsUseCase,
+    GetAiModelUseCase,
+    CreateAiModelUseCase,
+    UpdateAiModelUseCase,
+    DeleteAiModelUseCase
 )
 from usecases.conversation_use_cases import (
     ListConversationsUseCase,
@@ -251,6 +264,12 @@ def get_user_connection_repository(db_session: Session = Depends(get_db)) -> IUs
     """Get user connection repository instance."""
     return UserConnectionRepository(db_session)
 
+def get_ai_model_repository(
+    session: AsyncSession = Depends(get_db_session)
+) -> AiModelRepository:
+    """Get AI model repository instance."""
+    return AiModelRepositoryImpl(session)
+
 
 # ============================================================================
 # AI SERVICE DEPENDENCIES
@@ -278,6 +297,7 @@ def get_rag_service(knowledge_base_service: IKnowledgeBaseService = Depends(get_
 # APPLICATION SERVICE DEPENDENCIES
 # ============================================================================
 
+# Service dependencies (use interfaces)
 def get_auth_service(
     user_repository: UserRepository = Depends(get_user_repository),
     jwt_handler: JWTHandler = Depends(get_jwt_handler)
@@ -290,9 +310,17 @@ def get_user_service(
     user_repository: UserRepository = Depends(get_user_repository),
     group_repository: GroupRepository = Depends(get_group_repository),
     user_group_repository: UserGroupRepository = Depends(get_user_group_repository),
+    group_chatbot_repository: GroupChatbotRepository = Depends(get_group_chatbot_repository),
+    user_chatbot_repository: UserChatbotRepository = Depends(get_user_chatbot_repository),
 ) -> UserService:
     """Get user service instance."""
-    return UserService(user_repository, user_group_repository, group_repository)
+    return UserService(
+        user_repository,
+        user_group_repository,
+        group_repository,
+        group_chatbot_repository,
+        user_chatbot_repository
+    )
 
 
 def get_group_service(
@@ -361,7 +389,6 @@ def get_kb_sync_service(
         document_repository
     )
 
-
 def get_gitlab_sync_service(
     kb_sync_service: KBSyncService = Depends(get_kb_sync_service)
 ) -> GitLabSyncService:
@@ -383,12 +410,20 @@ def get_connector_service(
         gitlab_service_factory=gitlab_service_factory
     )
 
+def get_ai_model_service(
+    ai_model_repository: AiModelRepository = Depends(get_ai_model_repository)
+) -> AiModelService:
+    """Get AI model service instance."""
+    return AiModelService(ai_model_repository)
 
 # ============================================================================
 # AUTH USE CASE DEPENDENCIES
 # ============================================================================
 
-def get_login_use_case(auth_service: AuthService = Depends(get_auth_service)) -> LoginUseCase:
+# Auth use cases
+def get_login_use_case(
+    auth_service: AuthService = Depends(get_auth_service)
+) -> LoginUseCase:
     """Get login use case instance."""
     return LoginUseCase(auth_service)
 
@@ -436,7 +471,24 @@ def get_delete_user_use_case(user_service: UserService = Depends(get_user_servic
 # GROUP USE CASE DEPENDENCIES
 # ============================================================================
 
-def get_list_groups_use_case(group_service: GroupService = Depends(get_group_service)) -> ListGroupsUseCase:
+def get_update_own_profile_use_case(
+    user_service: UserService = Depends(get_user_service)
+) -> UpdateOwnProfileUseCase:
+    """Get update own profile use case instance."""
+    return UpdateOwnProfileUseCase(user_service)
+
+
+def get_change_password_use_case(
+    user_service: UserService = Depends(get_user_service)
+) -> ChangePasswordUseCase:
+    """Get change password use case instance."""
+    return ChangePasswordUseCase(user_service)
+
+
+# Group use cases
+def get_list_groups_use_case(
+    group_service: GroupService = Depends(get_group_service)
+) -> ListGroupsUseCase:
     """Get list groups use case instance."""
     return ListGroupsUseCase(group_service)
 
@@ -465,7 +517,46 @@ def get_delete_group_use_case(group_service: GroupService = Depends(get_group_se
 # CHATBOT USE CASE DEPENDENCIES
 # ============================================================================
 
-def get_list_chatbots_use_case(chatbot_service: ChatbotService = Depends(get_chatbot_service)) -> ListChatbotsUseCase:
+# AI Model use cases
+def get_list_ai_models_use_case(
+    ai_model_service: AiModelService = Depends(get_ai_model_service)
+) -> ListAiModelsUseCase:
+    """Get list AI models use case instance."""
+    return ListAiModelsUseCase(ai_model_service)
+
+
+def get_ai_model_use_case(
+    ai_model_service: AiModelService = Depends(get_ai_model_service)
+) -> GetAiModelUseCase:
+    """Get AI model use case instance."""
+    return GetAiModelUseCase(ai_model_service)
+
+
+def get_create_ai_model_use_case(
+    ai_model_service: AiModelService = Depends(get_ai_model_service)
+) -> CreateAiModelUseCase:
+    """Get create AI model use case instance."""
+    return CreateAiModelUseCase(ai_model_service)
+
+
+def get_update_ai_model_use_case(
+    ai_model_service: AiModelService = Depends(get_ai_model_service)
+) -> UpdateAiModelUseCase:
+    """Get update AI model use case instance."""
+    return UpdateAiModelUseCase(ai_model_service)
+
+
+def get_delete_ai_model_use_case(
+    ai_model_service: AiModelService = Depends(get_ai_model_service)
+) -> DeleteAiModelUseCase:
+    """Get delete AI model use case instance."""
+    return DeleteAiModelUseCase(ai_model_service)
+
+
+# Chatbot use cases
+def get_list_chatbots_use_case(
+    chatbot_service: ChatbotService = Depends(get_chatbot_service)
+) -> ListChatbotsUseCase:
     """Get list chatbots use case instance."""
     return ListChatbotsUseCase(chatbot_service)
 
@@ -526,7 +617,6 @@ def get_create_message_use_case(
 def get_delete_conversation_use_case(conversation_service: ConversationService = Depends(get_conversation_service)) -> DeleteConversationUseCase:
     """Get delete conversation use case instance."""
     return DeleteConversationUseCase(conversation_service)
-
 
 # ============================================================================
 # DOCUMENT USE CASE DEPENDENCIES

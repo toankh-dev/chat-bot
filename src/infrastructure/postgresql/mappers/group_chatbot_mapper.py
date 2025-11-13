@@ -48,6 +48,7 @@ class GroupChatbotMapper:
         """
         if existing_model:
             # Update existing model
+            existing_model.status = entity.status
             existing_model.group_id = entity.group_id
             existing_model.chatbot_id = entity.chatbot_id
             existing_model.assigned_by = entity.assigned_by

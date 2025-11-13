@@ -10,8 +10,6 @@ import shutil
 from pathlib import Path
 
 from shared.interfaces.services.external.gitlab_service import IGitLabService
-
-
 class GitLabService(IGitLabService):
     """Service for interacting with GitLab repositories."""
 

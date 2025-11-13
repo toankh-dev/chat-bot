@@ -1,6 +1,6 @@
 """Authentication controller."""
 
-from fastapi import Depends, status
+from fastapi import Depends
 from schemas.auth_schema import LoginRequest, LoginResponse, RegisterRequest, LogoutResponse
 from usecases.auth_use_cases import LoginUseCase, RegisterUseCase
 from core.dependencies import get_login_use_case, get_register_use_case

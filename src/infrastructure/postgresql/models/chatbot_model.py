@@ -20,7 +20,7 @@ class ChatbotModel(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(255), nullable=False)
     description = Column(Text)
-    model = Column(String(100), nullable=False, comment="gpt-4o, claude-3-5-sonnet, gemini-pro")
+    model_id = Column(Integer, ForeignKey("ai_models.id", ondelete="RESTRICT"), nullable=False, comment="Foreign key to ai_models table")
     temperature = Column(Numeric(3, 2), default=0.7, comment="0.0-2.0, controls randomness")
     max_tokens = Column(Integer, default=2048, comment="Maximum response length")
     top_p = Column(Numeric(3, 2), default=1.0, comment="0.0-1.0, nucleus sampling")
@@ -49,6 +49,7 @@ class ChatbotModel(Base):
 
     # Relationships
     creator = relationship("UserModel", back_populates="created_chatbots", foreign_keys=[created_by])
+    ai_model = relationship("AiModelModel", back_populates="chatbots")
     group_chatbots = relationship("GroupChatbotModel", back_populates="chatbot", cascade="all, delete-orphan")
     user_chatbots = relationship("UserChatbotModel", back_populates="chatbot", cascade="all, delete-orphan")
     chatbot_tools = relationship("ChatbotToolModel", back_populates="chatbot")

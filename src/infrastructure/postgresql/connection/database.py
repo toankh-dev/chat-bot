@@ -27,43 +27,28 @@ class DatabaseManager:
             f"@{settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}"
         )
 
+        # Connect args for asyncpg - disable SSL for local development
+        connect_args = {}
+        if settings.ENVIRONMENT in ["development", "local"]:
+            connect_args = {"ssl": "disable"}
+
         self.engine = create_async_engine(
             database_url,
             echo=settings.DEBUG,
             pool_size=20,
             max_overflow=30,
             pool_pre_ping=True,
-            pool_recycle=3600
+            pool_recycle=3600,
+            connect_args=connect_args
         )
-
+        
         self.session_factory = async_sessionmaker(
             self.engine,
             class_=AsyncSession,
             expire_on_commit=False
         )
-
-        # Sync engine for non-async operations
-        sync_database_url = (
-            f"postgresql://{settings.DB_USER}:{settings.DB_PASSWORD}"
-            f"@{settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}"
-        )
-
-        self.sync_engine = create_engine(
-            sync_database_url,
-            echo=settings.DEBUG,
-            pool_size=20,
-            max_overflow=30,
-            pool_pre_ping=True,
-            pool_recycle=3600
-        )
-
-        self.sync_session_factory = sessionmaker(
-            self.sync_engine,
-            class_=Session,
-            expire_on_commit=False
-        )
-
-        logger.info("Database connection initialized (async + sync)")
+        
+        logger.info("Database connection initialized")
     
     async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
         """Get database session."""

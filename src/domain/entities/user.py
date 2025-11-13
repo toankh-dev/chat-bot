@@ -3,7 +3,7 @@ User domain entity.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from typing import Optional
 from ..value_objects.email import Email
 
@@ -26,15 +26,15 @@ class UserEntity:
         last_login_at: Last login timestamp
     """
 
-    id: Optional[int]
+    id: int
     email: Email
     username: str
     name: str
     password_hash: str
     status: str = "active"
     is_admin: bool = False
-    created_at: datetime = field(default_factory=datetime.now)
-    updated_at: datetime = field(default_factory=datetime.now)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     last_login_at: Optional[datetime] = None
 
     def __post_init__(self):
@@ -47,21 +47,21 @@ class UserEntity:
     def deactivate(self) -> None:
         """Deactivate user account."""
         self.status = "inactive"
-        self.updated_at = datetime.now()
+        self.updated_at = datetime.now(UTC)
 
     def activate(self) -> None:
         """Activate user account."""
         self.status = "active"
-        self.updated_at = datetime.now()
+        self.updated_at = datetime.now(UTC)
 
     def record_login(self) -> None:
         """Record user login event."""
-        self.last_login_at = datetime.now()
+        self.last_login_at = datetime.now(UTC)
 
     def update_password(self, new_password_hash: str) -> None:
         """Update user password."""
         self.password_hash = new_password_hash
-        self.updated_at = datetime.now()
+        self.updated_at = datetime.now(UTC)
 
     @property
     def is_active(self) -> bool:

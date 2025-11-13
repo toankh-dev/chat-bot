@@ -21,11 +21,12 @@ from infrastructure.postgresql.models.sync_queue_model import SyncQueueModel
 from infrastructure.postgresql.models.file_change_history_model import FileChangeHistoryModel
 from infrastructure.postgresql.models.knowledge_base_model import KnowledgeBaseModel
 from infrastructure.postgresql.models.knowledge_base_source_model import KnowledgeBaseSourceModel
+from infrastructure.postgresql.models.ai_model_model import AiModelModel
 
 __all__ = [
     "Base",
     "DocumentModel",
-    "UserModel",
+    "UserModel", 
     "ChatbotModel",
     "ConversationModel",
     "MessageModel",
@@ -43,4 +44,5 @@ __all__ = [
     "FileChangeHistoryModel",
     "KnowledgeBaseModel",
     "KnowledgeBaseSourceModel"
+    "AiModelModel"
 ]

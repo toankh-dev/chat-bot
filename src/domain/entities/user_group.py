@@ -5,7 +5,7 @@ Represents the many-to-many relationship between users and groups.
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from typing import Optional
 
 

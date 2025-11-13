@@ -44,7 +44,7 @@ class VectorStoreFactory:
         # Create instance with provider-specific configuration
         try:
             if provider == 'chromadb':
-                persist_directory = config.get('persist_directory', settings.CHROMADB_PERSIST_DIRECTORY)
+                persist_directory = config.get('persist_directory')
                 if not persist_directory:
                     raise ValueError("persist_directory is required for chromadb provider")
                 return provider_cls(persist_directory=persist_directory)

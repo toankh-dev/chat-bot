@@ -19,7 +19,7 @@ class TestUser:
     def test_create_user(self):
         """Test creating a valid user."""
         user = UserEntity(
-            id=1,
+            id=UUID.generate(),
             email=Email("test@example.com"),
             username="testuser",
             name="Test User",
@@ -35,7 +35,7 @@ class TestUser:
         """Test user creation with invalid username."""
         with pytest.raises(ValueError):
             UserEntity(
-                id=2,
+                id=UUID.generate(),
                 email=Email("test@example.com"),
                 username="ab",  # Too short
                 name="Test User",
@@ -45,7 +45,7 @@ class TestUser:
     def test_user_deactivate(self):
         """Test deactivating a user."""
         user = UserEntity(
-            id=3,
+            id=UUID.generate(),
             email=Email("test@example.com"),
             username="testuser",
             name="Test User",
@@ -58,7 +58,7 @@ class TestUser:
     def test_user_record_login(self):
         """Test recording user login."""
         user = UserEntity(
-            id=4,
+            id=UUID.generate(),
             email=Email("test@example.com"),
             username="testuser",
             name="Test User",
@@ -146,9 +146,9 @@ class TestChatbot:
 
     def test_create_chatbot(self):
         """Test creating a valid chatbot."""
-        chatbot = ChatbotEntity(
-            id=1,
-            workspace_id=1,
+        chatbot = MessageEntity(
+            id=UUID.generate(),
+            workspace_id=UUID.generate(),
             name="Test Bot",
             description="A test chatbot",
             system_prompt="You are a helpful assistant"
@@ -161,9 +161,9 @@ class TestChatbot:
     def test_invalid_temperature(self):
         """Test chatbot with invalid temperature."""
         with pytest.raises(ValueError):
-            ChatbotEntity(
-                id=2,
-                workspace_id=1,
+            MessageEntity(
+                id=UUID.generate(),
+                workspace_id=UUID.generate(),
                 name="Test Bot",
                 description="Test",
                 system_prompt="Test",
@@ -172,9 +172,9 @@ class TestChatbot:
 
     def test_add_tool(self):
         """Test adding a tool to chatbot."""
-        chatbot = ChatbotEntity(
-            id=3,
-            workspace_id=1,
+        chatbot = MessageEntity(
+            id=UUID.generate(),
+            workspace_id=UUID.generate(),
             name="Test Bot",
             description="Test",
             system_prompt="Test"

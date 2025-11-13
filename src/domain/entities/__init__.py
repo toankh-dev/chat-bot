@@ -13,8 +13,8 @@ from .role import RoleEntity
 from .user import UserEntity
 from .user_chatbot import UserChatbotEntity
 from .user_group import UserGroupEntity
-from .workspace import WorkspaceEntity
 from .document import DocumentEntity
+from .ai_model import AiModelEntity
 
 __all__ = [
     "ChatbotEntity",
@@ -26,6 +26,6 @@ __all__ = [
     "UserEntity",
     "UserChatbotEntity",
     "UserGroupEntity",
-    "WorkspaceEntity",
-    "DocumentEntity"
+    "DocumentEntity",
+    "AiModelEntity"
 ]
