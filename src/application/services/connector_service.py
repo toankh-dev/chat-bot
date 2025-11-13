@@ -228,7 +228,7 @@ class ConnectorService:
 
         except Exception as e:
             logger.error(f"Failed to create system connection: {str(e)}")
-            self.user_connection_repository.rollback()
+            # Database session auto-rollback handled by get_db_session context manager
             raise ValueError(f"Failed to create system connection: {str(e)}")
 
     def get_sync_config(self, connector: ConnectorModel) -> Dict[str, Any]:
@@ -434,7 +434,7 @@ class ConnectorService:
             
         except Exception as e:
             logger.error(f"Failed to setup GitLab personal token connector: {e}")
-            self.connector_repository.rollback()
+            # Database session auto-rollback handled by get_db_session context manager
             raise ValueError(f"Failed to setup GitLab personal token connector: {e}")
 
     def get_decrypted_credentials(self, connector: ConnectorModel) -> Dict[str, str]:
@@ -503,7 +503,7 @@ class ConnectorService:
             
         except Exception as e:
             logger.error(f"Failed to update connector credentials: {e}")
-            self.connector_repository.rollback()
+            # Database session auto-rollback handled by get_db_session context manager
             raise ValueError(f"Failed to update credentials: {e}")
 
     def test_connector_credentials(self, connector: ConnectorModel) -> Dict[str, Any]:
@@ -546,7 +546,7 @@ class ConnectorService:
                 "message": "Connection failed"
             }
 
-    def list_all_connectors(self) -> List[ConnectorModel]:
+    def list_all_connectors(self, user_id: int, is_active: bool = True) -> List[ConnectorModel]:
         """
         Get all connectors from database.
         
@@ -554,7 +554,7 @@ class ConnectorService:
             List of all ConnectorModel instances
         """
         try:
-            return self.connector_repository.list_all(only_active=False)
+            return self.connector_repository.list_connector_by_user(user_id=user_id, is_active=is_active)
         except Exception as e:
             logger.error(f"Failed to list connectors: {e}")
             raise ValueError(f"Failed to retrieve connectors: {e}")
@@ -634,6 +634,5 @@ class ConnectorService:
 
         except Exception as e:
             logger.error(f"Failed to delete connector {connector_id}: {e}")
-            self.connector_repository.rollback()
-            self.user_connection_repository.rollback()
+            # Database session auto-rollback handled by get_db_session context manager
             raise ValueError(f"Failed to delete connector: {e}")

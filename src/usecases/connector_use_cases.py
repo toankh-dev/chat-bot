@@ -24,7 +24,7 @@ class ListConnectorsUseCase:
     def __init__(self, connector_service: ConnectorService):
         self.connector_service = connector_service
 
-    def execute(self) -> List[ConnectorModel]:
+    def execute(self, user_id: int) -> List[ConnectorModel]:
         """
         Execute list connectors use case.
 
@@ -32,7 +32,7 @@ class ListConnectorsUseCase:
             List[ConnectorModel]: List of all configured connectors
         """
         try:
-            return self.connector_service.list_all_connectors()
+            return self.connector_service.list_all_connectors(user_id=user_id)
         except Exception as e:
             logger.error(f"Failed to list connectors: {e}")
             raise ValueError(f"Failed to list connectors: {e}")
@@ -73,17 +73,23 @@ class SetupGitLabConnectorUseCase:
     """
     Use case for setting up GitLab personal token connector.
     This is idempotent - updates existing or creates new connector.
+    Also creates system connection for the admin user.
     """
 
     def __init__(self, connector_service: ConnectorService):
         self.connector_service = connector_service
 
-    def execute(self, request: GitLabPersonalTokenSetupRequest) -> ConnectorModel:
+    async def execute(
+        self, 
+        request: GitLabPersonalTokenSetupRequest, 
+        admin_user_id: int
+    ) -> ConnectorModel:
         """
         Execute GitLab connector setup use case.
 
         Args:
             request: GitLab setup request with token and configuration
+            admin_user_id: Admin user ID for creating system connection
 
         Returns:
             ConnectorModel: Configured connector with stable ID
@@ -100,7 +106,16 @@ class SetupGitLabConnectorUseCase:
                 admin_token=request.admin_token
             )
 
-            logger.info(f"Successfully configured GitLab connector: ID={connector.id}")
+            # Create system connection for admin user
+            system_connection = await self.connector_service.get_or_create_system_connection(
+                user_id=admin_user_id,
+                connector=connector
+            )
+
+            logger.info(
+                f"Successfully configured GitLab connector: ID={connector.id} "
+                f"with system connection ID={system_connection.id}"
+            )
             return connector
 
         except Exception as e:

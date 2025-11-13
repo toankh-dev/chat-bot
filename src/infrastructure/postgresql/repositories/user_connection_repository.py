@@ -24,18 +24,38 @@ class UserConnectionRepository(IUserConnectionRepository):
         """
         self.db_session = db_session
 
-    def create(self, connection: UserConnectionModel) -> UserConnectionModel:
+    def create(
+        self,
+        user_id: int,
+        connector_id: int,
+        external_user_id: str,
+        access_token: Optional[str] = None,
+        **kwargs
+    ) -> UserConnectionModel:
         """
         Create a new user connection.
 
         Args:
-            connection: UserConnection model instance
+            user_id: User ID
+            connector_id: Connector ID
+            external_user_id: External user ID
+            access_token: Encrypted access token
+            **kwargs: Additional fields
 
         Returns:
-            Created connection
+            Created user connection model
         """
+        connection = UserConnectionModel(
+            user_id=user_id,
+            connector_id=connector_id,
+            **kwargs
+        )
+        
+        if access_token:
+            connection.set_access_token(access_token)
+            
         self.db_session.add(connection)
-        self.db_session.commit()
+        self.db_session.flush()  # Ensure ID is generated before refresh
         self.db_session.refresh(connection)
         return connection
 
@@ -53,13 +73,13 @@ class UserConnectionRepository(IUserConnectionRepository):
             UserConnectionModel.id == connection_id
         ).first()
 
-    def get_user_connection(
+    def get_by_user_and_connector(
         self,
         user_id: int,
         connector_id: int
     ) -> Optional[UserConnectionModel]:
         """
-        Get user's connection for a specific connector.
+        Get user connection by user and connector.
 
         Args:
             user_id: User ID
@@ -74,6 +94,23 @@ class UserConnectionRepository(IUserConnectionRepository):
                 UserConnectionModel.connector_id == connector_id
             )
         ).first()
+
+    def get_user_connection(
+        self,
+        user_id: int,
+        connector_id: int
+    ) -> Optional[UserConnectionModel]:
+        """
+        Get user's connection for a specific connector (alias for get_by_user_and_connector).
+
+        Args:
+            user_id: User ID
+            connector_id: Connector ID
+
+        Returns:
+            UserConnection model or None
+        """
+        return self.get_by_user_and_connector(user_id, connector_id)
 
     def list_user_connections(
         self,
@@ -99,7 +136,19 @@ class UserConnectionRepository(IUserConnectionRepository):
 
         return query.order_by(UserConnectionModel.created_at.desc()).all()
 
-    def list_by_connector(
+    def list_by_connector(self, connector_id: int) -> List[UserConnectionModel]:
+        """
+        List all connections for a connector.
+
+        Args:
+            connector_id: Connector ID
+
+        Returns:
+            List of user connection models
+        """
+        return self.list_by_connector_with_active_filter(connector_id, only_active=True)
+
+    def list_by_connector_with_active_filter(
         self,
         connector_id: int,
         only_active: bool = True
@@ -123,9 +172,33 @@ class UserConnectionRepository(IUserConnectionRepository):
 
         return query.all()
 
-    def update(self, connection: UserConnectionModel) -> UserConnectionModel:
+    def update(self, connection_id: int, **kwargs) -> Optional[UserConnectionModel]:
         """
-        Update connection.
+        Update user connection.
+
+        Args:
+            connection_id: Connection ID
+            **kwargs: Fields to update
+
+        Returns:
+            Updated connection model or None
+        """
+        connection = self.get_by_id(connection_id)
+        if not connection:
+            return None
+
+        for key, value in kwargs.items():
+            if hasattr(connection, key):
+                setattr(connection, key, value)
+
+        connection.updated_at = datetime.utcnow()
+        self.db_session.flush()  # Ensure changes are flushed to DB
+        self.db_session.refresh(connection)
+        return connection
+
+    def update_model(self, connection: UserConnectionModel) -> UserConnectionModel:
+        """
+        Update connection model.
 
         Args:
             connection: UserConnection model with updates
@@ -134,7 +207,7 @@ class UserConnectionRepository(IUserConnectionRepository):
             Updated connection
         """
         connection.updated_at = datetime.utcnow()
-        self.db_session.commit()
+        self.db_session.flush()  # Ensure changes are flushed to DB
         self.db_session.refresh(connection)
         return connection
 
@@ -153,7 +226,6 @@ class UserConnectionRepository(IUserConnectionRepository):
             return False
 
         self.db_session.delete(connection)
-        self.db_session.commit()
         return True
 
     def deactivate(self, connection_id: int) -> Optional[UserConnectionModel]:
@@ -171,7 +243,7 @@ class UserConnectionRepository(IUserConnectionRepository):
             return None
 
         connection.is_active = False
-        return self.update(connection)
+        return self.update_model(connection)
 
     def activate(self, connection_id: int) -> Optional[UserConnectionModel]:
         """
@@ -188,7 +260,7 @@ class UserConnectionRepository(IUserConnectionRepository):
             return None
 
         connection.is_active = True
-        return self.update(connection)
+        return self.update_model(connection)
 
     def update_tokens(
         self,
@@ -219,7 +291,7 @@ class UserConnectionRepository(IUserConnectionRepository):
             connection.set_refresh_token(refresh_token)
         connection.expires_at = expires_at
 
-        return self.update(connection)
+        return self.update_model(connection)
 
     def get_expired_connections(self) -> List[UserConnectionModel]:
         """
@@ -308,7 +380,11 @@ class UserConnectionRepository(IUserConnectionRepository):
             connection_metadata=connection_metadata or {},
             **kwargs
         )
-        return self.create(connection)
+        
+        self.db_session.add(connection)
+        self.db_session.flush()  # Ensure ID is generated before refresh
+        self.db_session.refresh(connection)
+        return connection
 
     def delete_by_connector(self, connector_id: int) -> int:
         """
@@ -323,7 +399,6 @@ class UserConnectionRepository(IUserConnectionRepository):
         deleted_count = self.db_session.query(UserConnectionModel).filter(
             UserConnectionModel.connector_id == connector_id
         ).delete(synchronize_session=False)
-        self.db_session.commit()
         return deleted_count
 
     def count_active_connections(self, connector_id: int) -> int:
@@ -342,20 +417,3 @@ class UserConnectionRepository(IUserConnectionRepository):
                 UserConnectionModel.is_active == True
             )
         ).count()
-
-    def commit(self) -> None:
-        """Commit the current transaction."""
-        try:
-            self.db_session.commit()
-        except Exception as e:
-            self.db_session.rollback()
-            logger.error(f"Error committing transaction: {e}")
-            raise
-
-    def rollback(self) -> None:
-        """Rollback the current transaction."""
-        try:
-            self.db_session.rollback()
-        except Exception as e:
-            logger.error(f"Error rolling back transaction: {e}")
-            raise

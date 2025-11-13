@@ -194,11 +194,12 @@ class FetchGitLabRepositoriesUseCase:
     def __init__(self, connector_service: ConnectorService):
         self.connector_service = connector_service
 
-    def execute(self, per_page: int = 20, page: int = 1) -> Dict[str, Any]:
+    def execute(self, connector_id: int, per_page: int = 20, page: int = 1) -> Dict[str, Any]:
         """
         Execute fetch GitLab repositories use case.
 
         Args:
+            connector_id: GitLab connector ID to use for fetching repositories
             per_page: Number of repositories per page
             page: Page number to fetch
 
@@ -206,10 +207,13 @@ class FetchGitLabRepositoriesUseCase:
             Repository list with pagination info
         """
         try:
-            # Get GitLab connector and service
-            gitlab_connector = self.connector_service.get_connector_by_provider("gitlab")
+            # Get specific GitLab connector by ID
+            gitlab_connector = self.connector_service.get_connector_by_id(connector_id)
             if not gitlab_connector or not gitlab_connector.is_active:
-                raise ValueError("GitLab connector not found or not active")
+                raise ValueError(f"GitLab connector with ID {connector_id} not found or not active")
+
+            if gitlab_connector.provider_type != "gitlab":
+                raise ValueError(f"Connector {connector_id} is not a GitLab connector")
 
             gitlab_service = self.connector_service.get_gitlab_service(gitlab_connector)
 

@@ -1,28 +1,29 @@
 """Connector Repository Interface."""
 
 from abc import ABC, abstractmethod
-from typing import Optional, List
-from datetime import datetime
-
+from typing import Optional, List, Any
 
 class IConnectorRepository(ABC):
     """Interface for connector repository operations."""
 
     @abstractmethod
-    def get_by_provider_type(self, provider_type: str) -> Optional[any]:
+    def create(self, connector: Any) -> Any:
         """
-        Get connector by provider type.
+        Create a new connector.
 
         Args:
-            provider_type: Provider type (gitlab, github, etc.)
+            connector: Connector model instance
 
         Returns:
-            Connector model or None if not found
+            Created connector
+
+        Raises:
+            IntegrityError: If connector with same provider_type already exists
         """
         pass
 
     @abstractmethod
-    def get_by_id(self, connector_id: int) -> Optional[any]:
+    def get_by_id(self, connector_id: int) -> Optional[Any]:
         """
         Get connector by ID.
 
@@ -30,86 +31,98 @@ class IConnectorRepository(ABC):
             connector_id: Connector ID
 
         Returns:
-            Connector model or None if not found
+            Connector model or None
         """
         pass
 
     @abstractmethod
-    def list_all(self) -> List[any]:
+    def get_by_provider_type(self, provider_type: str) -> Optional[Any]:
         """
-        List all connectors.
-
-        Returns:
-            List of all connector models
-        """
-        pass
-
-    @abstractmethod
-    def create(
-        self,
-        name: str,
-        provider_type: str,
-        auth_type: str,
-        client_id: Optional[str],
-        config_schema: dict,
-        is_active: bool = True
-    ) -> any:
-        """
-        Create a new connector.
+        Get connector by provider type.
 
         Args:
-            name: Connector name
-            provider_type: Provider type
-            auth_type: Authentication type
-            client_id: Encrypted client ID/token
-            config_schema: Configuration schema
-            is_active: Whether connector is active
+            provider_type: Provider type (gitlab, github, bitbucket, etc.)
 
         Returns:
-            Created connector model
+            Connector model or None
         """
         pass
 
     @abstractmethod
-    def update(
-        self,
-        connector_id: int,
-        **kwargs
-    ) -> any:
+    def list_connector_by_user(self, user_id: int, is_active: bool = True) -> List[Any]:
         """
-        Update an existing connector.
+        List connectors that user has connections to.
 
         Args:
-            connector_id: Connector ID to update
-            **kwargs: Fields to update
+            user_id: User ID to filter by
+            is_active: If True, return only active connectors and connections
 
         Returns:
-            Updated connector model
+            List of connector models that user has connections to
+        """
+        pass
+
+    @abstractmethod
+    def update(self, connector: Any) -> Any:
+        """
+        Update connector.
+
+        Args:
+            connector: Connector model with updates
+
+        Returns:
+            Updated connector
         """
         pass
 
     @abstractmethod
     def delete(self, connector_id: int) -> bool:
         """
-        Delete a connector.
+        Delete connector.
 
         Args:
-            connector_id: Connector ID to delete
+            connector_id: Connector ID
 
         Returns:
-            True if deleted successfully
+            True if deleted, False if not found
+        """
+        pass
+
+    @abstractmethod
+    def activate(self, connector_id: int) -> Optional[Any]:
+        """
+        Activate a connector.
+
+        Args:
+            connector_id: Connector ID
+
+        Returns:
+            Updated connector or None
+        """
+        pass
+
+    @abstractmethod
+    def deactivate(self, connector_id: int) -> Optional[Any]:
+        """
+        Deactivate a connector.
+
+        Args:
+            connector_id: Connector ID
+
+        Returns:
+            Updated connector or None
         """
         pass
 
     @abstractmethod
     def update_connector(
         self,
-        connector: any,
+        connector: Any,
         name: Optional[str] = None,
         client_id: Optional[str] = None,
         config_schema: Optional[dict] = None,
         is_active: Optional[bool] = None
-    ) -> any:
+    ) -> Any:
         """
         Update connector fields.
 
@@ -134,7 +147,7 @@ class IConnectorRepository(ABC):
         client_id: Optional[str] = None,
         config_schema: Optional[dict] = None,
         is_active: bool = True
-    ) -> any:
+    ) -> Any:
         """
         Create a new connector.
 
@@ -149,14 +162,4 @@ class IConnectorRepository(ABC):
         Returns:
             Created connector model
         """
-        pass
-
-    @abstractmethod
-    def commit(self) -> None:
-        """Commit the current transaction."""
-        pass
-
-    @abstractmethod
-    def rollback(self) -> None:
-        """Rollback the current transaction."""
         pass

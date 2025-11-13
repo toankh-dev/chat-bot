@@ -156,13 +156,3 @@ class IUserConnectionRepository(ABC):
             Number of active connections
         """
         pass
-
-    @abstractmethod
-    def commit(self) -> None:
-        """Commit the current transaction."""
-        pass
-
-    @abstractmethod
-    def rollback(self) -> None:
-        """Rollback the current transaction."""
-        pass

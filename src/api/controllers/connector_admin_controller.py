@@ -50,7 +50,7 @@ async def list_connectors(
         List of connector configurations (without sensitive data)
     """
     try:
-        connectors = use_case.execute()
+        connectors = use_case.execute(user_id=current_user.id)
 
         # Convert to response format (excluding sensitive fields)
         return [
@@ -124,6 +124,7 @@ async def setup_gitlab_personal_token_connector(
     """
     Setup GitLab connector with personal access token.
     This endpoint is idempotent - it will update existing connector or create new one.
+    Also creates a system connection for the admin user.
 
     Args:
         request: GitLab setup configuration
@@ -132,11 +133,12 @@ async def setup_gitlab_personal_token_connector(
         Configured connector details (with stable ID)
     """
     try:
-        connector = use_case.execute(request)
+        # Pass current user ID to use case for connection creation
+        connector = await use_case.execute(request, current_user.id)
 
         logger.info(
             f"Admin {current_user.email} configured GitLab connector: "
-            f"ID={connector.id}, URL={request.gitlab_url}"
+            f"ID={connector.id}, URL={request.gitlab_url} with system connection"
         )
 
         return ConnectorResponse(

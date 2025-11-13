@@ -15,15 +15,16 @@ from api.controllers.connector_admin_controller import (
 )
 from schemas.connector_schema import ConnectorResponse
 
+# All endpoints require admin role
 router = APIRouter(dependencies=[Depends(require_admin)])
 
-# Register all connector admin endpoints
+# Register admin connector endpoints
 router.add_api_route(
     "/",
     list_connectors,
     methods=["GET"],
     response_model=List[ConnectorResponse],
-    summary="List Connectors",
+    summary="List All Connectors",
     description="Get all configured connectors (admin only)"
 )
 

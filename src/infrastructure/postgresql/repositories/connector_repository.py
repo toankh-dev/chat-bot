@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 
 from shared.interfaces.repositories.connector_repository import IConnectorRepository
 from infrastructure.postgresql.models.connector_model import ConnectorModel
+from infrastructure.postgresql.models.user_connection_model import UserConnectionModel
 from core.logger import logger
 
 
@@ -69,20 +70,28 @@ class ConnectorRepository(IConnectorRepository):
             ConnectorModel.provider_type == provider_type
         ).first()
 
-    def list_all(self, only_active: bool = True) -> List[ConnectorModel]:
+    def list_connector_by_user(self, user_id: int, is_active: bool = True) -> List[ConnectorModel]:
         """
-        List all connectors.
+        List connectors that user has connections to.
 
         Args:
-            only_active: If True, return only active connectors
+            user_id: User ID to filter by
+            only_active: If True, return only active connectors and connections
 
         Returns:
-            List of connector models
+            List of connector models that user has connections to
         """
-        query = self.db_session.query(ConnectorModel)
+        query = self.db_session.query(ConnectorModel).join(
+            UserConnectionModel, ConnectorModel.id == UserConnectionModel.connector_id
+        ).filter(
+            UserConnectionModel.user_id == user_id
+        )
 
-        if only_active:
-            query = query.filter(ConnectorModel.is_active == True)
+        if is_active:
+            query = query.filter(
+                ConnectorModel.is_active == True,
+                UserConnectionModel.is_active == True
+            )
 
         return query.order_by(ConnectorModel.name).all()
 
@@ -220,20 +229,3 @@ class ConnectorRepository(IConnectorRepository):
             is_active=is_active
         )
         return self.create(connector)
-
-    def commit(self) -> None:
-        """Commit the current transaction."""
-        try:
-            self.db_session.commit()
-        except Exception as e:
-            self.db_session.rollback()
-            logger.error(f"Error committing transaction: {e}")
-            raise
-
-    def rollback(self) -> None:
-        """Rollback the current transaction."""
-        try:
-            self.db_session.rollback()
-        except Exception as e:
-            logger.error(f"Error rolling back transaction: {e}")
-            raise

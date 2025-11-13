@@ -13,7 +13,7 @@ from schemas.gitlab_schema import (
     GitLabConnectionTestResponse
 )
 
-from api.middlewares.jwt_middleware import get_current_user
+from api.middlewares.jwt_middleware import require_admin
 from core.dependencies import (
     get_test_gitlab_connection_use_case,
     get_fetch_gitlab_repositories_use_case,
@@ -21,18 +21,6 @@ from core.dependencies import (
 )
 from domain.entities.user import UserEntity
 from core.logger import logger
-
-
-# ============================================================================
-# Dependency Injection
-# ============================================================================
-
-def require_admin(current_user: UserEntity = Depends(get_current_user)) -> UserEntity:
-    """Require user to be admin."""
-    # TODO: Implement proper admin role check
-    # For now, just pass through
-    return current_user
-
 
 # ============================================================================
 # Controller Functions (Admin Only)
@@ -131,20 +119,22 @@ async def test_gitlab_connection_admin(
 
 
 async def fetch_gitlab_repositories_admin(
-    per_page: int = 100,
+    connector_id: int,
+    per_page: int = 20,
     page: int = 1,
     current_user: UserEntity = Depends(require_admin),
     fetch_gitlab_repositories_use_case = Depends(get_fetch_gitlab_repositories_use_case)
 ) -> GitLabRepositoryListResponse:
     """
-    Fetch all repositories from GitLab API (Admin only).
+    Fetch all repositories from GitLab API using a specific connector (Admin only).
 
     This endpoint fetches repositories from GitLab but does NOT save them to database.
     Use this to browse available repositories before syncing.
 
     Args:
-        per_page: Number of results per page (max 100)
-        page: Page number
+        connector_id: GitLab connector ID to use for fetching repositories
+        per_page: Number of repositories per page (1-100, default 20)
+        page: Page number to fetch (starting from 1, default 1)
         current_user: Authenticated admin user
         fetch_gitlab_repositories_use_case: Use case for fetching repositories
 
@@ -152,10 +142,14 @@ async def fetch_gitlab_repositories_admin(
         List of GitLab repositories with metadata
     """
     try:
-        logger.info(f"Admin fetching GitLab repositories - page {page}, per_page {per_page}")
+        logger.info(f"Admin fetching GitLab repositories - connector_id: {connector_id}, page {page}, per_page {per_page}")
 
-        # Use GitLab use case to fetch repositories
-        result = fetch_gitlab_repositories_use_case.execute(per_page=per_page, page=page)
+        # Use GitLab use case to fetch repositories with specific connector
+        result = fetch_gitlab_repositories_use_case.execute(
+            connector_id=connector_id,
+            per_page=per_page, 
+            page=page
+        )
         logger.info("GitLab repositories fetched successfully via GitLab use cases")
 
         # Transform to response model

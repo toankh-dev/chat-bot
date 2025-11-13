@@ -7,7 +7,9 @@ from fastapi import APIRouter, status
 from api.controllers.gitlab_controller import (
     sync_repository_admin,
     test_gitlab_connection_admin,
-    fetch_gitlab_repositories_admin,
+    fetch_gitlab_repositories_admin
+)
+from schemas.gitlab_schema import (
     SyncRepositoryRequest,
     SyncRepositoryResponse,
     GitLabRepositoryListResponse
@@ -33,7 +35,7 @@ router.add_api_route(
     response_model=GitLabRepositoryListResponse,
     status_code=status.HTTP_200_OK,
     summary="Fetch GitLab repositories (Admin)",
-    description="Fetch all accessible repositories from GitLab API (does not save to database)"
+    description="Fetch all accessible repositories from GitLab API using a specific connector (does not save to database)"
 )
 
 # Sync repository

@@ -73,7 +73,9 @@ class DatabaseManager:
         async with self.session_factory() as session:
             try:
                 yield session
-                await session.commit()
+                # Only commit if there are pending changes (write operations)
+                if session.dirty or session.new or session.deleted:
+                    await session.commit()
             except Exception as e:
                 await session.rollback()
                 logger.error(f"Database session error: {e}")
@@ -89,7 +91,9 @@ class DatabaseManager:
         session = self.sync_session_factory()
         try:
             yield session
-            session.commit()
+            # Only commit if there are pending changes (write operations)
+            if session.dirty or session.new or session.deleted:
+                session.commit()
         except Exception as e:
             session.rollback()
             logger.error(f"Database session error: {e}")
