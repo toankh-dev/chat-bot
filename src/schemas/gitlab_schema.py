@@ -61,9 +61,6 @@ class GitLabRepositoryListResponse(BaseModel):
     """Response for fetching GitLab repositories."""
     repositories: List[GitLabRepositoryInfo]
     total: int
-    page: int
-    per_page: int
-
 
 class GitLabConnectionTestResponse(BaseModel):
     """Response for GitLab connection test."""

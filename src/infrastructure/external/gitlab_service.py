@@ -174,9 +174,7 @@ class GitLabService(IGitLabService):
         membership: bool = True,
         search: Optional[str] = None,
         order_by: str = "last_activity_at",
-        sort: str = "desc",
-        per_page: int = 100,
-        page: int = 1
+        sort: str = "desc"
     ) -> List[Dict[str, Any]]:
         """
         List GitLab repositories accessible to the authenticated user.
@@ -188,56 +186,68 @@ class GitLabService(IGitLabService):
             search: Search term to filter repositories by name/description
             order_by: Sort by field (id, name, path, created_at, updated_at, last_activity_at)
             sort: Sort order (asc or desc)
-            per_page: Number of results per page (max 100)
-            page: Page number
 
         Returns:
             List of repository information dictionaries
         """
         try:
-            # Build query parameters
-            list_params = {
-                "order_by": order_by,
-                "sort": sort,
-                "per_page": min(per_page, 100),  # GitLab max is 100
-                "page": page
-            }
+            # Always fetch all repositories without pagination
+            all_repositories = []
+            current_page = 1
+            per_page_batch = 100  # GitLab max per page
 
-            if visibility:
-                list_params["visibility"] = visibility
-            if owned:
-                list_params["owned"] = True
-            if membership:
-                list_params["membership"] = True
-            if search:
-                list_params["search"] = search
+            while True:
+                # Build query parameters for current batch
+                list_params = {
+                    "order_by": order_by,
+                    "sort": sort,
+                    "per_page": per_page_batch,
+                    "page": current_page
+                }
 
-            # Get projects from GitLab API
-            projects = self.gl.projects.list(**list_params)
+                if visibility:
+                    list_params["visibility"] = visibility
+                if owned:
+                    list_params["owned"] = True
+                if membership:
+                    list_params["membership"] = True
+                if search:
+                    list_params["search"] = search
 
-            # Transform to simplified format
-            repositories = []
-            for project in projects:
-                repositories.append({
-                    "id": str(project.id),
-                    "external_id": str(project.id),
-                    "name": project.name,
-                    "path": project.path,
-                    "full_name": project.path_with_namespace,
-                    "description": project.description or "",
-                    "visibility": project.visibility,
-                    "web_url": project.web_url,
-                    "http_url_to_repo": project.http_url_to_repo,
-                    "default_branch": project.default_branch or "main",
-                    "created_at": project.created_at,
-                    "last_activity_at": project.last_activity_at,
-                    "star_count": getattr(project, "star_count", 0),
-                    "forks_count": getattr(project, "forks_count", 0),
-                    "archived": getattr(project, "archived", False),
-                    "empty_repo": getattr(project, "empty_repo", False)
-                })
+                # Get projects from GitLab API
+                projects = self.gl.projects.list(**list_params)
 
-            return repositories
+                if not projects:
+                    break
+
+                # Transform to simplified format and add to results
+                for project in projects:
+                    all_repositories.append({
+                        "id": str(project.id),
+                        "external_id": str(project.id),
+                        "name": project.name,
+                        "path": project.path,
+                        "full_name": project.path_with_namespace,
+                        "description": project.description or "",
+                        "visibility": project.visibility,
+                        "web_url": project.web_url,
+                        "http_url_to_repo": project.http_url_to_repo,
+                        "default_branch": project.default_branch or "main",
+                        "created_at": project.created_at,
+                        "last_activity_at": project.last_activity_at,
+                        "star_count": getattr(project, "star_count", 0),
+                        "forks_count": getattr(project, "forks_count", 0),
+                        "archived": getattr(project, "archived", False),
+                        "empty_repo": getattr(project, "empty_repo", False)
+                    })
+
+                # If we got less than per_page_batch, we've reached the end
+                if len(projects) < per_page_batch:
+                    break
+
+                current_page += 1
+
+            return all_repositories
 
         except Exception as e:
             raise ValueError(f"Failed to list repositories: {str(e)}")
@@ -412,32 +422,34 @@ class GitLabService(IGitLabService):
 
     def get_projects(
         self,
-        per_page: int = 20,
-        page: int = 1,
+        owned: bool = False,
+        membership: bool = True,
+        visibility: Optional[str] = None,
         **kwargs
     ) -> Dict[str, Any]:
         """
         Get projects (alias for list_repositories with pagination info).
 
         Args:
-            per_page: Number of projects per page
-            page: Page number
+            owned: Only owned projects
+            membership: Only member projects
+            visibility: Filter by visibility (public, internal, private)
             **kwargs: Additional parameters for list_repositories
 
         Returns:
             Dictionary with repositories and pagination info
         """
         repositories = self.list_repositories(
-            per_page=per_page,
-            page=page,
+            owned=owned,
+            membership=membership,
+            visibility=visibility,
             **kwargs
         )
 
+        # Always return all repositories with single page info
         return {
             "repositories": repositories,
             "total": len(repositories),
-            "page": page,
-            "per_page": per_page
         }
 
     def cleanup_clone(self, clone_path: str):

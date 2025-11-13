@@ -120,8 +120,6 @@ async def test_gitlab_connection_admin(
 
 async def fetch_gitlab_repositories_admin(
     connector_id: int,
-    per_page: int = 20,
-    page: int = 1,
     current_user: UserEntity = Depends(require_admin),
     fetch_gitlab_repositories_use_case = Depends(get_fetch_gitlab_repositories_use_case)
 ) -> GitLabRepositoryListResponse:
@@ -133,8 +131,6 @@ async def fetch_gitlab_repositories_admin(
 
     Args:
         connector_id: GitLab connector ID to use for fetching repositories
-        per_page: Number of repositories per page (1-100, default 20)
-        page: Page number to fetch (starting from 1, default 1)
         current_user: Authenticated admin user
         fetch_gitlab_repositories_use_case: Use case for fetching repositories
 
@@ -142,15 +138,10 @@ async def fetch_gitlab_repositories_admin(
         List of GitLab repositories with metadata
     """
     try:
-        logger.info(f"Admin fetching GitLab repositories - connector_id: {connector_id}, page {page}, per_page {per_page}")
-
-        # Use GitLab use case to fetch repositories with specific connector
+        # Use GitLab use case to fetch all repositories with specific connector
         result = fetch_gitlab_repositories_use_case.execute(
-            connector_id=connector_id,
-            per_page=per_page, 
-            page=page
+            connector_id=connector_id
         )
-        logger.info("GitLab repositories fetched successfully via GitLab use cases")
 
         # Transform to response model
         repo_infos = [
@@ -163,8 +154,6 @@ async def fetch_gitlab_repositories_admin(
         return GitLabRepositoryListResponse(
             repositories=repo_infos,
             total=len(repo_infos),
-            page=page,
-            per_page=per_page
         )
 
     except HTTPException:

@@ -24,7 +24,7 @@ def _convert_user_to_chatbot_user(user: UserEntity) -> UserInChatbot:
     user_id_int = extract_user_id_int(user.id)
     return UserInChatbot(
         id=user_id_int,
-        name=user.full_name,
+        name=user.name,
         email=str(user.email)
     )
 
@@ -42,7 +42,7 @@ def _convert_user_to_creator_info(user: UserEntity) -> CreatorInfo:
     user_id_int = extract_user_id_int(user.id)
     return CreatorInfo(
         id=user_id_int,
-        name=user.full_name,
+        name=user.name,
         email=str(user.email)
     )
 

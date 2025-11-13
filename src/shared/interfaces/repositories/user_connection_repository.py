@@ -8,30 +8,6 @@ class IUserConnectionRepository(ABC):
     """Interface for user connection repository operations."""
 
     @abstractmethod
-    def create(
-        self,
-        user_id: int,
-        connector_id: int,
-        external_user_id: str,
-        access_token: Optional[str] = None,
-        **kwargs
-    ) -> any:
-        """
-        Create a new user connection.
-
-        Args:
-            user_id: User ID
-            connector_id: Connector ID
-            external_user_id: External user ID
-            access_token: Encrypted access token
-            **kwargs: Additional fields
-
-        Returns:
-            Created user connection model
-        """
-        pass
-
-    @abstractmethod
     def get_by_user_and_connector(
         self,
         user_id: int,

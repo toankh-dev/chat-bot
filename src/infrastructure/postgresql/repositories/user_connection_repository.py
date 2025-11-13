@@ -5,7 +5,7 @@ UserConnection Repository - Database operations for user connections.
 from typing import List, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
-from sqlalchemy import and_
+from sqlalchemy import and_, Boolean
 
 from shared.interfaces.repositories.user_connection_repository import IUserConnectionRepository
 from infrastructure.postgresql.models.user_connection_model import UserConnectionModel
@@ -23,41 +23,6 @@ class UserConnectionRepository(IUserConnectionRepository):
             db_session: SQLAlchemy database session
         """
         self.db_session = db_session
-
-    def create(
-        self,
-        user_id: int,
-        connector_id: int,
-        external_user_id: str,
-        access_token: Optional[str] = None,
-        **kwargs
-    ) -> UserConnectionModel:
-        """
-        Create a new user connection.
-
-        Args:
-            user_id: User ID
-            connector_id: Connector ID
-            external_user_id: External user ID
-            access_token: Encrypted access token
-            **kwargs: Additional fields
-
-        Returns:
-            Created user connection model
-        """
-        connection = UserConnectionModel(
-            user_id=user_id,
-            connector_id=connector_id,
-            **kwargs
-        )
-        
-        if access_token:
-            connection.set_access_token(access_token)
-            
-        self.db_session.add(connection)
-        self.db_session.flush()  # Ensure ID is generated before refresh
-        self.db_session.refresh(connection)
-        return connection
 
     def get_by_id(self, connection_id: int) -> Optional[UserConnectionModel]:
         """
@@ -349,7 +314,7 @@ class UserConnectionRepository(IUserConnectionRepository):
                 UserConnectionModel.is_active == True
             )
         ).filter(
-            UserConnectionModel.connection_metadata.op('->>')('system') == 'true'
+            UserConnectionModel.connection_metadata['system'].astext.cast(Boolean) == True
         ).first()
 
     def create_connection(
@@ -380,8 +345,9 @@ class UserConnectionRepository(IUserConnectionRepository):
             connection_metadata=connection_metadata or {},
             **kwargs
         )
-        
+
         self.db_session.add(connection)
+        self.db_session.commit()
         self.db_session.flush()  # Ensure ID is generated before refresh
         self.db_session.refresh(connection)
         return connection

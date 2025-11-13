@@ -35,7 +35,7 @@ router.add_api_route(
     response_model=GitLabRepositoryListResponse,
     status_code=status.HTTP_200_OK,
     summary="Fetch GitLab repositories (Admin)",
-    description="Fetch all accessible repositories from GitLab API using a specific connector (does not save to database)"
+    description="Fetch all accessible repositories from GitLab API using a specific connector without pagination (does not save to database)"
 )
 
 # Sync repository

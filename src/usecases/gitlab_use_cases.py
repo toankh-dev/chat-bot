@@ -194,7 +194,7 @@ class FetchGitLabRepositoriesUseCase:
     def __init__(self, connector_service: ConnectorService):
         self.connector_service = connector_service
 
-    def execute(self, connector_id: int, per_page: int = 20, page: int = 1) -> Dict[str, Any]:
+    def execute(self, connector_id: int) -> Dict[str, Any]:
         """
         Execute fetch GitLab repositories use case.
 
@@ -217,17 +217,12 @@ class FetchGitLabRepositoriesUseCase:
 
             gitlab_service = self.connector_service.get_gitlab_service(gitlab_connector)
 
-            # Fetch repositories
-            repositories = gitlab_service.get_projects(per_page=per_page, page=page)
+            # Fetch all repositories without pagination
+            repositories = gitlab_service.get_projects()
 
             return {
                 "success": True,
-                "repositories": repositories,
-                "pagination": {
-                    "page": page,
-                    "per_page": per_page,
-                    "total_count": len(repositories) if repositories else 0
-                }
+                **repositories
             }
 
         except Exception as e:

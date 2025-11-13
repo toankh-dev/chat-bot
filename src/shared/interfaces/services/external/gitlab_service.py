@@ -20,8 +20,6 @@ class IGitLabService(ABC):
     @abstractmethod
     def get_projects(
         self,
-        per_page: int = 20,
-        page: int = 1,
         owned: bool = False,
         membership: bool = True,
         visibility: Optional[str] = None
@@ -30,8 +28,6 @@ class IGitLabService(ABC):
         Get list of projects from GitLab.
 
         Args:
-            per_page: Number of results per page
-            page: Page number
             owned: Only owned projects
             membership: Only member projects
             visibility: Filter by visibility (public, internal, private)
@@ -93,28 +89,6 @@ class IGitLabService(ABC):
 
         Returns:
             File content as bytes
-        """
-        pass
-
-    @abstractmethod
-    def get_commits(
-        self,
-        project_id: str,
-        ref_name: str = "main",
-        since: Optional[str] = None,
-        until: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
-        """
-        Get commits for a project.
-
-        Args:
-            project_id: GitLab project ID
-            ref_name: Branch name
-            since: Only commits after this date
-            until: Only commits before this date
-
-        Returns:
-            List of commit dictionaries
         """
         pass
 
