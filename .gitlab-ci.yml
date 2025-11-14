@@ -22,6 +22,13 @@ build:
   services:
     - docker:24-dind
   before_script:
+    # Clean up Python cache files that may have permission issues
+    - find . -type d -name "__pycache__" -exec chmod -R u+w {} + 2>/dev/null || true
+    - find . -name "*.pyc" -exec chmod u+w {} + 2>/dev/null || true
+    - find . -name "*.pyo" -exec chmod u+w {} + 2>/dev/null || true
+    - find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+    - find . -name "*.pyc" -delete 2>/dev/null || true
+    - find . -name "*.pyo" -delete 2>/dev/null || true
     # Wait for Docker daemon to be ready
     - until docker info; do sleep 1; done
   script:
@@ -48,6 +55,13 @@ deploy:
   services:
     - docker:24-dind
   before_script:
+    # Clean up Python cache files that may have permission issues
+    - find . -type d -name "__pycache__" -exec chmod -R u+w {} + 2>/dev/null || true
+    - find . -name "*.pyc" -exec chmod u+w {} + 2>/dev/null || true
+    - find . -name "*.pyo" -exec chmod u+w {} + 2>/dev/null || true
+    - find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+    - find . -name "*.pyc" -delete 2>/dev/null || true
+    - find . -name "*.pyo" -delete 2>/dev/null || true
     - until docker info; do sleep 1; done
     - apk add --no-cache docker-compose || true
   script:
