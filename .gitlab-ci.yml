@@ -31,10 +31,9 @@ build:
     - apk add --no-cache git || true
     # Configure Git to trust the repository directory (fixes ownership issues)
     - git config --global --add safe.directory "$CI_PROJECT_DIR" || git config --global --add safe.directory "*" || true
-    # Clean up Python cache files that may have permission issues
-    - find . -type d -name "__pycache__" -exec chmod -R u+w {} + 2>/dev/null || true
-    - find . -name "*.pyc" -exec chmod u+w {} + 2>/dev/null || true
-    - find . -name "*.pyo" -exec chmod u+w {} + 2>/dev/null || true
+    # Clean up Python cache files (try direct deletion, suppress all errors)
+    # These files are tracked in Git but shouldn't be - we'll remove them if possible
+    # Suppress all error messages to avoid cluttering the CI output
     - find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
     - find . -name "*.pyc" -delete 2>/dev/null || true
     - find . -name "*.pyo" -delete 2>/dev/null || true
@@ -68,10 +67,9 @@ deploy:
     - apk add --no-cache git || true
     # Configure Git to trust the repository directory (fixes ownership issues)
     - git config --global --add safe.directory "$CI_PROJECT_DIR" || git config --global --add safe.directory "*" || true
-    # Clean up Python cache files that may have permission issues
-    - find . -type d -name "__pycache__" -exec chmod -R u+w {} + 2>/dev/null || true
-    - find . -name "*.pyc" -exec chmod u+w {} + 2>/dev/null || true
-    - find . -name "*.pyo" -exec chmod u+w {} + 2>/dev/null || true
+    # Clean up Python cache files (try direct deletion, suppress all errors)
+    # These files are tracked in Git but shouldn't be - we'll remove them if possible
+    # Suppress all error messages to avoid cluttering the CI output
     - find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
     - find . -name "*.pyc" -delete 2>/dev/null || true
     - find . -name "*.pyo" -delete 2>/dev/null || true
