@@ -49,14 +49,12 @@ async def sync_repository_admin(
         Sync result with statistics
     """
     try:
-        logger.info(f"Admin sync for GitLab repository URL: {request.repository_url}")
-
         # Execute the sync repository use case
         result = await sync_repository_use_case.execute(request, current_user.id)
 
         return SyncRepositoryResponse(
             success=result["success"],
-            repository=result["repository_name"],
+            repository=result["repository"],  # Fixed: use "repository" not "repository_name"
             repository_id=result["repository_id"],
             knowledge_base_id=result["knowledge_base_id"],
             knowledge_base_name=result["knowledge_base_name"],
@@ -102,16 +100,8 @@ async def test_gitlab_connection_admin(
     result = test_gitlab_connection_use_case.execute(connector_id=connector_id)
 
     if result["success"]:
-        logger.info(f"GitLab connection test successful: {result['details'].get('user', 'Unknown')}")
-
-        # Convert to response schema
-        details = result["details"]
         return GitLabConnectionTestResponse(
             success=True,
-            user_id=str(details.get("id", "")),
-            username=details.get("username"),
-            name=details.get("name"),
-            email=details.get("email"),
             message="Connection successful"
         )
     else:

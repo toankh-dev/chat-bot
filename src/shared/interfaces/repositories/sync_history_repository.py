@@ -58,19 +58,6 @@ class ISyncHistoryRepository(ABC):
         pass
 
     @abstractmethod
-    def get_latest_by_repository(self, repository_id: int) -> Optional[any]:
-        """
-        Get latest sync history for repository.
-
-        Args:
-            repository_id: Repository ID
-
-        Returns:
-            Latest sync history model or None
-        """
-        pass
-
-    @abstractmethod
     def list_by_repository(
         self,
         repository_id: int,

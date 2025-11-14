@@ -180,9 +180,9 @@ class ConnectorService:
             logger.error(f"Failed to create GitLab service: {str(e)}")
             raise ValueError(f"Failed to create GitLab service: {str(e)}")
 
-    async def get_or_create_system_connection(
-        self, 
-        user_id: int, 
+    def get_or_create_system_connection(
+        self,
+        user_id: int,
         connector: ConnectorModel
     ) -> UserConnectionModel:
         """

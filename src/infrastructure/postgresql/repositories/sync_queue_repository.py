@@ -303,3 +303,20 @@ class SyncQueueRepository:
         for item in stuck_items:
             self.reset_to_pending(item.id)
         return len(stuck_items)
+
+    def count_pending_by_commit(self, commit_id: int) -> int:
+        """
+        Count pending items for a specific commit.
+
+        Args:
+            commit_id: Commit ID to check
+
+        Returns:
+            Number of pending items
+        """
+        return self.db_session.query(SyncQueueModel).filter(
+            and_(
+                SyncQueueModel.commit_id == commit_id,
+                SyncQueueModel.status == "pending"
+            )
+        ).count()

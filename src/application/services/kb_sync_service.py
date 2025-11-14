@@ -10,6 +10,8 @@ from shared.interfaces.repositories.document_repository import DocumentRepositor
 from domain.entities.document import DocumentEntity
 import asyncio
 
+from src.infrastructure.vector_store.factory import VectorStoreFactory
+
 
 class KBSyncService:
     """Service for syncing document chunks to Knowledge Base (vector store)."""
@@ -17,7 +19,6 @@ class KBSyncService:
     def __init__(
         self,
         embedding_service: IEmbeddingService,
-        vector_store: IVectorStore,
         document_repository: DocumentRepository
     ):
         """
@@ -29,7 +30,6 @@ class KBSyncService:
             document_repository: Repository for updating document status
         """
         self.embedding_service = embedding_service
-        self.vector_store = vector_store
         self.document_repository = document_repository
 
     async def add_document_to_kb(
@@ -250,13 +250,16 @@ class KBSyncService:
             Dictionary with sync results
         """
         try:
+           
             # Extract texts and metadata
             texts = [doc["content"] for doc in documents]
             metadatas = [doc["metadata"] for doc in documents]
 
             # Get knowledge_base_id from first document's metadata
             knowledge_base_id = metadatas[0].get("knowledge_base_id") if metadatas else "default"
-
+            persist_directory = f"data/chromadb/{knowledge_base_id}"
+            vector_store = VectorStoreFactory.create(config={"persist_directory": persist_directory})
+    
             # Create embeddings asynchronously
             embeddings = await self.embedding_service.create_embeddings(texts)
 
@@ -272,7 +275,7 @@ class KBSyncService:
                     }
 
                     # Add vector to store
-                    vector_id = self.vector_store.add_vector(embedding, full_metadata)
+                    vector_id = vector_store.add_vector(embedding, full_metadata)
                     vector_ids.append(vector_id)
 
                 except Exception as e:

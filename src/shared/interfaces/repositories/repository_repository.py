@@ -9,103 +9,61 @@ class IRepositoryRepository(ABC):
     """Interface for repository repository operations."""
 
     @abstractmethod
-    def get_by_id(self, repository_id: int) -> Optional[any]:
-        """
-        Get repository by ID.
-
-        Args:
-            repository_id: Repository ID
-
-        Returns:
-            Repository model or None if not found
-        """
+    def create(self, repository):
         pass
 
     @abstractmethod
-    def get_by_external_id(self, external_id: str) -> Optional[any]:
-        """
-        Get repository by external ID (GitLab project ID).
-
-        Args:
-            external_id: External repository ID
-
-        Returns:
-            Repository model or None if not found
-        """
+    def get_by_id(self, repo_id: int):
         pass
 
     @abstractmethod
-    def create(
-        self,
-        name: str,
-        external_id: str,
-        url: str,
-        provider: str,
-        default_branch: str,
-        **kwargs
-    ) -> any:
-        """
-        Create a new repository.
-
-        Args:
-            name: Repository name
-            external_id: External repository ID
-            url: Repository URL
-            provider: Provider type (gitlab, github, etc.)
-            default_branch: Default branch name
-            **kwargs: Additional fields
-
-        Returns:
-            Created repository model
-        """
+    def get_or_create(self, connection_id: int, external_id: str, defaults: dict = None):
         pass
 
     @abstractmethod
-    def update(self, repository_id: int, **kwargs) -> Optional[any]:
-        """
-        Update repository.
-
-        Args:
-            repository_id: Repository ID
-            **kwargs: Fields to update
-
-        Returns:
-            Updated repository model or None
-        """
+    def get_by_connection_and_external_id(self, connection_id: int, external_id: str):
         pass
 
     @abstractmethod
-    def delete(self, repository_id: int) -> bool:
-        """
-        Delete repository.
-
-        Args:
-            repository_id: Repository ID
-
-        Returns:
-            True if deleted, False if not found
-        """
+    def list_by_connection(self, connection_id: int, only_active: bool = True):
         pass
 
     @abstractmethod
-    def list_by_user(self, user_id: int) -> List[any]:
-        """
-        List repositories by user.
-
-        Args:
-            user_id: User ID
-
-        Returns:
-            List of repository models
-        """
+    def list_user_repositories(self, user_id: int):
         pass
 
     @abstractmethod
-    def commit(self) -> None:
-        """Commit the current transaction."""
+    def update(self, repository):
         pass
 
     @abstractmethod
-    def rollback(self) -> None:
-        """Rollback the current transaction."""
+    def update_sync_status(self, repo_id: int, status: str, last_synced_at = None):
+        pass
+
+    @abstractmethod
+    def mark_syncing(self, repo_id: int):
+        pass
+
+    @abstractmethod
+    def mark_completed(self, repo_id: int, last_synced_at = None):
+        pass
+
+    @abstractmethod
+    def mark_failed(self, repo_id: int):
+        pass
+
+    @abstractmethod
+    def delete(self, repo_id: int) -> bool:
+        pass
+
+    @abstractmethod
+    def deactivate(self, repo_id: int):
+        pass
+
+    @abstractmethod
+    def get_pending_sync_repositories(self):
+        pass
+
+    @abstractmethod
+    def get_stale_syncing_repositories(self, stale_minutes: int = 60):
         pass

@@ -57,6 +57,7 @@ from infrastructure.postgresql.repositories import (
 from infrastructure.postgresql.repositories.connector_repository import ConnectorRepository
 from infrastructure.postgresql.repositories.user_connection_repository import UserConnectionRepository
 from infrastructure.postgresql.repositories.repository_repository import RepositoryRepository
+from infrastructure.postgresql.repositories.commit_model_repository import CommitRepository
 
 # Service Implementations
 # Services
@@ -72,6 +73,9 @@ from application.services.document_chunking_service import DocumentChunkingServi
 from application.services.gitlab_sync_service import GitLabSyncService
 from application.services.kb_sync_service import KBSyncService
 from application.services.connector_service import ConnectorService
+from application.services.code_chunking_service import CodeChunkingService
+from application.services.group_service import GroupService
+from application.services.knowledge_base_service import KnowledgeBaseService
 
 # Infrastructure Services
 from infrastructure.vector_store.factory import VectorStoreFactory
@@ -85,7 +89,6 @@ from infrastructure.external.gitlab_service import GitLabService
 from application.services.ai_model_service import AiModelService
 
 # Use Cases
-from src.application.services.group_service import GroupService
 from usecases.auth_use_cases import LoginUseCase, RegisterUseCase
 from usecases.user_use_cases import (
     GetCurrentUserUseCase,
@@ -150,12 +153,6 @@ from usecases.gitlab_use_cases import (
     FetchGitLabBranchesUseCase,
     SyncRepositoryUseCase
 )
-
-# Schemas
-from schemas.user_schema import UserResponse
-
-# Domain Entities
-from domain.entities.user import UserEntity
 
 # Security
 security = HTTPBearer()
@@ -255,6 +252,13 @@ def get_document_repository(session: AsyncSession = Depends(get_db_session)) -> 
     """Get document repository instance."""
     return DocumentRepositoryImpl(session)
 
+def get_repository_repository(session: AsyncSession = Depends(get_db_session)) -> RepositoryRepository:
+    """Get repository repository instance."""
+    return RepositoryRepository(session)
+
+def get_commit_repository(session: AsyncSession = Depends(get_db_session)) -> CommitRepository:
+    """Get commit repository instance."""
+    return CommitRepository(session)
 
 def get_connector_repository(db_session: Session = Depends(get_db)) -> IConnectorRepository:
     """Get connector repository instance."""
@@ -276,23 +280,11 @@ def get_ai_model_repository(
 # AI SERVICE DEPENDENCIES
 # ============================================================================
 
-def get_knowledge_base_service(bedrock_client: BedrockClient = Depends(get_bedrock_client)) -> IKnowledgeBaseService:
-    """Get Knowledge Base service instance."""
-    return BedrockKnowledgeBaseService(bedrock_client)
-
 
 def get_embedding_service() -> IEmbeddingService:
     """Get embedding service instance based on LLM_PROVIDER."""
-    provider = getattr(settings, "LLM_PROVIDER", "gemini")
     model_id = getattr(settings, "EMBEDDING_MODEL", None)
     return EmbeddingFactory.create(model_id=model_id)
-
-
-def get_rag_service(knowledge_base_service: IKnowledgeBaseService = Depends(get_knowledge_base_service)) -> IRAGService:
-    """Get RAG service instance with direct LLM provider."""
-    llm_provider = LLMFactory.create()
-    return RAGService(knowledge_base_service, llm_provider)
-
 
 # ============================================================================
 # APPLICATION SERVICE DEPENDENCIES
@@ -377,25 +369,19 @@ def get_document_chunking_service() -> DocumentChunkingService:
     max_chunks = int(getattr(settings, "MAX_CHUNKS_PER_DOCUMENT", 500))
     return DocumentChunkingService(chunk_size, chunk_overlap, max_chunks)
 
+def get_code_chunking_service() -> CodeChunkingService:
+    """Get AI model service instance."""
+    return CodeChunkingService()
 
 def get_kb_sync_service(
     embedding_service: IEmbeddingService = Depends(get_embedding_service),
-    vector_store_service: VectorStoreService = Depends(get_vector_store_service),
     document_repository: DocumentRepository = Depends(get_document_repository)
 ) -> KBSyncService:
     """Get KB sync service instance."""
     return KBSyncService(
         embedding_service,
-        vector_store_service.vector_store,
         document_repository
     )
-
-def get_gitlab_sync_service(
-    kb_sync_service: KBSyncService = Depends(get_kb_sync_service)
-) -> GitLabSyncService:
-    """Get GitLab sync service instance."""
-    return GitLabSyncService(kb_sync_service=kb_sync_service)
-
 
 def get_connector_service(
     connector_repository: IConnectorRepository = Depends(get_connector_repository),
@@ -410,6 +396,29 @@ def get_connector_service(
         encryption_service=encryption_service,
         gitlab_service_factory=gitlab_service_factory
     )
+
+def get_gitlab_sync_service(
+    db_session: Session = Depends(get_db),
+    code_chunking_service: CodeChunkingService = Depends(get_code_chunking_service),
+    kb_sync_service: KBSyncService = Depends(get_kb_sync_service),
+    connector_service: ConnectorService = Depends(get_connector_service)
+) -> GitLabSyncService:
+    """Get GitLab sync service instance."""
+    # Create sync session repositories
+    repository_repository = RepositoryRepository(db_session)
+    commit_repository = CommitRepository(db_session)
+    document_repository = DocumentRepositoryImpl(db_session)
+
+    return GitLabSyncService(
+        db_session=db_session,
+        repository_repository=repository_repository,
+        document_repository=document_repository,
+        commit_repository=commit_repository,
+        kb_sync_service=kb_sync_service,
+        code_chunking_service=code_chunking_service,
+        connector_service=connector_service
+    )
+
 
 def get_ai_model_service(
     ai_model_repository: AiModelRepository = Depends(get_ai_model_repository)
@@ -603,13 +612,11 @@ def get_create_conversation_use_case(conversation_service: ConversationService =
 
 def get_create_message_use_case(
     conversation_service: ConversationService = Depends(get_conversation_service),
-    rag_service: IRAGService = Depends(get_rag_service),
     chatbot_repository: ChatbotRepository = Depends(get_chatbot_repository)
 ) -> CreateMessageUseCase:
     """Get create message use case instance with RAG integration."""
     return CreateMessageUseCase(
         conversation_service,
-        rag_service,
         chatbot_repository,
         domain="general"  # Default domain, can be made configurable
     )
@@ -672,20 +679,6 @@ def get_document_status_use_case(document_repository: DocumentRepository = Depen
 # RAG USE CASE DEPENDENCIES
 # ============================================================================
 
-def get_chat_with_documents_use_case(rag_service: IRAGService = Depends(get_rag_service)) -> ChatWithDocumentsUseCase:
-    """Get chat with documents use case."""
-    return ChatWithDocumentsUseCase(rag_service)
-
-
-def get_semantic_search_use_case(rag_service: IRAGService = Depends(get_rag_service)) -> SemanticSearchUseCase:
-    """Get semantic search use case."""
-    return SemanticSearchUseCase(rag_service)
-
-
-def get_retrieve_contexts_use_case(rag_service: IRAGService = Depends(get_rag_service)) -> RetrieveContextsUseCase:
-    """Get retrieve contexts use case."""
-    return RetrieveContextsUseCase(rag_service)
-
 
 # ============================================================================
 # CONNECTOR USE CASE DEPENDENCIES
@@ -738,17 +731,15 @@ def get_fetch_gitlab_branches_use_case(connector_service: ConnectorService = Dep
 def get_sync_repository_use_case(
     connector_service: ConnectorService = Depends(get_connector_service),
     gitlab_sync_service: GitLabSyncService = Depends(get_gitlab_sync_service),
-    async_session: AsyncSession = Depends(get_db_session),
     sync_session: Session = Depends(get_db)
 ) -> SyncRepositoryUseCase:
     """Get sync repository use case."""
     repository_repository = RepositoryRepository(sync_session)
-    
+
     return SyncRepositoryUseCase(
         connector_service=connector_service,
         gitlab_sync_service=gitlab_sync_service,
-        repository_repository=repository_repository,
-        async_session=async_session
+        repository_repository=repository_repository
     )
 
 

@@ -309,20 +309,3 @@ class RepositoryRepository(IRepositoryRepository):
                 RepositoryModel.updated_at < stale_time
             )
         ).all()
-
-    def commit(self) -> None:
-        """Commit the current transaction."""
-        try:
-            self.db_session.commit()
-        except Exception as e:
-            self.db_session.rollback()
-            logger.error(f"Error committing transaction: {e}")
-            raise
-
-    def rollback(self) -> None:
-        """Rollback the current transaction."""
-        try:
-            self.db_session.rollback()
-        except Exception as e:
-            logger.error(f"Error rolling back transaction: {e}")
-            raise
