@@ -18,6 +18,8 @@ services:
       - DB_PASSWORD=postgres
       - CORS_ORIGINS=http://localhost:3000,http://localhost:8000
       - AUTO_MIGRATE=true
+      # API Keys from GitLab CI/CD variables
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
     depends_on:
       postgres:
         condition: service_healthy

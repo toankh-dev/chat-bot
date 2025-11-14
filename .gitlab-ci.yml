@@ -3,53 +3,28 @@ stages:
   - deploy
 
 variables:
-  # Docker image configuration
   DOCKER_IMAGE_NAME: kass-backend
   DOCKER_COMPOSE_FILE: docker-compose.prod.yml
-  # Use Docker-in-Docker service
-  DOCKER_DRIVER: overlay2
-  DOCKER_TLS_CERTDIR: "/certs"
 
-# Only run on splus-develop branch
+before_script:
+  - sudo chown -R gitlab-runner:gitlab-runner . || true
+  - sudo find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+
 workflow:
   rules:
     - if: $CI_COMMIT_BRANCH == "splus-develop"
 
-# Build stage - Build Docker image
 build:
   stage: build
-  image: docker:24-dind
-  services:
-    - docker:24-dind
-  before_script:
-    # Wait for Docker daemon to be ready
-    - until docker info; do sleep 1; done
   script:
     - echo "Building Docker image..."
-    # Build production image with latest tag
     - docker build -f Dockerfile.prod -t $DOCKER_IMAGE_NAME:latest .
-    # Build production image with commit SHA tag for versioning
     - docker build -f Dockerfile.prod -t $DOCKER_IMAGE_NAME:$CI_COMMIT_SHORT_SHA .
-    # List built images for verification
-    - docker images | grep $DOCKER_IMAGE_NAME
-    - echo "Build completed successfully!"
   only:
     - splus-develop
-  # Cache Docker layers for faster builds
-  cache:
-    key: docker-$CI_COMMIT_REF_SLUG
-    paths:
-      - .docker/
 
-# Deploy stage - Deploy application using docker-compose
 deploy:
   stage: deploy
-  image: docker:24-dind
-  services:
-    - docker:24-dind
-  before_script:
-    - until docker info; do sleep 1; done
-    - apk add --no-cache docker-compose || true
   script:
     - echo "Deploying application..."
     - docker compose -f $DOCKER_COMPOSE_FILE down || true
@@ -62,9 +37,8 @@ deploy:
     - docker compose -f $DOCKER_COMPOSE_FILE logs api | tail -20
     - docker image prune -f
     - echo "Deployment completed successfully!"
+    - echo "Application is running at http://localhost:8000"
   only:
     - splus-develop
   dependencies:
     - build
-  when: on_success
-

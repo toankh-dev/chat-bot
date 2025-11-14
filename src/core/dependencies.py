@@ -89,6 +89,7 @@ from infrastructure.external.gitlab_service import GitLabService
 from application.services.ai_model_service import AiModelService
 
 # Use Cases
+from src.application.services.group_service import GroupService
 from usecases.auth_use_cases import LoginUseCase, RegisterUseCase
 from usecases.user_use_cases import (
     GetCurrentUserUseCase,
@@ -419,6 +420,52 @@ def get_gitlab_sync_service(
         connector_service=connector_service
     )
 
+
+def get_document_processing_service() -> DocumentProcessingService:
+    """Get document processing service instance."""
+    return DocumentProcessingService()
+
+
+def get_document_chunking_service() -> DocumentChunkingService:
+    """Get document chunking service instance."""
+    chunk_size = int(getattr(settings, "CHUNK_SIZE", 1000))
+    chunk_overlap = int(getattr(settings, "CHUNK_OVERLAP", 200))
+    max_chunks = int(getattr(settings, "MAX_CHUNKS_PER_DOCUMENT", 500))
+    return DocumentChunkingService(chunk_size, chunk_overlap, max_chunks)
+
+
+def get_kb_sync_service(
+    embedding_service: IEmbeddingService = Depends(get_embedding_service),
+    vector_store_service: VectorStoreService = Depends(get_vector_store_service),
+    document_repository: DocumentRepository = Depends(get_document_repository)
+) -> KBSyncService:
+    """Get KB sync service instance."""
+    return KBSyncService(
+        embedding_service,
+        vector_store_service.vector_store,
+        document_repository
+    )
+
+def get_gitlab_sync_service(
+    kb_sync_service: KBSyncService = Depends(get_kb_sync_service)
+) -> GitLabSyncService:
+    """Get GitLab sync service instance."""
+    return GitLabSyncService(kb_sync_service=kb_sync_service)
+
+
+def get_connector_service(
+    connector_repository: IConnectorRepository = Depends(get_connector_repository),
+    user_connection_repository: IUserConnectionRepository = Depends(get_user_connection_repository),
+    encryption_service: IEncryptionService = Depends(get_encryption_service),
+    gitlab_service_factory: Callable[[str, str], IGitLabService] = Depends(get_gitlab_service_factory)
+) -> ConnectorService:
+    """Get connector service instance with proper dependencies."""
+    return ConnectorService(
+        connector_repository=connector_repository,
+        user_connection_repository=user_connection_repository,
+        encryption_service=encryption_service,
+        gitlab_service_factory=gitlab_service_factory
+    )
 
 def get_ai_model_service(
     ai_model_repository: AiModelRepository = Depends(get_ai_model_repository)

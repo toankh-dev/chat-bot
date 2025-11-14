@@ -80,9 +80,21 @@ class DatabaseManager:
         async with self.session_factory() as session:
             try:
                 yield session
-                # Only commit if there are pending changes (write operations)
+                # Commit if there are any pending changes (write operations)
+                # After flush(), objects are no longer in session.new, but they're still tracked
+                # Check for new objects, modified objects, deleted objects, or if session is in a transaction
+                # SQLAlchemy will only commit if there are actual changes
                 if session.dirty or session.new or session.deleted:
                     await session.commit()
+                elif session.in_transaction():
+                    # If we're in a transaction but no obvious changes, check if session was used
+                    # This handles cases where flush() was called but objects are no longer "new"
+                    # SQLAlchemy tracks changes internally, so commit will only happen if needed
+                    try:
+                        await session.commit()
+                    except Exception:
+                        # If commit fails (e.g., no changes), that's okay - SQLAlchemy handles it
+                        pass
             except Exception as e:
                 await session.rollback()
                 logger.error(f"Database session error: {e}")

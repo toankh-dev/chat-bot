@@ -28,6 +28,7 @@ from core.dependencies import (
 
 
 async def list_conversations(
+    chatbot_id: int = None,
     skip: int = 0,
     limit: int = 100,
     current_user: UserEntity = Depends(get_current_user),
@@ -37,6 +38,7 @@ async def list_conversations(
     List user's conversations.
 
     Args:
+        chatbot_id: Optional filter by chatbot ID
         skip: Number of records to skip
         limit: Maximum number of records to return
         current_user: Authenticated user
@@ -45,7 +47,13 @@ async def list_conversations(
     Returns:
         List[ConversationResponse]: List of conversations
     """
-    return await use_case.execute(current_user.id, skip=skip, limit=limit)
+    conversations = await use_case.execute(current_user.id, skip=skip, limit=limit)
+
+    # Filter by chatbot_id if provided
+    if chatbot_id is not None:
+        conversations = [c for c in conversations if c.chatbot_id == chatbot_id]
+
+    return conversations
 
 
 async def get_conversation(

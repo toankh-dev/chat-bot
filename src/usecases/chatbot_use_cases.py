@@ -201,7 +201,7 @@ class CreateChatbotUseCase:
         # Use creator_id as workspace_id (temporary until workspace model is ready)
         workspace_id = creator_id
         
-        chatbot = await self.chatbot_service.create_chatbot(
+        created_chatbot = await self.chatbot_service.create_chatbot(
             workspace_id=workspace_id,
             name=request.name,
             model_id=request.model_id,
@@ -222,8 +222,18 @@ class CreateChatbotUseCase:
         )
 
         # Load chatbot with assignments for response
-        chatbot = await self.chatbot_service.get_chatbot_by_id(chatbot.id, include_assignments=True)
-        model_data = await self.chatbot_service.get_chatbot_model_data(chatbot.id)
+        # The created_chatbot entity should have the real ID after repository flush/refresh
+        # If ID is still 0 or None, there was an issue with the database operation
+        chatbot_id = created_chatbot.id
+        if not chatbot_id or chatbot_id <= 0:
+            # Log the issue for debugging
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Chatbot creation failed: ID not assigned. Entity: {created_chatbot}")
+            raise ValueError("Failed to create chatbot: ID not assigned by database")
+        
+        chatbot = await self.chatbot_service.get_chatbot_by_id(chatbot_id, include_assignments=True)
+        model_data = await self.chatbot_service.get_chatbot_model_data(chatbot_id)
 
         # Convert assignments to schema format
         assigned_groups = getattr(chatbot, 'assigned_groups', None)

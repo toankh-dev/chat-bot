@@ -48,7 +48,17 @@ class ChatbotMapper:
         )
 
     @staticmethod
-    def to_model(entity: ChatbotEntity, existing_model: Optional[ChatbotModel] = None) -> ChatbotModel:
+    def to_model(
+        entity: ChatbotEntity, 
+        existing_model: Optional[ChatbotModel] = None,
+        created_by: Optional[int] = None,
+        model_id: Optional[int] = None,
+        top_p: Optional[Decimal] = None,
+        welcome_message: Optional[str] = None,
+        fallback_message: Optional[str] = None,
+        max_conversation_length: Optional[int] = None,
+        enable_function_calling: Optional[bool] = None
+    ) -> ChatbotModel:
         """
         Convert domain entity to ORM model.
 
@@ -78,25 +88,27 @@ class ChatbotMapper:
             return existing_model
         else:
             # Create new model - skip id if None to allow auto-generation
+            # Use provided parameters if available, otherwise use entity values
             model_data = {
                 "name": entity.name,
                 "description": entity.description,
-                "model_id": entity.model_id,
+                "model_id": model_id if model_id is not None else entity.model_id,
                 "temperature": Decimal(str(entity.temperature)),
                 "max_tokens": entity.max_tokens,
-                "top_p": Decimal(str(entity.top_p)),
+                "top_p": Decimal(str(top_p)) if top_p is not None else Decimal(str(entity.top_p)),
                 "system_prompt": entity.system_prompt,
-                "welcome_message": entity.welcome_message,
-                "fallback_message": entity.fallback_message,
-                "max_conversation_length": entity.max_conversation_length,
-                "enable_function_calling": entity.enable_function_calling,
-                "created_by": entity.created_by,
+                "welcome_message": welcome_message if welcome_message is not None else entity.welcome_message,
+                "fallback_message": fallback_message if fallback_message is not None else entity.fallback_message,
+                "max_conversation_length": max_conversation_length if max_conversation_length is not None else entity.max_conversation_length,
+                "enable_function_calling": enable_function_calling if enable_function_calling is not None else entity.enable_function_calling,
+                "created_by": created_by if created_by is not None else entity.created_by,
                 "status": entity.status,
-                "created_at": entity.created_at,
-                "updated_at": entity.updated_at
+                "created_at": entity.created_at.replace(tzinfo=None) if entity.created_at and entity.created_at.tzinfo else entity.created_at,
+                "updated_at": entity.updated_at.replace(tzinfo=None) if entity.updated_at and entity.updated_at.tzinfo else entity.updated_at
             }
-            # Only set id if entity has a valid id
-            if entity.id is not None:
+            # Only set id if entity has a valid positive id (not 0 or None)
+            # This allows the database to auto-generate the ID for new entities
+            if entity.id is not None and entity.id > 0:
                 model_data["id"] = entity.id
 
             return ChatbotModel(**model_data)
