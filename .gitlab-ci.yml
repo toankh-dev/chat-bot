@@ -5,10 +5,7 @@ stages:
 variables:
   DOCKER_IMAGE_NAME: kass-backend
   DOCKER_COMPOSE_FILE: docker-compose.prod.yml
-  # GEMINI_API_KEY should be set in GitLab CI/CD Variables (Settings > CI/CD > Variables)
-  # The variable will be automatically available as an environment variable
 
-# Only run on splus-develop branch
 workflow:
   rules:
     - if: $CI_COMMIT_BRANCH == "splus-develop"
@@ -16,41 +13,38 @@ workflow:
 build:
   stage: build
   script:
-    - echo "Cleaning up old cache files..."
+    - echo "Pre-cleanup before build..."
     - sudo find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
     - sudo find . -type f -name "*.pyc" -exec rm -f {} + 2>/dev/null || true
     - echo "Building Docker image..."
-    # Build production image with latest tag
     - docker build -f Dockerfile.prod -t $DOCKER_IMAGE_NAME:latest .
-    # Build production image with commit SHA tag for versioning
     - docker build -f Dockerfile.prod -t $DOCKER_IMAGE_NAME:$CI_COMMIT_SHORT_SHA .
+    - echo "Post-cleanup after build..."
+    - sudo find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+    - sudo find . -type f -name "*.pyc" -exec rm -f {} + 2>/dev/null || true
   only:
     - splus-develop
 
 deploy:
   stage: deploy
   script:
+    - echo "Pre-cleanup before deploy..."
+    - sudo find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
     - echo "Deploying application..."
-    # Stop and remove old containers
     - docker compose -f $DOCKER_COMPOSE_FILE down || true
-    # Pull external service images (postgres, redis, chromadb)
     - docker compose -f $DOCKER_COMPOSE_FILE pull postgres redis chromadb || true
-    # Start new containers with build
     - docker compose -f $DOCKER_COMPOSE_FILE up -d --build
-    # Wait for services to be ready
     - echo "Waiting for services to be ready..."
     - sleep 20
-    # Verify services are running
     - docker compose -f $DOCKER_COMPOSE_FILE ps
-    # Check API health logs
     - echo "Checking API health..."
     - docker compose -f $DOCKER_COMPOSE_FILE logs api | tail -20
-    # Clean up old images to save space
     - docker image prune -f
+    - echo "Post-cleanup after deploy..."
+    - sudo find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
     - echo "Deployment completed successfully!"
     - echo "Application is running at http://localhost:8000"
   only:
     - splus-develop
   dependencies:
     - build
-
