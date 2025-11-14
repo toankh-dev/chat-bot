@@ -3,93 +3,49 @@ stages:
   - deploy
 
 variables:
-  # Docker image configuration
   DOCKER_IMAGE_NAME: kass-backend
   DOCKER_COMPOSE_FILE: docker-compose.prod.yml
-  # Use Docker-in-Docker service
-  DOCKER_DRIVER: overlay2
-  DOCKER_TLS_CERTDIR: "/certs"
-  # Git strategy: use clone to avoid permission issues with tracked cache files
-  # This performs a fresh clone each time, avoiding permission errors during checkout
-  GIT_STRATEGY: clone
-  # Disable Git clean to prevent permission errors when removing tracked cache files
-  GIT_CLEAN_FLAGS: none
 
 # Only run on splus-develop branch
 workflow:
   rules:
     - if: $CI_COMMIT_BRANCH == "splus-develop"
 
-# Build stage - Build Docker image
 build:
   stage: build
-  image: docker:24-dind
-  services:
-    - docker:24-dind
-  before_script:
-    # Install Git if not available (needed for safe.directory config)
-    - apk add --no-cache git || true
-    # Configure Git to trust the repository directory (fixes ownership issues)
-    - git config --global --add safe.directory "$CI_PROJECT_DIR" || git config --global --add safe.directory "*" || true
-    # Clean up Python cache files (try direct deletion, suppress all errors)
-    # These files are tracked in Git but shouldn't be - we'll remove them if possible
-    # Suppress all error messages to avoid cluttering the CI output
-    - find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-    - find . -name "*.pyc" -delete 2>/dev/null || true
-    - find . -name "*.pyo" -delete 2>/dev/null || true
-    # Wait for Docker daemon to be ready
-    - until docker info; do sleep 1; done
   script:
     - echo "Building Docker image..."
     # Build production image with latest tag
     - docker build -f Dockerfile.prod -t $DOCKER_IMAGE_NAME:latest .
     # Build production image with commit SHA tag for versioning
     - docker build -f Dockerfile.prod -t $DOCKER_IMAGE_NAME:$CI_COMMIT_SHORT_SHA .
-    # List built images for verification
-    - docker images | grep $DOCKER_IMAGE_NAME
-    - echo "Build completed successfully!"
   only:
     - splus-develop
-  # Cache Docker layers for faster builds
-  cache:
-    key: docker-$CI_COMMIT_REF_SLUG
-    paths:
-      - .docker/
 
-# Deploy stage - Deploy application using docker-compose
 deploy:
   stage: deploy
-  image: docker:24-dind
-  services:
-    - docker:24-dind
-  before_script:
-    # Install Git if not available (needed for safe.directory config)
-    - apk add --no-cache git || true
-    # Configure Git to trust the repository directory (fixes ownership issues)
-    - git config --global --add safe.directory "$CI_PROJECT_DIR" || git config --global --add safe.directory "*" || true
-    # Clean up Python cache files (try direct deletion, suppress all errors)
-    # These files are tracked in Git but shouldn't be - we'll remove them if possible
-    # Suppress all error messages to avoid cluttering the CI output
-    - find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-    - find . -name "*.pyc" -delete 2>/dev/null || true
-    - find . -name "*.pyo" -delete 2>/dev/null || true
-    - until docker info; do sleep 1; done
-    - apk add --no-cache docker-compose || true
   script:
     - echo "Deploying application..."
+    # Stop and remove old containers
     - docker compose -f $DOCKER_COMPOSE_FILE down || true
+    # Pull external service images (postgres, redis, chromadb)
     - docker compose -f $DOCKER_COMPOSE_FILE pull postgres redis chromadb || true
+    # Start new containers with build
     - docker compose -f $DOCKER_COMPOSE_FILE up -d --build
+    # Wait for services to be ready
     - echo "Waiting for services to be ready..."
     - sleep 20
+    # Verify services are running
     - docker compose -f $DOCKER_COMPOSE_FILE ps
+    # Check API health logs
     - echo "Checking API health..."
     - docker compose -f $DOCKER_COMPOSE_FILE logs api | tail -20
+    # Clean up old images to save space
     - docker image prune -f
     - echo "Deployment completed successfully!"
+    - echo "Application is running at http://localhost:8000"
   only:
     - splus-develop
   dependencies:
     - build
-  when: on_success
 
