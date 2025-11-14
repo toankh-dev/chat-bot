@@ -153,10 +153,10 @@ class UserService:
             id=0,  # Temporary ID, will be set by database
             email=Email(email),
             username=email.split('@')[0],  # Derive username from email
-            full_name=name.strip(),
-            hashed_password=password_hash,
-            is_active=True,
-            is_superuser=is_admin
+            name=name.strip(),
+            password_hash=password_hash,
+            status="active",
+            is_admin=is_admin
         )
 
         created_user = await self.user_repository.create(user)
@@ -206,7 +206,7 @@ class UserService:
                 raise ValidationError("Name cannot be empty")
 
         # Validate admin deactivation
-        if is_active is not None and not is_active and user.is_superuser:
+        if is_active is not None and not is_active and user.is_admin:
             # Check if this is the only admin or the first admin
             first_admin = await self._get_first_admin()
 
@@ -237,11 +237,12 @@ class UserService:
                 id=user.id,
                 email=user.email,
                 username=user.username,
-                full_name=name.strip(),
-                hashed_password=user.hashed_password,
-                is_active=user.is_active if is_active is None else is_active,
-                is_superuser=user.is_superuser,
+                name=name.strip(),
+                password_hash=user.password_hash,
+                status="active" if (is_active if is_active is not None else user.is_active) else "inactive",
+                is_admin=user.is_admin,
                 created_at=user.created_at,
+                updated_at=user.updated_at,
                 last_login_at=user.last_login_at
             )
         elif is_active is not None:
@@ -303,7 +304,7 @@ class UserService:
             raise NotFoundError(f"User with ID {user_id} not found")
 
         # Prevent deletion of admin accounts
-        if user.is_superuser:
+        if user.is_admin:
             # Find the first admin (user with ID 1 or lowest admin ID)
             first_admin = await self._get_first_admin()
 
@@ -414,7 +415,7 @@ class UserService:
 
         # Fallback: just get by ID 1
         first_admin = await self.user_repository.find_by_id(1)
-        if not first_admin or not first_admin.is_superuser:
+        if not first_admin or not first_admin.is_admin:
             raise NotFoundError("First admin user not found")
 
         return first_admin
@@ -463,10 +464,10 @@ class UserService:
                 id=user.id,
                 email=Email(email),
                 username=email.split('@')[0],  # Update username from email
-                full_name=name.strip() if name is not None else user.full_name,
-                hashed_password=user.hashed_password,
-                is_active=user.is_active,
-                is_superuser=user.is_superuser,
+                name=name.strip() if name is not None else user.name,
+                password_hash=user.password_hash,
+                status=user.status,
+                is_admin=user.is_admin,
                 created_at=user.created_at,
                 last_login_at=user.last_login_at
             )
@@ -476,10 +477,10 @@ class UserService:
                 id=user.id,
                 email=user.email,
                 username=user.username,
-                full_name=name.strip(),
-                hashed_password=user.hashed_password,
-                is_active=user.is_active,
-                is_superuser=user.is_superuser,
+                name=name.strip(),
+                password_hash=user.password_hash,
+                status=user.status,
+                is_admin=user.is_admin,
                 created_at=user.created_at,
                 last_login_at=user.last_login_at
             )
@@ -517,7 +518,7 @@ class UserService:
             raise ValidationError("New password is required")
 
         # Verify current password
-        if not bcrypt.checkpw(current_password.encode('utf-8'), user.hashed_password.encode('utf-8')):
+        if not bcrypt.checkpw(current_password.encode('utf-8'), user.password_hash.encode('utf-8')):
             raise ValidationError("Current password is incorrect")
 
         # Validate new password strength
@@ -548,10 +549,10 @@ class UserService:
             id=user.id,
             email=user.email,
             username=user.username,
-            full_name=user.full_name,
-            hashed_password=hashed_password,
-            is_active=user.is_active,
-            is_superuser=user.is_superuser,
+            name=user.name,
+            password_hash=hashed_password,
+            status=user.is_active,
+            is_admin=user.is_admin,
             created_at=user.created_at,
             last_login_at=user.last_login_at
         )
@@ -585,10 +586,10 @@ class UserService:
             id=user.id,
             email=user.email,
             username=user.username,
-            full_name=user.full_name,
-            hashed_password=hashed_password,
-            is_active=user.is_active,
-            is_superuser=user.is_superuser,
+            name=user.name,
+            password_hash=hashed_password,
+            status=user.status,
+            is_admin=user.is_admin,
             created_at=user.created_at,
             last_login_at=user.last_login_at
         )
