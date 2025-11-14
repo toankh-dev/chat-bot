@@ -1,8 +1,8 @@
 """seed_admin_user
 
-Revision ID: 582d29a30554
-Revises: 896bbd668c61
-Create Date: 2025-11-11 04:45:18.254823+00:00
+Revision ID: 5af2ce4ce67a
+Revises: 2b7cff221de5
+Create Date: 2025-11-14 03:30:14.394052+00:00
 
 """
 from alembic import op
@@ -13,8 +13,8 @@ from datetime import datetime
 
 
 # revision identifiers, used by Alembic.
-revision = "582d29a30554"
-down_revision = "896bbd668c61"
+revision = "5af2ce4ce67a"
+down_revision = "2b7cff221de5"
 branch_labels = None
 depends_on = None
 
