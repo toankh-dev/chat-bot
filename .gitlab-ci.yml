@@ -9,6 +9,11 @@ variables:
   # Use Docker-in-Docker service
   DOCKER_DRIVER: overlay2
   DOCKER_TLS_CERTDIR: "/certs"
+  # Git strategy: use clone to avoid permission issues with tracked cache files
+  # This performs a fresh clone each time, avoiding permission errors during checkout
+  GIT_STRATEGY: clone
+  # Disable Git clean to prevent permission errors when removing tracked cache files
+  GIT_CLEAN_FLAGS: none
 
 # Only run on splus-develop branch
 workflow:
@@ -22,6 +27,10 @@ build:
   services:
     - docker:24-dind
   before_script:
+    # Install Git if not available (needed for safe.directory config)
+    - apk add --no-cache git || true
+    # Configure Git to trust the repository directory (fixes ownership issues)
+    - git config --global --add safe.directory "$CI_PROJECT_DIR" || git config --global --add safe.directory "*" || true
     # Clean up Python cache files that may have permission issues
     - find . -type d -name "__pycache__" -exec chmod -R u+w {} + 2>/dev/null || true
     - find . -name "*.pyc" -exec chmod u+w {} + 2>/dev/null || true
@@ -55,6 +64,10 @@ deploy:
   services:
     - docker:24-dind
   before_script:
+    # Install Git if not available (needed for safe.directory config)
+    - apk add --no-cache git || true
+    # Configure Git to trust the repository directory (fixes ownership issues)
+    - git config --global --add safe.directory "$CI_PROJECT_DIR" || git config --global --add safe.directory "*" || true
     # Clean up Python cache files that may have permission issues
     - find . -type d -name "__pycache__" -exec chmod -R u+w {} + 2>/dev/null || true
     - find . -name "*.pyc" -exec chmod u+w {} + 2>/dev/null || true
