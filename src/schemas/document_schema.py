@@ -33,3 +33,11 @@ class DocumentProcessingResponse(BaseModel):
     text_statistics: Optional[dict] = Field(None, description="Text extraction statistics")
     chunk_statistics: Optional[dict] = Field(None, description="Chunking statistics")
     error: Optional[str] = Field(None, description="Error message if failed")
+
+
+class DocumentDeleteResponse(BaseModel):
+    """Response schema for document deletion."""
+    message: str = Field(..., description="Success message")
+
+    class Config:
+        from_attributes = True

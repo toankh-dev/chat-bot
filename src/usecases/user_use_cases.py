@@ -5,9 +5,8 @@ Defines application-level use cases for user operations.
 """
 
 from typing import List
+from src.domain.entities.user import UserEntity
 from application.services.user_service import UserService
-from infrastructure.postgresql.models import UserModel
-from domain.entities.user import UserEntity
 from schemas.user_schema import (
     UserCreate,
     UserUpdate,
@@ -22,9 +21,9 @@ def _convert_entity_to_response(user: UserEntity) -> UserResponse:
     return UserResponse(
         id=user.id,
         email=str(user.email),
-        name=user.full_name,
-        is_admin=user.is_superuser,
-        status="active" if user.is_active else "inactive",
+        name=user.name,
+        is_admin=user.is_admin,
+        status=user.status,
         created_at=user.created_at,
         updated_at=user.updated_at,
         groups=getattr(user, 'groups', None)

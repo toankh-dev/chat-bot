@@ -8,7 +8,7 @@ from typing import List, Optional
 import bcrypt
 from domain.value_objects.email import Email
 from core.errors import NotFoundError, ValidationError, ResourceConflictError
-from domain.entities.user import User
+from domain.entities.user import UserEntity
 from shared.interfaces.repositories.group_repository import GroupRepository
 from shared.interfaces.repositories.user_group_repository import UserGroupRepository
 from shared.interfaces.repositories.user_repository import UserRepository
@@ -37,7 +37,7 @@ class UserService:
         self.group_chatbot_repository = group_chatbot_repository
         self.user_chatbot_repository = user_chatbot_repository
 
-    async def get_user_by_id(self, user_id: int, include_groups: bool = True) -> User:
+    async def get_user_by_id(self, user_id: int, include_groups: bool = True) -> UserEntity:
         """
         Get user by ID.
 
@@ -63,7 +63,7 @@ class UserService:
 
         return user
 
-    async def list_users(self, skip: int = 0, limit: int = 100) -> List[User]:
+    async def list_users(self, skip: int = 0, limit: int = 100) -> List[UserEntity]:
         """
         List all users with pagination.
 
@@ -84,7 +84,7 @@ class UserService:
         is_admin: bool = False,
         group_ids: Optional[List[int]] = None,
         added_by: Optional[int] = None
-    ) -> User:
+    ) -> UserEntity:
         """
         Create new user.
 
@@ -142,19 +142,19 @@ class UserService:
                     if not await self.group_repository.exists(group_id):
                         raise ValidationError(f"Group with ID {group_id} not found")
 
-        hashed_password = bcrypt.hashpw(
+        password_hash = bcrypt.hashpw(
             password.encode('utf-8'),
             bcrypt.gensalt()
         ).decode('utf-8')
 
         # Create domain entity
         # ID will be set by database auto-increment
-        user = User(
+        user = UserEntity(
             id=0,  # Temporary ID, will be set by database
             email=Email(email),
             username=email.split('@')[0],  # Derive username from email
             full_name=name.strip(),
-            hashed_password=hashed_password,
+            hashed_password=password_hash,
             is_active=True,
             is_superuser=is_admin
         )
@@ -174,12 +174,12 @@ class UserService:
 
     async def update_user(
         self,
-        user_id: int,
+        user_id: str,
         name: Optional[str] = None,
         is_active: Optional[bool] = None,
         group_ids: Optional[List[int]] = None,
         updated_by: Optional[int] = None
-    ) -> User:
+    ) -> UserEntity:
         """
         Update user information.
 
@@ -233,7 +233,7 @@ class UserService:
         # Update domain entity using its methods
         if name is not None:
             # Update the full_name attribute directly (domain entity doesn't have .name)
-            user = User(
+            user = UserEntity(
                 id=user.id,
                 email=user.email,
                 username=user.username,
@@ -381,12 +381,12 @@ class UserService:
 
         return await self.user_repository.delete(user_id)
 
-    async def _get_first_admin(self) -> User:
+    async def _get_first_admin(self) -> UserEntity:
         """
         Get the first admin user (account creator).
 
         Returns:
-            User: The first admin user in the system
+            UserEntity: The first admin user in the system
 
         Raises:
             NotFoundError: If no admin users exist
@@ -424,7 +424,7 @@ class UserService:
         user_id: int,
         name: Optional[str] = None,
         email: Optional[str] = None
-    ) -> User:
+    ) -> UserEntity:
         """
         Update user's own profile.
 
@@ -459,7 +459,7 @@ class UserService:
                 raise ValidationError("Email already registered")
 
             # Update email
-            user = User(
+            user = UserEntity(
                 id=user.id,
                 email=Email(email),
                 username=email.split('@')[0],  # Update username from email
@@ -472,7 +472,7 @@ class UserService:
             )
         elif name is not None:
             # Only update name
-            user = User(
+            user = UserEntity(
                 id=user.id,
                 email=user.email,
                 username=user.username,
@@ -544,7 +544,7 @@ class UserService:
         ).decode('utf-8')
 
         # Update password
-        user = User(
+        user = UserEntity(
             id=user.id,
             email=user.email,
             username=user.username,
@@ -558,7 +558,7 @@ class UserService:
 
         await self.user_repository.update(user)
 
-    async def change_password(self, user_id: int, new_password: str) -> User:
+    async def change_password(self, user_id: int, new_password: str) -> UserEntity:
         """
         Change user password (admin operation).
 
@@ -581,7 +581,7 @@ class UserService:
         ).decode('utf-8')
 
         # Update password
-        user = User(
+        user = UserEntity(
             id=user.id,
             email=user.email,
             username=user.username,

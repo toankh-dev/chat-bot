@@ -152,6 +152,9 @@ class GetChatbotUseCase:
                 creator = _convert_user_to_creator_info(creator_user)
 
         # Build response with assignments
+        assigned_groups = getattr(chatbot, 'assigned_groups', [])
+        assigned_users = getattr(chatbot, 'assigned_users', [])
+        
         chatbot_dict = {
             "id": chatbot.id,
             "name": chatbot.name,
@@ -214,7 +217,8 @@ class CreateChatbotUseCase:
             welcome_message=request.welcome_message,
             fallback_message=request.fallback_message,
             max_conversation_length=request.max_conversation_length,
-            enable_function_calling=request.enable_function_calling
+            enable_function_calling=request.enable_function_calling,
+            created_by=creator_id,
         )
 
         # Load chatbot with assignments for response

@@ -6,6 +6,9 @@ Handles chatbot management business logic.
 
 from typing import List, Optional
 from decimal import Decimal
+from sqlalchemy.orm import selectinload
+from sqlalchemy import select
+from infrastructure.postgresql.models import ChatbotModel
 from core.errors import NotFoundError, ValidationError
 from domain.entities.user import UserEntity
 from domain.entities.chatbot import ChatbotEntity
@@ -102,7 +105,6 @@ class ChatbotService:
 
         # Access the session from repository to query model directly
         if hasattr(self.chatbot_repository, 'session'):
-            from sqlalchemy.orm import selectinload
             result = await self.chatbot_repository.session.execute(
                 select(ChatbotModel)
                 .options(selectinload(ChatbotModel.ai_model))
@@ -352,8 +354,7 @@ class ChatbotService:
                 chatbot.deactivate()
 
         # Get existing model to preserve fields not in entity
-        from sqlalchemy import select
-        from infrastructure.postgresql.models import ChatbotModel
+
         if hasattr(self.chatbot_repository, 'session'):
             result = await self.chatbot_repository.session.execute(
                 select(ChatbotModel).where(ChatbotModel.id == chatbot_id)

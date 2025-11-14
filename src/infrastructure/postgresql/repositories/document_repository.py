@@ -6,7 +6,7 @@ from shared.interfaces.repositories.document_repository import DocumentRepositor
 from domain.entities.document import DocumentEntity
 from domain.value_objects.uuid_vo import UUID
 from infrastructure.postgresql.models.document_model import DocumentModel
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 
 class DocumentRepositoryImpl(DocumentRepository):
     def __init__(self, session: AsyncSession):
@@ -131,7 +131,7 @@ class DocumentRepositoryImpl(DocumentRepository):
         if processing_status:
             doc_model.processing_status = processing_status
             if processing_status == "completed":
-                doc_model.processed_at = datetime.utcnow()
+                doc_model.processed_at = datetime.now(timezone.utc)
         if error_message is not None:
             doc_model.error_message = error_message
 

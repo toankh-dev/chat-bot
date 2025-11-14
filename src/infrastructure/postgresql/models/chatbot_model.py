@@ -54,4 +54,5 @@ class ChatbotModel(Base):
     user_chatbots = relationship("UserChatbotModel", back_populates="chatbot", cascade="all, delete-orphan")
     chatbot_tools = relationship("ChatbotToolModel", back_populates="chatbot")
     conversations = relationship("ConversationModel", back_populates="chatbot")
+    knowledge_bases = relationship("KnowledgeBaseModel", back_populates="chatbot", cascade="all, delete-orphan")
 

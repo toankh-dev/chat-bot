@@ -21,11 +21,11 @@ class AuthService:
         self.user_repository = user_repository
         self.jwt_handler = jwt_handler
 
-    def verify_password(self, plain_password: str, hashed_password: str) -> bool:
+    def verify_password(self, plain_password: str, password_hash: str) -> bool:
         """Verify password against hash."""
         return bcrypt.checkpw(
             plain_password.encode('utf-8'),
-            hashed_password.encode('utf-8')
+            password_hash.encode('utf-8')
         )
 
     def hash_password(self, password: str) -> str:
@@ -53,7 +53,7 @@ class AuthService:
         if not user:
             raise AuthenticationError("Invalid email or password")
 
-        if not self.verify_password(password, user.hashed_password):
+        if not self.verify_password(password, user.password_hash):
             raise AuthenticationError("Invalid email or password")
 
         if not user.is_active:
@@ -80,7 +80,7 @@ class AuthService:
         if existing_user:
             raise ValidationError("Email already registered")
 
-        hashed_password = self.hash_password(password)
+        password_hash = self.hash_password(password)
 
         # Build a domain User entity and persist via repository
         # ID will be set by database auto-increment
@@ -89,7 +89,7 @@ class AuthService:
             email=Email(email),
             username=email.split('@')[0],
             full_name=name,
-            hashed_password=hashed_password,
+            hashed_password=password_hash,
             is_active=True,
             is_superuser=False
         )
@@ -108,7 +108,7 @@ class AuthService:
         """
         access_token = self.jwt_handler.create_access_token(
             subject=str(user.id),
-            additional_claims={"email": str(user.email), "is_admin": user.is_superuser}
+            additional_claims={"email": str(user.email), "is_admin": user.is_admin}
         )
 
         refresh_token = self.jwt_handler.create_refresh_token(

@@ -10,7 +10,7 @@ from shared.interfaces.repositories.base_repository import BaseRepository
 from domain.entities.chatbot import ChatbotEntity
 
 
-class ChatbotRepository(BaseRepository[ChatbotEntity, int]):
+class ChatbotRepository(BaseRepository[ChatbotEntity, str]):
     """
     Chatbot repository interface.
 
@@ -32,12 +32,12 @@ class ChatbotRepository(BaseRepository[ChatbotEntity, int]):
         pass
 
     @abstractmethod
-    async def find_by_workspace(self, workspace_id: int, skip: int = 0, limit: int = 100) -> List[ChatbotEntity]:
+    async def find_by_workspace(self, workspace_id: str, skip: int = 0, limit: int = 100) -> List[ChatbotEntity]:
         """
         Find chatbots in a specific workspace.
 
         Args:
-            workspace_id: Workspace identifier (integer)
+            workspace_id: Workspace identifier
             skip: Number of records to skip
             limit: Maximum number of records to return
 

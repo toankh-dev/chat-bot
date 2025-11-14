@@ -105,3 +105,11 @@ class UserResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     groups: Optional[List[GroupInUser]] = Field(default=None, description="Groups the user belongs to")
+
+    @field_validator('email', mode='before')
+    @classmethod
+    def validate_email(cls, v):
+        """Convert Email object to string if needed."""
+        if hasattr(v, 'value'):  # Email value object
+            return str(v)
+        return v

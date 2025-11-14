@@ -3,7 +3,7 @@ Chatbot repository implementation.
 
 Implements chatbot data access using SQLAlchemy.
 """
-
+from decimal import Decimal
 from typing import Optional, List
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,7 +26,7 @@ class ChatbotRepositoryImpl(ChatbotRepository):
         """Find chatbot by ID."""
         # Ensure ID is an integer
         chatbot_id = int(id)
-        
+
         result = await self.session.execute(
             select(ChatbotModel).where(ChatbotModel.id == chatbot_id)
         )
@@ -35,19 +35,24 @@ class ChatbotRepositoryImpl(ChatbotRepository):
 
     async def find_all(self, skip: int = 0, limit: int = 100) -> List[ChatbotEntity]:
         """Find all chatbots with pagination."""
-        result = await self.session.execute(
-            select(ChatbotModel).offset(skip).limit(limit)
-        )
+        result = await self.session.execute(select(ChatbotModel).offset(skip).limit(limit))
         models = result.scalars().all()
         return [self.mapper.to_entity(model) for model in models]
 
-    async def create(self, entity: ChatbotEntity, created_by: int, 
-                     model_id: int, top_p = None,
-                     welcome_message: str = None, fallback_message: str = None,
-                     max_conversation_length: int = 50, enable_function_calling: bool = True) -> ChatbotEntity:
+    async def create(
+        self,
+        entity: ChatbotEntity,
+        created_by: int,
+        model_id: int,
+        top_p=None,
+        welcome_message: str = None,
+        fallback_message: str = None,
+        max_conversation_length: int = 50,
+        enable_function_calling: bool = True,
+    ) -> ChatbotEntity:
         """
         Create new chatbot.
-        
+
         Args:
             entity: Chatbot domain entity
             created_by: User ID who created the chatbot
@@ -58,28 +63,34 @@ class ChatbotRepositoryImpl(ChatbotRepository):
             max_conversation_length: Max conversation length
             enable_function_calling: Enable function calling
         """
-        from decimal import Decimal
         if top_p is None:
             top_p = Decimal("1.0")
         model = self.mapper.to_model(
-            entity, 
+            entity,
             created_by=created_by,
             model_id=model_id,
             top_p=top_p,
             welcome_message=welcome_message,
             fallback_message=fallback_message,
             max_conversation_length=max_conversation_length,
-            enable_function_calling=enable_function_calling
+            enable_function_calling=enable_function_calling,
         )
         self.session.add(model)
         await self.session.flush()
         await self.session.refresh(model)
         return self.mapper.to_entity(model)
 
-    async def update(self, entity: ChatbotEntity, created_by: int,
-                     model_id: Optional[int] = None, top_p = None,
-                     welcome_message: str = None, fallback_message: str = None,
-                     max_conversation_length: int = 50, enable_function_calling: bool = True) -> ChatbotEntity:
+    async def update(
+        self,
+        entity: ChatbotEntity,
+        created_by: int,
+        model_id: Optional[int] = None,
+        top_p=None,
+        welcome_message: str = None,
+        fallback_message: str = None,
+        max_conversation_length: int = 50,
+        enable_function_calling: bool = True,
+    ) -> ChatbotEntity:
         """Update existing chatbot."""
         # Find existing model using integer ID
         result = await self.session.execute(
@@ -88,11 +99,10 @@ class ChatbotRepositoryImpl(ChatbotRepository):
         existing_model = result.scalar_one_or_none()
 
         if existing_model:
-            from decimal import Decimal
             if top_p is None:
                 top_p = Decimal("1.0")
             updated_model = self.mapper.to_model(
-                entity, 
+                entity,
                 created_by=created_by,
                 existing_model=existing_model,
                 model_id=model_id,
@@ -100,7 +110,7 @@ class ChatbotRepositoryImpl(ChatbotRepository):
                 welcome_message=welcome_message,
                 fallback_message=fallback_message,
                 max_conversation_length=max_conversation_length,
-                enable_function_calling=enable_function_calling
+                enable_function_calling=enable_function_calling,
             )
             await self.session.flush()
             await self.session.refresh(updated_model)
@@ -108,8 +118,14 @@ class ChatbotRepositoryImpl(ChatbotRepository):
         else:
             # Create new if doesn't exist
             return await self.create(
-                entity, created_by, model_id or int(entity.model_id), top_p, welcome_message,
-                fallback_message, max_conversation_length, enable_function_calling
+                entity,
+                created_by,
+                model_id or int(entity.model_id),
+                top_p,
+                welcome_message,
+                fallback_message,
+                max_conversation_length,
+                enable_function_calling,
             )
 
     async def delete(self, id: int) -> bool:
@@ -141,21 +157,26 @@ class ChatbotRepositoryImpl(ChatbotRepository):
         models = result.scalars().all()
         return [self.mapper.to_entity(model) for model in models]
 
-    async def find_by_workspace(self, workspace_id: int, skip: int = 0, limit: int = 100) -> List[ChatbotEntity]:
+    async def find_by_workspace(
+        self, workspace_id: int, skip: int = 0, limit: int = 100
+    ) -> List[ChatbotEntity]:
         """
         Find chatbots in a specific workspace.
-        
+
         Args:
             workspace_id: Workspace identifier (integer, using created_by as workspace for now)
             skip: Number of records to skip
             limit: Maximum number of records to return
-            
+
         Returns:
             List of chatbot entities in the workspace
         """
         # Note: Using created_by as workspace for now - update when workspace model is ready
         result = await self.session.execute(
-            select(ChatbotModel).where(ChatbotModel.created_by == workspace_id).offset(skip).limit(limit)
+            select(ChatbotModel)
+            .where(ChatbotModel.created_by == workspace_id)
+            .offset(skip)
+            .limit(limit)
         )
         models = result.scalars().all()
         return [self.mapper.to_entity(model) for model in models]
