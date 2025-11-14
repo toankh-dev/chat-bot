@@ -5,6 +5,8 @@ stages:
 variables:
   DOCKER_IMAGE_NAME: kass-backend
   DOCKER_COMPOSE_FILE: docker-compose.prod.yml
+  # GEMINI_API_KEY should be set in GitLab CI/CD Variables (Settings > CI/CD > Variables)
+  # The variable will be automatically available as an environment variable
 
 # Only run on splus-develop branch
 workflow:
