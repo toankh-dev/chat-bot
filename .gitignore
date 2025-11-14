@@ -94,3 +94,8 @@ docs/
 .claude/
 # Local file storage (development)
 local_storage/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python

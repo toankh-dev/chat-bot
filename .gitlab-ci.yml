@@ -16,6 +16,9 @@ workflow:
 build:
   stage: build
   script:
+    - echo "Cleaning up old cache files..."
+    - sudo find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+    - sudo find . -type f -name "*.pyc" -exec rm -f {} + 2>/dev/null || true
     - echo "Building Docker image..."
     # Build production image with latest tag
     - docker build -f Dockerfile.prod -t $DOCKER_IMAGE_NAME:latest .
