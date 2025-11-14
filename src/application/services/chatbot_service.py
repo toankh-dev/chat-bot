@@ -189,7 +189,8 @@ class ChatbotService:
         welcome_message: Optional[str] = None,
         fallback_message: Optional[str] = None,
         max_conversation_length: int = 50,
-        enable_function_calling: bool = True
+        enable_function_calling: bool = True,
+        created_by: Optional[int] = None
     ) -> ChatbotEntity:
         """
         Create new chatbot.
@@ -208,6 +209,7 @@ class ChatbotService:
             group_ids: Optional list of group IDs to assign chatbot to
             user_ids: Optional list of user IDs to assign chatbot to
             assigned_by: Admin ID who is making the assignments
+            created_by: User ID who created the chatbot (defaults to assigned_by if not provided)
 
         Returns:
             Chatbot: Created chatbot
@@ -231,27 +233,31 @@ class ChatbotService:
                     if not await self.user_repository.exists(user_id):
                         raise ValidationError(f"User with ID {user_id} not found")
 
-        # Use assigned_by as created_by (the user creating the chatbot)
-        if not assigned_by:
-            raise ValidationError("assigned_by is required to create a chatbot")
+        # Use created_by if provided, otherwise fall back to assigned_by
+        creator_id = created_by if created_by is not None else assigned_by
+        if not creator_id:
+            raise ValidationError("Either created_by or assigned_by is required to create a chatbot")
         
         # Create entity with temporary ID (will be replaced by database)
         chatbot = ChatbotEntity(
             id=0,  # Temporary ID, will be set by database
-            workspace_id=workspace_id,
             name=name,
             description=description or "",
             system_prompt=system_prompt or "",
             model_id=model_id,
-            temperature=temperature,
+            temperature=float(temperature),
             max_tokens=max_tokens,
-            tools=tools,
-            is_active=True,
+            top_p=float(top_p),
+            welcome_message=welcome_message or "",
+            fallback_message=fallback_message or "",
+            max_conversation_length=max_conversation_length,
+            enable_function_calling=enable_function_calling,
+            created_by=creator_id,
         )
         
         created_chatbot = await self.chatbot_repository.create(
             chatbot,
-            created_by=assigned_by,
+            created_by=creator_id,
             model_id=model_id,
             top_p=top_p,
             welcome_message=welcome_message,
