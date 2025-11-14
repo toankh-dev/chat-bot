@@ -7,9 +7,8 @@ variables:
   DOCKER_COMPOSE_FILE: docker-compose.prod.yml
 
 before_script:
-  - echo "Cleaning up Python cache files..."
+  - sudo chown -R gitlab-runner:gitlab-runner . || true
   - sudo find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-  - sudo find . -type f -name "*.pyc" -exec rm -f {} + 2>/dev/null || true
 
 workflow:
   rules:
@@ -18,23 +17,15 @@ workflow:
 build:
   stage: build
   script:
-    - echo "Pre-cleanup before build..."
-    - sudo find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-    - sudo find . -type f -name "*.pyc" -exec rm -f {} + 2>/dev/null || true
     - echo "Building Docker image..."
     - docker build -f Dockerfile.prod -t $DOCKER_IMAGE_NAME:latest .
     - docker build -f Dockerfile.prod -t $DOCKER_IMAGE_NAME:$CI_COMMIT_SHORT_SHA .
-    - echo "Post-cleanup after build..."
-    - sudo find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-    - sudo find . -type f -name "*.pyc" -exec rm -f {} + 2>/dev/null || true
   only:
     - splus-develop
 
 deploy:
   stage: deploy
   script:
-    - echo "Pre-cleanup before deploy..."
-    - sudo find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
     - echo "Deploying application..."
     - docker compose -f $DOCKER_COMPOSE_FILE down || true
     - docker compose -f $DOCKER_COMPOSE_FILE pull postgres redis chromadb || true
@@ -45,8 +36,6 @@ deploy:
     - echo "Checking API health..."
     - docker compose -f $DOCKER_COMPOSE_FILE logs api | tail -20
     - docker image prune -f
-    - echo "Post-cleanup after deploy..."
-    - sudo find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
     - echo "Deployment completed successfully!"
     - echo "Application is running at http://localhost:8000"
   only:
