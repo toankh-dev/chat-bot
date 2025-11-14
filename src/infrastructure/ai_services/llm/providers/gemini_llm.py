@@ -4,6 +4,7 @@ Gemini LLM service implementation.
 from typing import Optional, Dict, Any, List
 import asyncio
 import google.generativeai as genai
+from google.api_core import exceptions as google_exceptions
 from core.config import settings
 from core.logger import logger
 from shared.interfaces.services.ai_services.llm_service import ILLMService
@@ -37,6 +38,8 @@ class GeminiLLMService(ILLMService):
             genai.configure(api_key=settings.GEMINI_API_KEY)
         self.model = genai.GenerativeModel(model_name)
         self.model_name = model_name
+        # Set default timeout to 60 seconds
+        self.timeout_seconds = 60
 
     async def generate_response(
         self,
@@ -67,19 +70,31 @@ class GeminiLLMService(ILLMService):
             # Build full prompt with context (using utility function)
             full_prompt = build_prompt_with_context(prompt, context)
 
-            # Run sync Gemini call in executor to avoid blocking
+            # Run sync Gemini call in executor with timeout to avoid blocking
             loop = asyncio.get_event_loop()
-            response_text = await loop.run_in_executor(
-                None,
-                lambda: self.get_completion(
-                    prompt=full_prompt,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    **kwargs
-                )
+            response_text = await asyncio.wait_for(
+                loop.run_in_executor(
+                    None,
+                    lambda: self.get_completion(
+                        prompt=full_prompt,
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                        **kwargs
+                    )
+                ),
+                timeout=self.timeout_seconds
             )
             return response_text
 
+        except asyncio.TimeoutError as e:
+            logger.error(f"Timeout error in Gemini response generation after {self.timeout_seconds} seconds: {e}")
+            raise TimeoutError(f"The request timed out after {self.timeout_seconds} seconds. Please try again with a shorter message or try again later.") from e
+        except TimeoutError as e:
+            logger.error(f"Timeout error in Gemini response generation: {e}")
+            raise
+        except ConnectionError as e:
+            logger.error(f"Connection error in Gemini response generation: {e}")
+            raise
         except Exception as e:
             logger.error(f"Error generating response from Gemini: {e}")
             raise
@@ -176,6 +191,12 @@ class GeminiLLMService(ILLMService):
             )
             return response.text
 
+        except google_exceptions.DeadlineExceeded as e:
+            logger.error(f"Gemini API request timed out: {e}")
+            raise TimeoutError(f"The request timed out. Please try again with a shorter message or try again later.") from e
+        except google_exceptions.ServiceUnavailable as e:
+            logger.error(f"Gemini API service unavailable: {e}")
+            raise ConnectionError("The AI service is temporarily unavailable. Please try again in a few moments.") from e
         except Exception as e:
             logger.error(f"Error getting completion from Gemini: {e}")
             raise

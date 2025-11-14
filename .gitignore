@@ -89,3 +89,6 @@ site/
 tmp/
 temp/
 *.tmp
+
+# Local file storage (development)
+local_storage/

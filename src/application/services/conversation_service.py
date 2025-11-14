@@ -119,7 +119,10 @@ class ConversationService:
         Returns:
             Conversation: Created conversation
         """
-        conversation = ConversationEntity(
+        from infrastructure.postgresql.models.conversation_model import ConversationModel
+        from infrastructure.postgresql.mappers.conversation_mapper import ConversationMapper
+
+        conversation_model = ConversationModel(
             user_id=user_id,
             chatbot_id=chatbot_id,
             title=title or "New Conversation",
@@ -128,7 +131,9 @@ class ConversationService:
             message_count=0
         )
 
-        return await self.conversation_repository.create(conversation)
+        created_model = await self.conversation_repository.create(conversation_model)
+        await self.conversation_repository.session.commit()
+        return ConversationMapper.to_entity(created_model)
 
     async def delete_conversation(self, conversation_id: int, user_id: int) -> bool:
         """
@@ -150,8 +155,8 @@ class ConversationService:
 
     async def create_message(
         self,
-        conversation_id: str,
-        user_id: str,
+        conversation_id: int,
+        user_id: int,
         content: str,
         role: str = "user"
     ) -> MessageEntity:

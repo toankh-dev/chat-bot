@@ -1,6 +1,6 @@
 """Conversation and message schemas."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
@@ -16,11 +16,14 @@ class MessageResponse(BaseModel):
     conversation_id: int
     role: str
     content: str
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, alias='msg_metadata', serialization_alias='metadata')
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = {
+        "from_attributes": True,
+        "populate_by_name": True,
+        "by_alias": False  # Use field name (metadata) not alias (msg_metadata) in response
+    }
 
 
 class ConversationCreate(BaseModel):

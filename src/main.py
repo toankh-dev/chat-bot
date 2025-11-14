@@ -197,8 +197,10 @@ from api.routers.document_routes import router as document_router
 from api.routers.ai_routes import create_ai_routes
 from api.routers.ai_model_routes import router as ai_model_router
 from api.controllers.gitlab_controller import router as gitlab_router
+from api.controllers.chat_controller import router as chat_router
 
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Authentication"])
+app.include_router(chat_router, prefix="/api/v1", tags=["Chat"])
 app.include_router(user_router, prefix="/api/v1/users", tags=["Users"])
 app.include_router(group_router, prefix="/api/v1/groups", tags=["Groups"])
 app.include_router(chatbot_router, prefix="/api/v1/chatbots", tags=["Chatbots"])

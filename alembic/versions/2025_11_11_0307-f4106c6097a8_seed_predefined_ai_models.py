@@ -22,21 +22,8 @@ def upgrade() -> None:
     
     # Predefined AI models from major providers
     predefined_models = [
-        # OpenAI models
-        "gpt-4",
-        "gpt-4-turbo",
-        "gpt-4o",
-        "gpt-4o-mini",
-        "gpt-3.5-turbo",
-        # Anthropic models
-        "claude-3-5-sonnet",
-        "claude-3-opus",
-        "claude-3-haiku",
-        "claude-3-5-haiku",
-        # Google models
-        "gemini-pro",
-        "gemini-ultra",
-        "gemini-1.5-pro",
+        "gemini-2.5-flash",
+        "gemini-2.5-pro"
     ]
     
     # Insert predefined models (skip if already exists)

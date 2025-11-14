@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Index
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.postgresql import JSON
 from infrastructure.postgresql.connection.base import Base
 
 
@@ -28,20 +29,17 @@ class ConversationModel(Base):
 class MessageModel(Base):
     """Chat message within a conversation."""
     __tablename__ = "messages"
-    __table_args__ = {'extend_existing': True}
+    __table_args__ = (
+        Index('idx_messages_conversation_id', 'conversation_id'),
+        {'extend_existing': True}
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     conversation_id = Column(Integer, ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False)
     role = Column(String(20), nullable=False)  # user, assistant, system
     content = Column(Text, nullable=False)
-    tokens = Column(Integer)
+    msg_metadata = Column('metadata', JSON)  # Map to 'metadata' column but use 'msg_metadata' attribute
     created_at = Column(DateTime, default=func.now())
-
-    # Create an index on (conversation_id, created_at)
-    __table_args__ = (
-        Index('idx_messages_conversation_created', 'conversation_id', 'created_at'),
-        {'extend_existing': True}
-    )
 
     # Relationships
     conversation = relationship("ConversationModel", back_populates="messages")
