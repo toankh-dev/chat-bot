@@ -59,5 +59,5 @@ router.add_api_route(
     response_model=GitLabBranchListResponse,
     status_code=status.HTTP_200_OK,
     summary="Fetch GitLab branches (Admin)",
-    description="Fetch all branches from a GitLab project using project web URL and connector"
+    description="Fetch all branches from a GitLab project using project ID and connector"
 )

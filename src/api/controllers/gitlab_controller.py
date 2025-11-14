@@ -176,18 +176,18 @@ async def fetch_gitlab_repositories_admin(
 
 
 async def fetch_gitlab_branches_admin(
-    web_url: str = Query(..., description="GitLab project web URL (e.g., https://gitlab.com/group/project)"),
+    project_id: int = Query(..., description="GitLab project ID (numeric ID from GitLab API)"),
     connector_id: int = Query(..., description="GitLab connector ID to use"),
     current_user: UserEntity = Depends(require_admin),
     fetch_gitlab_branches_use_case = Depends(get_fetch_gitlab_branches_use_case)
 ) -> GitLabBranchListResponse:
     """
-    Fetch branches from a GitLab project using web URL and connector (Admin only).
+    Fetch branches from a GitLab project using project ID and connector (Admin only).
 
     This endpoint fetches all branch names from a specific GitLab project.
 
     Args:
-        web_url: GitLab project web URL
+        project_id: GitLab project ID (numeric ID from GitLab API)
         connector_id: GitLab connector ID to use for connection
         current_user: Authenticated admin user
         fetch_gitlab_branches_use_case: Use case for fetching branches
@@ -202,14 +202,9 @@ async def fetch_gitlab_branches_admin(
     """
     result = fetch_gitlab_branches_use_case.execute(
         connector_id=connector_id,
-        web_url=web_url
+        project_id=project_id
     )
 
-    # Now result["branches"] is just a list of strings (branch names)
-    branch_names = result["branches"]
-
-    logger.info(f"Returning {len(branch_names)} branches for project {result['project_name']}")
-
     return GitLabBranchListResponse(
-        branches=branch_names  # Chỉ trả về branches
+        branches=result["branches"]
     )
