@@ -1,6 +1,6 @@
 """Chatbot management controller."""
 
-from fastapi import Depends, status
+from fastapi import Depends
 from typing import List
 from schemas.chatbot_schema import ChatbotResponse, ChatbotCreate, ChatbotUpdate
 from domain.entities.user import UserEntity

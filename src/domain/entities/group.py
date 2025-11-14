@@ -21,7 +21,6 @@ class GroupEntity:
 
     id: Optional[int] = None
     name: str = ""
-    description: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     created_by: Optional[int] = None  # User ID who created the group
@@ -39,7 +38,7 @@ class GroupEntity:
         """Check if the group has been persisted to database."""
         return self.id is not None
 
-    def update_info(self, name: Optional[str] = None, description: Optional[str] = None):
+    def update_info(self, name: Optional[str] = None):
         """
         Update group information.
 
@@ -52,10 +51,7 @@ class GroupEntity:
                 raise ValueError("Group name cannot be empty")
             self.name = name.strip()
 
-        if description is not None:
-            self.description = description.strip() if description.strip() else None
-
-        self.updated_at = datetime.now(UTC)
+        self.updated_at = datetime.now()
 
     def __str__(self) -> str:
         """String representation of the group."""

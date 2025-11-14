@@ -1,23 +1,34 @@
 """JWT authentication middleware."""
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from infrastructure.auth.jwt_handler import JWTHandler
 from infrastructure.postgresql.connection.database import get_db_session
 from domain.entities.user import UserEntity
-from infrastructure.postgresql.repositories.user_repository import UserRepositoryImpl
-from core.dependencies import get_jwt_handler
+from shared.interfaces.repositories.user_repository import UserRepository
+from core.dependencies import get_user_repository
+from core.errors import (
+    AuthenticationError,
+    InvalidTokenError,
+    AuthorizationError
+)
 
 security = HTTPBearer()
 
+
+def get_jwt_handler() -> JWTHandler:
+    """Get JWT handler instance."""
+    return JWTHandler()
+
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
     jwt_handler: JWTHandler = Depends(get_jwt_handler)
 ) -> UserEntity:
     """
-    Get current authenticated user from JWT token.
+    Get current authenticated user from JWT token using Clean Architecture.
 
     Args:
         credentials: HTTP bearer token credentials
@@ -25,49 +36,40 @@ async def get_current_user(
         jwt_handler: JWT handler instance
 
     Returns:
-        UserModel: Authenticated user
+        UserEntity: Authenticated user
 
     Raises:
-        HTTPException: If authentication fails
+        AuthenticationError: If authentication fails
+        InvalidTokenError: If token is invalid
+        AuthorizationError: If user account is not active
     """
+    # Import here to avoid circular dependency
+    
     token = credentials.credentials
 
     try:
         payload = jwt_handler.decode_token(token)
         user_id = payload.get("sub")
-
         if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token"
-            )
+            raise InvalidTokenError("Token does not contain user ID")
 
-        user_repository = UserRepositoryImpl(db)
-        # Convert user_id from JWT token (string) to integer
-        user_id_int = int(user_id) if isinstance(user_id, str) and user_id.isdigit() else int(user_id)
-        user = await user_repository.find_by_id(user_id_int)
+        # Use dependency injection for repository
+        user_repository: UserRepository = get_user_repository(session)
+        user = await user_repository.find_by_id(int(user_id))
 
         if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found"
-            )
+            raise AuthenticationError("User not found")
 
         if not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="User account is not active"
-            )
+            raise AuthorizationError("User account is not active")
 
         return user
 
-    except HTTPException:
+    except (AuthenticationError, InvalidTokenError, AuthorizationError):
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials"
-        )
+        print("Authentication error:", str(e))
+        raise AuthenticationError("Could not validate credentials")
 
 
 async def require_admin(
@@ -80,14 +82,11 @@ async def require_admin(
         current_user: Authenticated user
 
     Returns:
-        UserModel: Admin user
+        UserEntity: Admin user
 
     Raises:
-        HTTPException: If user is not admin
+        AuthorizationError: If user is not admin
     """
-    if not current_user.is_superuser:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin privileges required"
-        )
+    if not current_user.is_admin:
+        raise AuthorizationError("Admin privileges required")
     return current_user

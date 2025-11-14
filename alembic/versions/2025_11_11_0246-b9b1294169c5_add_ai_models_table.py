@@ -85,10 +85,17 @@ def upgrade() -> None:
 
     # Make model_id NOT NULL after populating
     op.alter_column("chatbots", "model_id", nullable=False)
-    
+
     # Remove provider and model columns from chatbots table (data now in ai_models)
-    op.drop_column("chatbots", "provider")
-    op.drop_column("chatbots", "model")
+    # Check if columns exist before dropping (in case they were removed by another migration)
+    connection = op.get_bind()
+    inspector = sa.inspect(connection)
+    chatbots_columns = [col['name'] for col in inspector.get_columns('chatbots')]
+
+    if 'provider' in chatbots_columns:
+        op.drop_column("chatbots", "provider")
+    if 'model' in chatbots_columns:
+        op.drop_column("chatbots", "model")
 
 
 def downgrade() -> None:

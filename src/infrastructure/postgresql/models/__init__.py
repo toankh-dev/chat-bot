@@ -12,6 +12,15 @@ from infrastructure.postgresql.models.user_group_model import UserGroup
 from infrastructure.postgresql.models.user_chatbot import UserChatbotModel
 from infrastructure.postgresql.models.group_chatbot import GroupChatbotModel
 from infrastructure.postgresql.models.chatbot_tool_model import ChatbotToolModel
+from infrastructure.postgresql.models.connector_model import ConnectorModel
+from infrastructure.postgresql.models.user_connection_model import UserConnectionModel
+from infrastructure.postgresql.models.repository_model import RepositoryModel
+from infrastructure.postgresql.models.commit_model import CommitModel
+from infrastructure.postgresql.models.sync_history_model import SyncHistoryModel
+from infrastructure.postgresql.models.sync_queue_model import SyncQueueModel
+from infrastructure.postgresql.models.file_change_history_model import FileChangeHistoryModel
+from infrastructure.postgresql.models.knowledge_base_model import KnowledgeBaseModel
+from infrastructure.postgresql.models.knowledge_base_source_model import KnowledgeBaseSourceModel
 from infrastructure.postgresql.models.ai_model_model import AiModelModel
 
 __all__ = [
@@ -22,9 +31,18 @@ __all__ = [
     "ConversationModel",
     "MessageModel",
     "Group",
-    "UserGroup", 
+    "UserGroup",
     "UserChatbotModel",
     "GroupChatbotModel",
     "ChatbotToolModel",
+    "ConnectorModel",
+    "UserConnectionModel",
+    "RepositoryModel",
+    "CommitModel",
+    "SyncHistoryModel",
+    "SyncQueueModel",
+    "FileChangeHistoryModel",
+    "KnowledgeBaseModel",
+    "KnowledgeBaseSourceModel"
     "AiModelModel"
 ]

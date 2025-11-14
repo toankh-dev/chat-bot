@@ -26,3 +26,12 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=6)
     name: str = Field(..., min_length=1)
+
+
+class LogoutResponse(BaseModel):
+    """Logout response schema."""
+    message: str = Field(..., description="Logout confirmation message")
+    user_id: int = Field(..., description="ID of logged out user")
+
+    class Config:
+        from_attributes = True

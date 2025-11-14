@@ -25,10 +25,16 @@ class UserRepositoryImpl(UserRepository):
         self.session = session
         self.mapper = UserMapper
 
-    async def find_by_id(self, id: int) -> Optional[UserEntity]:
+    async def find_by_id(self, id: str) -> Optional[UserEntity]:
         """Find user by ID and return domain entity."""
+        # Convert string ID to integer for ORM query
+        try:
+            user_id = int(id)
+        except (ValueError, TypeError):
+            return None
+
         result = await self.session.execute(
-            select(UserModel).where(UserModel.id == id)
+            select(UserModel).where(UserModel.id == user_id)
         )
         model = result.scalar_one_or_none()
         return self.mapper.to_entity(model) if model else None
@@ -51,6 +57,7 @@ class UserRepositoryImpl(UserRepository):
 
     async def update(self, entity: UserEntity) -> UserEntity:
         """Update existing user from domain entity."""
+        # Find existing model by integer ID
         result = await self.session.execute(
             select(UserModel).where(UserModel.id == entity.id)
         )
@@ -65,22 +72,33 @@ class UserRepositoryImpl(UserRepository):
             # Create new if doesn't exist
             return await self.create(entity)
 
-    async def delete(self, id: int) -> bool:
+    async def delete(self, id: str) -> bool:
         """Delete user by ID."""
+        try:
+            user_id = int(id)
+        except (ValueError, TypeError):
+            return False
+            
         result = await self.session.execute(
-            select(UserModel).where(UserModel.id == id)
+            select(UserModel).where(UserModel.id == user_id)
         )
         model = result.scalar_one_or_none()
+        
         if model:
             await self.session.delete(model)
             await self.session.flush()
             return True
         return False
 
-    async def exists(self, id: int) -> bool:
+    async def exists(self, id: str) -> bool:
         """Check if user exists."""
+        try:
+            user_id = int(id)
+        except (ValueError, TypeError):
+            return False
+
         result = await self.session.execute(
-            select(UserModel.id).where(UserModel.id == id)
+            select(UserModel.id).where(UserModel.id == user_id)
         )
         return result.scalar_one_or_none() is not None
 

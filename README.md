@@ -610,6 +610,32 @@ tests/
 - **Test edge cases** and error handling
 - **Maintain >80% coverage** for critical paths
 
+### Quick Testing with Swagger
+
+After setting up the database, you can test the entire flow via Swagger UI:
+
+```bash
+# 1. Reset and seed database
+reset-db.bat  # Windows
+./reset-db.sh # Linux/Mac
+
+# 2. Start server
+docker-compose up -d
+
+# 3. Open Swagger
+# http://localhost:8000/docs
+```
+
+**Test Accounts:**
+- Admin: `admin@kass.dev` / `admin123`
+- User: `user@kass.dev` / `user123`
+
+**Testing Guides:**
+- 📘 **Quick Test Guide** - [`QUICK_TEST_GUIDE.md`](QUICK_TEST_GUIDE.md) - 10 phút test cơ bản
+- 📗 **Complete Swagger Guide** - [`SWAGGER_TESTING_GUIDE.md`](SWAGGER_TESTING_GUIDE.md) - Hướng dẫn chi tiết từng bước
+- 📙 **Database Setup** - [`DATABASE_SETUP.md`](DATABASE_SETUP.md) - Migration & seeding
+- 📕 **Test Data JSON** - [`swagger-test-data.json`](swagger-test-data.json) - All request payloads
+
 ---
 
 ## 🤝 Contributing

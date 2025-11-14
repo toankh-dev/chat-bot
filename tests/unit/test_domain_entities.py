@@ -22,14 +22,14 @@ class TestUser:
             id=UUID.generate(),
             email=Email("test@example.com"),
             username="testuser",
-            full_name="Test User",
-            hashed_password="hashed_password_here"
+            name="Test User",
+            password_hash="password_hash_here"
         )
 
         assert user.username == "testuser"
         assert str(user.email) == "test@example.com"
         assert user.is_active is True
-        assert user.is_superuser is False
+        assert user.is_admin is False
 
     def test_user_invalid_username(self):
         """Test user creation with invalid username."""
@@ -38,8 +38,8 @@ class TestUser:
                 id=UUID.generate(),
                 email=Email("test@example.com"),
                 username="ab",  # Too short
-                full_name="Test User",
-                hashed_password="hashed"
+                name="Test User",
+                password_hash="hashed"
             )
 
     def test_user_deactivate(self):
@@ -48,8 +48,8 @@ class TestUser:
             id=UUID.generate(),
             email=Email("test@example.com"),
             username="testuser",
-            full_name="Test User",
-            hashed_password="hashed"
+            name="Test User",
+            password_hash="hashed"
         )
 
         user.deactivate()
@@ -61,8 +61,8 @@ class TestUser:
             id=UUID.generate(),
             email=Email("test@example.com"),
             username="testuser",
-            full_name="Test User",
-            hashed_password="hashed"
+            name="Test User",
+            password_hash="hashed"
         )
 
         assert user.last_login_at is None

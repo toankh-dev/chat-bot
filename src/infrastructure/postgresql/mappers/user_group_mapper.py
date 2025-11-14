@@ -28,11 +28,10 @@ class UserGroupMapper:
             UserGroup domain entity
         """
         return UserGroupEntity(
-            id=None,  # No id column in table (composite primary key)
             user_id=model.user_id,
             group_id=model.group_id,
             added_by=model.added_by,
-            created_at=model.joined_at
+            joined_at=model.joined_at,
         )
 
     @staticmethod
@@ -47,21 +46,21 @@ class UserGroupMapper:
         Returns:
             SQLAlchemy UserGroup model
         """
+        
         if existing_model:
             # Update existing model (rarely needed for junction tables)
             existing_model.user_id = entity.user_id
             existing_model.group_id = entity.group_id
             existing_model.added_by = entity.added_by
-            existing_model.joined_at = entity.created_at.replace(tzinfo=None) if entity.created_at and entity.created_at.tzinfo else entity.created_at
+            existing_model.joined_at = entity.joined_at
             return existing_model
         else:
-            # Create new model - remove timezone from datetime
-            joined_at = entity.created_at.replace(tzinfo=None) if entity.created_at and entity.created_at.tzinfo else entity.created_at
+            # Create new model
             return UserGroupModel(
                 user_id=entity.user_id,
                 group_id=entity.group_id,
                 added_by=entity.added_by,
-                joined_at=joined_at
+                joined_at=entity.joined_at,
             )
 
     @staticmethod
@@ -79,5 +78,4 @@ class UserGroupMapper:
             "user_id": entity.user_id,
             "group_id": entity.group_id,
             "added_by": entity.added_by,
-            "joined_at": entity.created_at
         }

@@ -36,11 +36,11 @@ class CodeChunkingService:
             ".kt": Language.KOTLIN,
             ".scala": Language.SCALA,
             ".cs": Language.CSHARP,
-            ".sql": Language.SQL,
-            ".sh": Language.BASH,
-            ".yaml": Language.YAML,
-            ".yml": Language.YAML,
-            ".json": Language.JSON,
+            ".sql": "sql",
+           ".sh": "bash",
+            ".yaml": "yaml",
+            ".yml": "yaml",
+            ".json": "json",
             ".xml": Language.HTML,
             ".html": Language.HTML,
             ".css": Language.HTML,
@@ -57,7 +57,8 @@ class CodeChunkingService:
         metadata: Dict[str, Any]
     ) -> List[CodeChunk]:
         if not content or not content.strip():
-            raise ValueError(f"Cannot chunk empty file: {file_path}")
+            # Skip empty files instead of raising error
+            return []
 
         content_size = len(content.encode("utf-8"))
         if content_size > self.max_file_size:
@@ -73,6 +74,25 @@ class CodeChunkingService:
             total_chunks=1
         )
         return [CodeChunk(text=content, chunk_index=0, metadata=chunk_metadata)]
+
+    def chunk_code(
+        self,
+        file_path: str,
+        content: str,
+        metadata: Dict[str, Any]
+    ) -> List[CodeChunk]:
+        """
+        Alias for chunk_by_file for backward compatibility.
+
+        Args:
+            file_path: Path to the source file
+            content: File content
+            metadata: Base metadata for chunks
+
+        Returns:
+            List of code chunks
+        """
+        return self.chunk_by_file(file_path, content, metadata)
 
     def _chunk_large_file(
         self,
