@@ -280,6 +280,26 @@ class GitLabService(IGitLabService):
         except Exception as e:
             raise ValueError(f"Failed to get project info: {str(e)}")
 
+    def get_branches(self, project_id: str) -> List[str]:
+        """
+        Get all branch names of a GitLab project.
+
+        Args:
+            project_id: GitLab project ID or path
+
+        Returns:
+            List of branch names
+        """
+        try:
+            project = self.gl.projects.get(project_id)
+            branches = project.branches.list()
+
+            # Return only branch names
+            return [branch.name for branch in branches]
+
+        except Exception as e:
+            raise ValueError(f"Failed to get branches for project {project_id}: {str(e)}")
+
     def get_commit_info(
         self,
         project_id: str,

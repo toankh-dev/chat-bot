@@ -70,3 +70,8 @@ class GitLabConnectionTestResponse(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
     message: Optional[str] = None
+
+
+class GitLabBranchListResponse(BaseModel):
+    """Response for fetching GitLab branches."""
+    branches: List[str]  # Simple list of branch names

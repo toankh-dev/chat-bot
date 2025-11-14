@@ -147,6 +147,7 @@ from usecases.connector_use_cases import (
 from usecases.gitlab_use_cases import (
     TestGitLabConnectionUseCase,
     FetchGitLabRepositoriesUseCase,
+    FetchGitLabBranchesUseCase,
     SyncRepositoryUseCase
 )
 
@@ -727,6 +728,11 @@ def get_test_gitlab_connection_use_case(connector_service: ConnectorService = De
 def get_fetch_gitlab_repositories_use_case(connector_service: ConnectorService = Depends(get_connector_service)) -> FetchGitLabRepositoriesUseCase:
     """Get fetch GitLab repositories use case."""
     return FetchGitLabRepositoriesUseCase(connector_service)
+
+
+def get_fetch_gitlab_branches_use_case(connector_service: ConnectorService = Depends(get_connector_service)) -> FetchGitLabBranchesUseCase:
+    """Get fetch GitLab branches use case."""
+    return FetchGitLabBranchesUseCase(connector_service)
 
 
 def get_sync_repository_use_case(

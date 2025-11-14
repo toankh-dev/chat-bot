@@ -226,11 +226,10 @@ app.include_router(group_router, prefix="/api/v1/groups", tags=["Groups"])
 app.include_router(chatbot_router, prefix="/api/v1/chatbots", tags=["Chatbots"])
 app.include_router(conversation_router, prefix="/api/v1/conversations", tags=["Conversations"])
 app.include_router(document_router, prefix="/api/v1/documents", tags=["Documents"])
-app.include_router(gitlab_router, prefix="/api/v1/gitlab", tags=["GitLab Sync (Admin)"]) 
+app.include_router(gitlab_router, prefix="/api/v1/gitlab", tags=["GitLab Management"]) 
 app.include_router(connector_admin_router, prefix="/api/v1/connectors", tags=["Admin - Connector Management"])
 app.include_router(document_router, prefix="/api/v1", tags=["Documents"])
 app.include_router(ai_model_router, prefix="/api/v1/ai-models", tags=["AI Models"])
-app.include_router(gitlab_router, tags=["GitLab Integration"])
 
 
 if __name__ == "__main__":
