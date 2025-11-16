@@ -88,3 +88,25 @@ class KnowledgeBaseSourceRepository(IKnowledgeBaseSourceRepository):
         self.db_session.flush()
         self.db_session.refresh(source)
         return source
+
+    def delete(self, kb_source_id: int) -> bool:
+        """
+        Delete KB source and trigger auto-cleanup via SQLAlchemy event listener.
+
+        Args:
+            kb_source_id: Knowledge Base Source ID
+
+        Returns:
+            True if deleted, False if not found
+        """
+        source = self.db_session.query(KnowledgeBaseSourceModel).filter(
+            KnowledgeBaseSourceModel.id == kb_source_id
+        ).first()
+
+        if not source:
+            return False
+
+        # Delete will trigger @event.listens_for('before_delete') cleanup
+        self.db_session.delete(source)
+        self.db_session.flush()
+        return True

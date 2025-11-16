@@ -254,33 +254,9 @@ class KBSyncService:
     async def sync_documents(self, documents: List[Dict[str, Any]], persist_directory: str) -> Dict[str, Any]:
         """
         Synchronously sync documents to vector store (for GitLab sync).
-
-        Args:
-            documents: List of documents with 'content' and 'metadata' keys
-            persist_directory: Collection name (format: kb_{kb_id})
-            NOTE: Parameter name is misleading (legacy), actually contains collection_name
-
-        Returns:
-            Dictionary with sync results
-
-        USE CASES:
-            - UC-1.1: First time sync → batch add vectors
-            - UC-1.2: Incremental sync → add changed file vectors
-            - UC-1.3: Branch change → add new branch vectors (after cleanup)
         """
         try:
-            # ============================================================
-            # CRITICAL FIX: Pass collection_name to vector store factory
-            # ============================================================
-            # Parameter name 'persist_directory' is legacy (misleading)
-            # After Phase 1.2 fix, it actually contains collection_name (kb_{kb_id})
-            #
-            # Vector store needs both:
-            #   - collection_name: kb_{kb_id} (for collection isolation)
-            #   - persist_directory: .chromadb/{collection_name} (for file storage)
-            # ============================================================
-
-            collection_name = persist_directory  # Actually collection name after Phase 1.2
+            collection_name = persist_directory
             actual_persist_dir = f".chromadb/{collection_name}"
 
             vector_store = self.vector_store_factory.create(

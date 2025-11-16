@@ -30,16 +30,17 @@ from shared.interfaces.repositories.user_chatbot_repository import UserChatbotRe
 from shared.interfaces.repositories.document_repository import DocumentRepository
 from shared.interfaces.repositories.connector_repository import IConnectorRepository
 from shared.interfaces.repositories.user_connection_repository import IUserConnectionRepository
+from shared.interfaces.repositories.ai_model_repository import AiModelRepository
 
 # Service Interfaces
 from shared.interfaces.services.ai_services.knowledge_base_service import IKnowledgeBaseService
-from shared.interfaces.services.ai_services.rag_service import IRAGService
 from shared.interfaces.services.ai_services.embedding_service import IEmbeddingService
 from shared.interfaces.services.storage.file_storage_service import IFileStorageService
 from shared.interfaces.services.upload.document_upload_service import IDocumentUploadService
 from shared.interfaces.services.security.encryption_service import IEncryptionService
 from shared.interfaces.services.external.gitlab_service import IGitLabService
-from shared.interfaces.repositories.ai_model_repository import AiModelRepository
+from shared.interfaces.services.lock.redis_lock_service import IRedisLockService
+
 
 # Repository Implementations
 from infrastructure.postgresql.repositories import (
@@ -61,8 +62,8 @@ from infrastructure.postgresql.repositories.commit_model_repository import Commi
 from infrastructure.postgresql.repositories.sync_queue_repository import SyncQueueRepository
 from infrastructure.postgresql.repositories.file_change_history_repository import FileChangeHistoryRepository
 from infrastructure.postgresql.repositories.sync_history_repository import SyncHistoryRepository
-from src.infrastructure.postgresql.repositories.knowledge_base_repository import KnowledgeBaseRepository
-from src.infrastructure.postgresql.repositories.knowledge_base_source_repository import KnowledgeBaseSourceRepository
+from infrastructure.postgresql.repositories.knowledge_base_repository import KnowledgeBaseRepository
+from infrastructure.postgresql.repositories.knowledge_base_source_repository import KnowledgeBaseSourceRepository
 
 # Service Implementations
 # Services
@@ -71,7 +72,6 @@ from application.services.user_service import UserService
 from application.services.chatbot_service import ChatbotService
 from application.services.conversation_service import ConversationService
 from application.services.vector_store_service import VectorStoreService
-from application.services.rag_service import RAGService
 from application.services.document_upload_service import DocumentUploadService
 from application.services.document_processing_service import DocumentProcessingService
 from application.services.document_chunking_service import DocumentChunkingService
@@ -84,16 +84,15 @@ from application.services.group_service import GroupService
 # Infrastructure Services
 from infrastructure.vector_store.factory import VectorStoreFactory
 from infrastructure.ai_services.bedrock_client import BedrockClient, get_bedrock_client as _create_bedrock_client
-from infrastructure.ai_services.knowledge_base.bedrock_kb import BedrockKnowledgeBaseService
 from infrastructure.ai_services.embeddings.factory import EmbeddingFactory
-from infrastructure.ai_services.llm.factory import LLMFactory
 from infrastructure.s3.s3_file_storage_service import S3FileStorageService
 from infrastructure.security.encryption_service import EncryptionService
 from infrastructure.external.gitlab_service import GitLabService
 from application.services.ai_model_service import AiModelService
+from infrastructure.lock.redis_lock_service import RedisLockService
 
 # Use Cases
-from src.application.services.group_service import GroupService
+from application.services.group_service import GroupService
 from usecases.auth_use_cases import LoginUseCase, RegisterUseCase
 from usecases.user_use_cases import (
     GetCurrentUserUseCase,
@@ -140,11 +139,6 @@ from usecases.document_use_cases import (
     ProcessDocumentUseCase,
     GetDocumentStatusUseCase
 )
-from usecases.rag_use_cases import (
-    ChatWithDocumentsUseCase,
-    SemanticSearchUseCase,
-    RetrieveContextsUseCase
-)
 from usecases.connector_use_cases import (
     ListConnectorsUseCase,
     GetConnectorUseCase,
@@ -186,12 +180,6 @@ def get_bedrock_client() -> BedrockClient:
     return _create_bedrock_client()
 
 
-def get_vector_store_service() -> VectorStoreService:
-    """Get vector store service instance."""
-    vector_store_instance = VectorStoreFactory.create()
-    return VectorStoreService(vector_store_instance)
-
-
 def get_file_storage_service() -> IFileStorageService:
     """Get file storage service instance."""
     return S3FileStorageService()
@@ -207,6 +195,10 @@ def get_gitlab_service_factory() -> Callable[[str, str], IGitLabService]:
     def factory(gitlab_url: str, private_token: str) -> IGitLabService:
         return GitLabService(gitlab_url, private_token)
     return factory
+
+def get_vector_store_factory():
+    """Get vector store factory instance."""
+    return VectorStoreFactory()
 
 
 # ============================================================================
@@ -325,12 +317,6 @@ def get_embedding_service() -> IEmbeddingService:
     model_id = getattr(settings, "EMBEDDING_MODEL", None)
     return EmbeddingFactory.create(model_id=model_id)
 
-
-def get_vector_store_factory():
-    """Get vector store factory instance."""
-    from infrastructure.vector_store.factory import VectorStoreFactory
-    return VectorStoreFactory()
-
 # ============================================================================
 # APPLICATION SERVICE DEPENDENCIES
 # ============================================================================
@@ -448,6 +434,49 @@ def get_kb_cleanup_service(
     )
 
 
+def get_kb_cleanup_service_sync():
+    """
+    Get KB Cleanup Service instance with SYNC repositories for SQLAlchemy event listeners.
+
+    This factory creates a cleanup service that can be used in synchronous contexts
+    like SQLAlchemy 'before_delete' event handlers.
+
+    Returns:
+        KBCleanupService with sync repositories
+    """
+    from src.application.services.kb_cleanup_service import KBCleanupService
+    from infrastructure.postgresql.connection.database import DatabaseManager
+
+    # Get sync session
+    db_manager = DatabaseManager()
+    sync_session = db_manager.get_sync_session()
+
+    # Create sync repositories
+    kb_repo = get_knowledge_base_sync_repository_direct(sync_session)
+    kb_source_repo = get_kb_source_repository_direct(sync_session)
+
+    # Get vector store factory (stateless, can be shared)
+    vector_factory = VectorStoreFactory()
+
+    return KBCleanupService(
+        kb_repo=kb_repo,
+        kb_source_repo=kb_source_repo,
+        vector_store_factory=vector_factory
+    )
+
+
+def get_knowledge_base_sync_repository_direct(session):
+    """Direct factory for sync KB repository (for event listeners)."""
+    from infrastructure.postgresql.repositories.knowledge_base_repository import KnowledgeBaseRepository
+    return KnowledgeBaseRepository(session)
+
+
+def get_kb_source_repository_direct(session):
+    """Direct factory for sync KB source repository (for event listeners)."""
+    from infrastructure.postgresql.repositories.knowledge_base_source_repository import KnowledgeBaseSourceRepository
+    return KnowledgeBaseSourceRepository(session)
+
+
 def get_connector_service(
     connector_repository: IConnectorRepository = Depends(get_connector_repository),
     user_connection_repository: IUserConnectionRepository = Depends(get_user_connection_repository),
@@ -461,6 +490,18 @@ def get_connector_service(
         encryption_service=encryption_service,
         gitlab_service_factory=gitlab_service_factory
     )
+
+def get_redis_lock_service():
+    """
+    Get Redis lock service instance (singleton pattern).
+
+    Returns:
+        RedisLockService: Distributed lock service using Redis
+
+    Raises:
+        redis.exceptions.ConnectionError: If cannot connect to Redis server
+    """
+    return RedisLockService()
 
 def get_gitlab_sync_service(
     # 9 Repository dependencies (all SYNC)
@@ -477,7 +518,8 @@ def get_gitlab_sync_service(
     code_chunking_service: CodeChunkingService = Depends(get_code_chunking_service),
     kb_sync_service: KBSyncService = Depends(get_kb_sync_service),
     connector_service: ConnectorService = Depends(get_connector_service),
-    kb_cleanup_service = Depends(get_kb_cleanup_service)
+    kb_cleanup_service = Depends(get_kb_cleanup_service),
+    redis_lock_service:IRedisLockService = Depends(get_redis_lock_service)
 ) -> GitLabSyncService:
     """
     Get GitLab sync service instance with all repository and service dependencies.
@@ -496,23 +538,8 @@ def get_gitlab_sync_service(
         code_chunking_service=code_chunking_service,
         connector_service=connector_service,
         kb_cleanup_service=kb_cleanup_service,
-        redis_lock_service=get_redis_lock_service()
+        redis_lock_service=redis_lock_service
     )
-
-
-def get_redis_lock_service():
-    """
-    Get Redis lock service instance (singleton pattern).
-
-    Returns:
-        RedisLockService: Distributed lock service using Redis
-
-    Raises:
-        redis.exceptions.ConnectionError: If cannot connect to Redis server
-    """
-    from infrastructure.lock.redis_lock_service import RedisLockService
-    return RedisLockService()
-
 
 def get_document_processing_service() -> DocumentProcessingService:
     """Get document processing service instance."""
@@ -551,7 +578,6 @@ def get_ai_model_service(
 # AUTH USE CASE DEPENDENCIES
 # ============================================================================
 
-# Auth use cases
 def get_login_use_case(
     auth_service: AuthService = Depends(get_auth_service)
 ) -> LoginUseCase:
@@ -697,9 +723,12 @@ def get_chatbot_use_case(chatbot_service: ChatbotService = Depends(get_chatbot_s
     return GetChatbotUseCase(chatbot_service)
 
 
-def get_create_chatbot_use_case(chatbot_service: ChatbotService = Depends(get_chatbot_service)) -> CreateChatbotUseCase:
+def get_create_chatbot_use_case(
+    chatbot_service: ChatbotService = Depends(get_chatbot_service),
+    knowledge_base_repository: KnowledgeBaseRepository = Depends(get_knowledge_base_sync_repository)
+) -> CreateChatbotUseCase:
     """Get create chatbot use case instance."""
-    return CreateChatbotUseCase(chatbot_service)
+    return CreateChatbotUseCase(chatbot_service, knowledge_base_repository)
 
 
 def get_update_chatbot_use_case(chatbot_service: ChatbotService = Depends(get_chatbot_service)) -> UpdateChatbotUseCase:
