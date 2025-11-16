@@ -1,188 +1,90 @@
 """
-KnowledgeBaseSource repository implementation.
-
-Handles database operations for knowledge base sources.
+KnowledgeBaseSource Sync Repository - Database operations for KB source management (SYNC).
 """
 
-from typing import List, Optional
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Optional
+from datetime import datetime
+from sqlalchemy.orm import Session
+from sqlalchemy import and_, select
 
+from infrastructure.postgresql.models.knowledge_base_source_model import (
+    KnowledgeBaseSourceModel,
+)
 from domain.entities.knowledge_base_source import KnowledgeBaseSourceEntity
-from infrastructure.postgresql.models.knowledge_base_source_model import KnowledgeBaseSourceModel
 from infrastructure.postgresql.mappers.knowledge_base_source_mapper import KnowledgeBaseSourceMapper
+from shared.interfaces.repositories.knowledge_base_source_repository import IKnowledgeBaseSourceRepository
 
 
-class KnowledgeBaseSourceRepository:
-    """
-    Repository for KnowledgeBaseSource CRUD operations.
-    """
+class KnowledgeBaseSourceRepository(IKnowledgeBaseSourceRepository):
+    """Repository for managing knowledge base source records (SYNC version for GitLab)."""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, db_session: Session):
         """
-        Initialize repository with database session.
+        Initialize knowledge base source repository.
 
         Args:
-            session: SQLAlchemy async session
+            db_session: SQLAlchemy database session (sync)
         """
-        self.session = session
+        self.db_session = db_session
+        self.mapper = KnowledgeBaseSourceMapper
 
-    async def create(self, entity: KnowledgeBaseSourceEntity) -> KnowledgeBaseSourceEntity:
+    def get_by_kb_and_source(
+        self, kb_id: int, source_type: str, source_id: str
+    ) -> Optional[KnowledgeBaseSourceModel]:
+        """
+        Get knowledge base source by KB ID, source type, and source ID.
+
+        Args:
+            kb_id: Knowledge base ID
+            source_type: Source type (e.g., 'repository')
+            source_id: Source identifier
+
+        Returns:
+            KnowledgeBaseSource model or None
+        """
+        return self.db_session.query(KnowledgeBaseSourceModel).filter(
+            and_(
+                KnowledgeBaseSourceModel.knowledge_base_id == kb_id,
+                KnowledgeBaseSourceModel.source_type == source_type,
+                KnowledgeBaseSourceModel.source_id == source_id
+            )
+        ).first()
+
+    def create(self, source_data: dict) -> KnowledgeBaseSourceModel:
         """
         Create a new knowledge base source.
 
         Args:
-            entity: KnowledgeBaseSource entity to create
+            source_data: Dictionary with source fields
 
         Returns:
-            Created KnowledgeBaseSource entity with ID
+            Created KnowledgeBaseSource model
         """
-        model = KnowledgeBaseSourceMapper.to_model(entity)
-        self.session.add(model)
-        await self.session.flush()
-        await self.session.refresh(model)
-        return KnowledgeBaseSourceMapper.to_entity(model)
+        source = KnowledgeBaseSourceModel(**source_data)
+        self.db_session.add(source)
+        self.db_session.flush()
+        self.db_session.refresh(source)
+        return source
 
-    async def update(self, entity: KnowledgeBaseSourceEntity) -> KnowledgeBaseSourceEntity:
-        """
-        Update an existing knowledge base source.
-
-        Args:
-            entity: KnowledgeBaseSource entity to update
-
-        Returns:
-            Updated KnowledgeBaseSource entity
-
-        Raises:
-            ValueError: If source not found
-        """
-        if entity.id is None:
-            raise ValueError("Cannot update knowledge base source without ID")
-
-        stmt = select(KnowledgeBaseSourceModel).where(KnowledgeBaseSourceModel.id == entity.id)
-        result = await self.session.execute(stmt)
+    def update(self, entity: KnowledgeBaseSourceModel) -> KnowledgeBaseSourceEntity:
+        """Update existing Knowledge Base Source from domain entity."""
+        # Find existing model by integer ID
+        result = self.db_session.execute(
+            select(KnowledgeBaseSourceModel).where(KnowledgeBaseSourceModel.id == entity.id)
+        )
         existing_model = result.scalar_one_or_none()
 
-        if not existing_model:
-            raise ValueError(f"Knowledge base source with ID {entity.id} not found")
-
-        updated_model = KnowledgeBaseSourceMapper.to_model(entity, existing_model)
-        await self.session.flush()
-        await self.session.refresh(updated_model)
-        return KnowledgeBaseSourceMapper.to_entity(updated_model)
-
-    async def get_by_id(self, source_id: int) -> Optional[KnowledgeBaseSourceEntity]:
-        """
-        Get knowledge base source by ID.
-
-        Args:
-            source_id: Source ID
-
-        Returns:
-            KnowledgeBaseSource entity or None if not found
-        """
-        stmt = select(KnowledgeBaseSourceModel).where(KnowledgeBaseSourceModel.id == source_id)
-        result = await self.session.execute(stmt)
-        model = result.scalar_one_or_none()
-        return KnowledgeBaseSourceMapper.to_entity(model) if model else None
-
-    async def get_by_knowledge_base_id(self, kb_id: int) -> List[KnowledgeBaseSourceEntity]:
-        """
-        Get all sources for a knowledge base.
-
-        Args:
-            kb_id: Knowledge base ID
-
-        Returns:
-            List of KnowledgeBaseSource entities
-        """
-        stmt = select(KnowledgeBaseSourceModel).where(
-            KnowledgeBaseSourceModel.knowledge_base_id == kb_id
-        ).order_by(KnowledgeBaseSourceModel.created_at.desc())
-        result = await self.session.execute(stmt)
-        models = result.scalars().all()
-        return [KnowledgeBaseSourceMapper.to_entity(model) for model in models]
-
-    async def find_by_source(
-        self,
-        kb_id: int,
-        source_type: str,
-        source_id: str
-    ) -> Optional[KnowledgeBaseSourceEntity]:
-        """
-        Find source by knowledge base, type, and source ID.
-
-        Args:
-            kb_id: Knowledge base ID
-            source_type: Source type (repository, document, etc.)
-            source_id: Source ID
-
-        Returns:
-            KnowledgeBaseSource entity or None if not found
-        """
-        stmt = select(KnowledgeBaseSourceModel).where(
-            KnowledgeBaseSourceModel.knowledge_base_id == kb_id,
-            KnowledgeBaseSourceModel.source_type == source_type,
-            KnowledgeBaseSourceModel.source_id == source_id
-        )
-        result = await self.session.execute(stmt)
-        model = result.scalar_one_or_none()
-        return KnowledgeBaseSourceMapper.to_entity(model) if model else None
-
-    async def get_by_source_type(
-        self,
-        kb_id: int,
-        source_type: str
-    ) -> List[KnowledgeBaseSourceEntity]:
-        """
-        Get all sources of a specific type for a knowledge base.
-
-        Args:
-            kb_id: Knowledge base ID
-            source_type: Source type (repository, document, etc.)
-
-        Returns:
-            List of KnowledgeBaseSource entities
-        """
-        stmt = select(KnowledgeBaseSourceModel).where(
-            KnowledgeBaseSourceModel.knowledge_base_id == kb_id,
-            KnowledgeBaseSourceModel.source_type == source_type
-        ).order_by(KnowledgeBaseSourceModel.created_at.desc())
-        result = await self.session.execute(stmt)
-        models = result.scalars().all()
-        return [KnowledgeBaseSourceMapper.to_entity(model) for model in models]
-
-    async def get_auto_sync_sources(self) -> List[KnowledgeBaseSourceEntity]:
-        """
-        Get all sources with auto_sync enabled.
-
-        Returns:
-            List of KnowledgeBaseSource entities with auto_sync=True
-        """
-        stmt = select(KnowledgeBaseSourceModel).where(
-            KnowledgeBaseSourceModel.auto_sync == True
-        ).order_by(KnowledgeBaseSourceModel.last_synced_at.asc())
-        result = await self.session.execute(stmt)
-        models = result.scalars().all()
-        return [KnowledgeBaseSourceMapper.to_entity(model) for model in models]
-
-    async def delete(self, source_id: int) -> bool:
-        """
-        Delete knowledge base source by ID.
-
-        Args:
-            source_id: Source ID
-
-        Returns:
-            True if deleted, False if not found
-        """
-        stmt = select(KnowledgeBaseSourceModel).where(KnowledgeBaseSourceModel.id == source_id)
-        result = await self.session.execute(stmt)
-        model = result.scalar_one_or_none()
-
-        if not model:
-            return False
-
-        await self.session.delete(model)
-        await self.session.flush()
-        return True
+        if existing_model:
+            updated_model = self.mapper.to_model(entity, existing_model)
+            self.db_session.flush()
+            self.db_session.refresh(updated_model)
+            return self.mapper.to_entity(updated_model)
+        else:
+            # Create new if doesn't exist
+            return self.create(entity)
+        
+    def update_source_sync_status(self, source: KnowledgeBaseSourceModel) -> KnowledgeBaseSourceModel:
+        """Update existing Knowledge Base Source from domain entity."""
+        self.db_session.flush()
+        self.db_session.refresh(source)
+        return source

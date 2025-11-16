@@ -58,6 +58,11 @@ from infrastructure.postgresql.repositories.connector_repository import Connecto
 from infrastructure.postgresql.repositories.user_connection_repository import UserConnectionRepository
 from infrastructure.postgresql.repositories.repository_repository import RepositoryRepository
 from infrastructure.postgresql.repositories.commit_model_repository import CommitRepository
+from infrastructure.postgresql.repositories.sync_queue_repository import SyncQueueRepository
+from infrastructure.postgresql.repositories.file_change_history_repository import FileChangeHistoryRepository
+from infrastructure.postgresql.repositories.sync_history_repository import SyncHistoryRepository
+from src.infrastructure.postgresql.repositories.knowledge_base_repository import KnowledgeBaseRepository
+from src.infrastructure.postgresql.repositories.knowledge_base_source_repository import KnowledgeBaseSourceRepository
 
 # Service Implementations
 # Services
@@ -75,7 +80,6 @@ from application.services.kb_sync_service import KBSyncService
 from application.services.connector_service import ConnectorService
 from application.services.code_chunking_service import CodeChunkingService
 from application.services.group_service import GroupService
-from application.services.knowledge_base_service import KnowledgeBaseService
 
 # Infrastructure Services
 from infrastructure.vector_store.factory import VectorStoreFactory
@@ -253,13 +257,13 @@ def get_document_repository(session: AsyncSession = Depends(get_db_session)) -> 
     """Get document repository instance."""
     return DocumentRepositoryImpl(session)
 
-def get_repository_repository(session: AsyncSession = Depends(get_db_session)) -> RepositoryRepository:
-    """Get repository repository instance."""
-    return RepositoryRepository(session)
+def get_repository_repository(db_session: Session = Depends(get_db)) -> RepositoryRepository:
+    """Get repository repository instance (SYNC)."""
+    return RepositoryRepository(db_session)
 
-def get_commit_repository(session: AsyncSession = Depends(get_db_session)) -> CommitRepository:
-    """Get commit repository instance."""
-    return CommitRepository(session)
+def get_commit_repository(db_session: Session = Depends(get_db)) -> CommitRepository:
+    """Get commit repository instance (SYNC)."""
+    return CommitRepository(db_session)
 
 def get_connector_repository(db_session: Session = Depends(get_db)) -> IConnectorRepository:
     """Get connector repository instance."""
@@ -277,6 +281,40 @@ def get_ai_model_repository(
     return AiModelRepositoryImpl(session)
 
 
+# SYNC Repositories for GitLab operations
+def get_sync_queue_repository(db_session: Session = Depends(get_db)) -> SyncQueueRepository:
+    """Get sync queue repository instance (SYNC)."""
+    return SyncQueueRepository(db_session)
+
+
+def get_file_change_history_repository(db_session: Session = Depends(get_db)) -> FileChangeHistoryRepository:
+    """Get file change history repository instance (SYNC)."""
+    return FileChangeHistoryRepository(db_session)
+
+
+def get_knowledge_base_sync_repository(db_session: Session = Depends(get_db)) -> KnowledgeBaseRepository:
+    """Get knowledge base repository instance (SYNC)."""
+    return KnowledgeBaseRepository(db_session)
+
+
+def get_kb_source_sync_repository(db_session: Session = Depends(get_db)) -> KnowledgeBaseSourceRepository:
+    """Get knowledge base source repository instance (SYNC)."""
+    return KnowledgeBaseSourceRepository(db_session)
+
+
+def get_sync_history_repository(db_session: Session = Depends(get_db)) -> SyncHistoryRepository:
+    """Get sync history repository instance (SYNC)."""
+    return SyncHistoryRepository(db_session)
+
+def get_knowledge_base_repository(db_session: Session = Depends(get_db)) -> KnowledgeBaseRepository:
+    """Get sync knowledge base repository instance (SYNC)."""
+    return KnowledgeBaseRepository(db_session)
+
+def get_kb_source_repository(db_session: Session = Depends(get_db)) -> KnowledgeBaseSourceRepository:
+    """Get sync knowledge base source repository instance (SYNC)."""
+    return KnowledgeBaseSourceRepository(db_session)
+
+
 # ============================================================================
 # AI SERVICE DEPENDENCIES
 # ============================================================================
@@ -286,6 +324,12 @@ def get_embedding_service() -> IEmbeddingService:
     """Get embedding service instance based on LLM_PROVIDER."""
     model_id = getattr(settings, "EMBEDDING_MODEL", None)
     return EmbeddingFactory.create(model_id=model_id)
+
+
+def get_vector_store_factory():
+    """Get vector store factory instance."""
+    from infrastructure.vector_store.factory import VectorStoreFactory
+    return VectorStoreFactory()
 
 # ============================================================================
 # APPLICATION SERVICE DEPENDENCIES
@@ -376,13 +420,33 @@ def get_code_chunking_service() -> CodeChunkingService:
 
 def get_kb_sync_service(
     embedding_service: IEmbeddingService = Depends(get_embedding_service),
+    vector_store_factory = Depends(get_vector_store_factory),
     document_repository: DocumentRepository = Depends(get_document_repository)
 ) -> KBSyncService:
     """Get KB sync service instance."""
     return KBSyncService(
         embedding_service,
+        vector_store_factory,
         document_repository
     )
+
+
+def get_kb_cleanup_service(
+    kb_repo = Depends(get_knowledge_base_repository),
+    kb_source_repo = Depends(get_kb_source_repository),
+    vector_store_factory = Depends(get_vector_store_factory)
+):
+    """
+    Get KB Cleanup Service instance (Phase 3.5).
+    """
+    from src.application.services.kb_cleanup_service import KBCleanupService
+
+    return KBCleanupService(
+        kb_repo=kb_repo,
+        kb_source_repo=kb_source_repo,
+        vector_store_factory=vector_store_factory
+    )
+
 
 def get_connector_service(
     connector_repository: IConnectorRepository = Depends(get_connector_repository),
@@ -399,26 +463,55 @@ def get_connector_service(
     )
 
 def get_gitlab_sync_service(
-    db_session: Session = Depends(get_db),
+    # 9 Repository dependencies (all SYNC)
+    repository_repository: RepositoryRepository = Depends(get_repository_repository),
+    commit_repository: CommitRepository = Depends(get_commit_repository),
+    sync_queue_repository: SyncQueueRepository = Depends(get_sync_queue_repository),
+    file_change_history_repository: FileChangeHistoryRepository = Depends(get_file_change_history_repository),
+    sync_history_repository: SyncHistoryRepository = Depends(get_sync_history_repository),
+    connector_repository: ConnectorRepository = Depends(get_connector_repository),
+    user_connection_repository: UserConnectionRepository = Depends(get_user_connection_repository),
+    knowledge_base_repository: KnowledgeBaseRepository = Depends(get_knowledge_base_sync_repository),
+    kb_source_repository: KnowledgeBaseSourceRepository = Depends(get_kb_source_sync_repository),
+    # 4 Service dependencies (added kb_cleanup_service in Phase 3.5)
     code_chunking_service: CodeChunkingService = Depends(get_code_chunking_service),
     kb_sync_service: KBSyncService = Depends(get_kb_sync_service),
-    connector_service: ConnectorService = Depends(get_connector_service)
+    connector_service: ConnectorService = Depends(get_connector_service),
+    kb_cleanup_service = Depends(get_kb_cleanup_service)
 ) -> GitLabSyncService:
-    """Get GitLab sync service instance."""
-    # Create sync session repositories
-    repository_repository = RepositoryRepository(db_session)
-    commit_repository = CommitRepository(db_session)
-    document_repository = DocumentRepositoryImpl(db_session)
-
+    """
+    Get GitLab sync service instance with all repository and service dependencies.
+    """
     return GitLabSyncService(
-        db_session=db_session,
         repository_repository=repository_repository,
-        document_repository=document_repository,
         commit_repository=commit_repository,
+        sync_queue_repository=sync_queue_repository,
+        file_change_history_repository=file_change_history_repository,
+        sync_history_repository=sync_history_repository,
+        connector_repository=connector_repository,
+        user_connection_repository=user_connection_repository,
+        knowledge_base_repository=knowledge_base_repository,
+        kb_source_repository=kb_source_repository,
         kb_sync_service=kb_sync_service,
         code_chunking_service=code_chunking_service,
-        connector_service=connector_service
+        connector_service=connector_service,
+        kb_cleanup_service=kb_cleanup_service,
+        redis_lock_service=get_redis_lock_service()
     )
+
+
+def get_redis_lock_service():
+    """
+    Get Redis lock service instance (singleton pattern).
+
+    Returns:
+        RedisLockService: Distributed lock service using Redis
+
+    Raises:
+        redis.exceptions.ConnectionError: If cannot connect to Redis server
+    """
+    from infrastructure.lock.redis_lock_service import RedisLockService
+    return RedisLockService()
 
 
 def get_document_processing_service() -> DocumentProcessingService:
@@ -432,25 +525,6 @@ def get_document_chunking_service() -> DocumentChunkingService:
     chunk_overlap = int(getattr(settings, "CHUNK_OVERLAP", 200))
     max_chunks = int(getattr(settings, "MAX_CHUNKS_PER_DOCUMENT", 500))
     return DocumentChunkingService(chunk_size, chunk_overlap, max_chunks)
-
-
-def get_kb_sync_service(
-    embedding_service: IEmbeddingService = Depends(get_embedding_service),
-    vector_store_service: VectorStoreService = Depends(get_vector_store_service),
-    document_repository: DocumentRepository = Depends(get_document_repository)
-) -> KBSyncService:
-    """Get KB sync service instance."""
-    return KBSyncService(
-        embedding_service,
-        vector_store_service.vector_store,
-        document_repository
-    )
-
-def get_gitlab_sync_service(
-    kb_sync_service: KBSyncService = Depends(get_kb_sync_service)
-) -> GitLabSyncService:
-    """Get GitLab sync service instance."""
-    return GitLabSyncService(kb_sync_service=kb_sync_service)
 
 
 def get_connector_service(
@@ -778,15 +852,11 @@ def get_fetch_gitlab_branches_use_case(connector_service: ConnectorService = Dep
 def get_sync_repository_use_case(
     connector_service: ConnectorService = Depends(get_connector_service),
     gitlab_sync_service: GitLabSyncService = Depends(get_gitlab_sync_service),
-    sync_session: Session = Depends(get_db)
 ) -> SyncRepositoryUseCase:
     """Get sync repository use case."""
-    repository_repository = RepositoryRepository(sync_session)
-
     return SyncRepositoryUseCase(
         connector_service=connector_service,
         gitlab_sync_service=gitlab_sync_service,
-        repository_repository=repository_repository
     )
 
 

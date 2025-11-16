@@ -62,10 +62,8 @@ class CodeChunkingService:
 
         content_size = len(content.encode("utf-8"))
         if content_size > self.max_file_size:
-            print(f"⚠️ File {file_path} is {content_size} bytes, splitting...")
             return self._chunk_large_file(file_path, content, metadata)
 
-        # File nhỏ → 1 chunk duy nhất
         chunk_metadata = self._create_chunk_metadata(
             file_path=file_path,
             content=content,

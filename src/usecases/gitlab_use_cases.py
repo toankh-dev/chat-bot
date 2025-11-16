@@ -8,7 +8,6 @@ from typing import Dict, Any
 
 from application.services.gitlab_sync_service import GitLabSyncService
 from application.services.connector_service import ConnectorService
-from infrastructure.postgresql.repositories.repository_repository import RepositoryRepository
 from schemas.gitlab_schema import SyncRepositoryRequest
 from core.errors import BusinessRuleViolationError, ResourceNotFoundError
 
@@ -24,11 +23,9 @@ class SyncRepositoryUseCase:
         self,
         connector_service: ConnectorService,
         gitlab_sync_service: GitLabSyncService,
-        repository_repository: RepositoryRepository
     ):
         self.connector_service = connector_service
         self.gitlab_sync_service = gitlab_sync_service
-        self.repository_repository = repository_repository
 
     async def execute(self, request: SyncRepositoryRequest, user_id: int) -> Dict[str, Any]:
         """
@@ -49,8 +46,8 @@ class SyncRepositoryUseCase:
             sync_result = await self.gitlab_sync_service.sync_repository_full(
                 user_id=user_id,
                 connector_id=request.connector_id,
-                repository_external_id=request.project_id,
-                chatbot_id=request.chatbot_id,
+                knowledge_base_id=request.knowledge_base_id,
+                repository_external_id=request.repository_external_id,
                 branch=request.branch,
                 auto_sync=request.auto_sync
             )

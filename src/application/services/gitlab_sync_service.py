@@ -2,11 +2,8 @@
 GitLab Sync Service - Enhanced with incremental sync and queue-based processing.
 """
 
-from typing import Dict, List, Any, Optional
+from typing import Dict, Any, Optional
 from datetime import datetime
-from pathlib import Path
-from sqlalchemy.orm import Session
-from sqlalchemy import select
 import asyncio
 
 from infrastructure.external.gitlab_service import GitLabService
@@ -14,23 +11,26 @@ from application.services.code_chunking_service import CodeChunkingService
 from application.services.kb_sync_service import KBSyncService
 from application.services.connector_service import ConnectorService
 from infrastructure.postgresql.repositories.repository_repository import RepositoryRepository
-from infrastructure.postgresql.repositories.user_connection_repository import (
-    UserConnectionRepository,
-)
+from infrastructure.postgresql.repositories.user_connection_repository import UserConnectionRepository
 from infrastructure.postgresql.repositories.sync_history_repository import SyncHistoryRepository
 from infrastructure.postgresql.repositories.sync_queue_repository import SyncQueueRepository
-from infrastructure.postgresql.repositories.file_change_history_repository import (
-    FileChangeHistoryRepository,
-)
+from infrastructure.postgresql.repositories.file_change_history_repository import FileChangeHistoryRepository
 from infrastructure.postgresql.repositories.commit_model_repository import CommitRepository
+from infrastructure.postgresql.repositories.connector_repository import ConnectorRepository
+from infrastructure.postgresql.models.knowledge_base_source_model import KnowledgeBaseSourceModel
+from infrastructure.postgresql.repositories.knowledge_base_repository import KnowledgeBaseRepository
+from infrastructure.postgresql.repositories.knowledge_base_source_repository import KnowledgeBaseSourceRepository
 from infrastructure.postgresql.models.repository_model import RepositoryModel
 from infrastructure.postgresql.models.sync_history_model import SyncHistoryModel
 from infrastructure.postgresql.models.sync_queue_model import SyncQueueModel
 from infrastructure.postgresql.models.file_change_history_model import FileChangeHistoryModel
-from infrastructure.postgresql.models.knowledge_base_model import KnowledgeBaseModel
-from infrastructure.postgresql.models.knowledge_base_source_model import KnowledgeBaseSourceModel
-from shared.interfaces.repositories.document_repository import DocumentRepository
 from core.logger import logger
+from core.errors import (
+    ConnectorNotFoundError,
+    KnowledgeBaseNotFoundError,
+    VectorCleanupException
+)
+from shared.constants import DEFAULT_BRANCH, GITLAB_SYNC_BATCH_SIZE_DEFAULT, SYNC_QUEUE_BULK_INSERT_BATCH_SIZE
 
 
 class GitLabSyncService:
@@ -38,57 +38,127 @@ class GitLabSyncService:
 
     def __init__(
         self,
-        db_session: Session,
+        # 9 Repository dependencies (all SYNC)
         repository_repository: RepositoryRepository,
-        document_repository: DocumentRepository,
         commit_repository: CommitRepository,
+        sync_queue_repository: SyncQueueRepository,
+        file_change_history_repository: FileChangeHistoryRepository,
+        sync_history_repository: SyncHistoryRepository,
+        connector_repository: ConnectorRepository,
+        user_connection_repository: UserConnectionRepository,
+        knowledge_base_repository: KnowledgeBaseRepository,
+        kb_source_repository: KnowledgeBaseSourceRepository,
+        # 5 Service dependencies (added redis_lock_service for concurrent sync prevention)
         kb_sync_service: KBSyncService,
         code_chunking_service: CodeChunkingService,
         connector_service: ConnectorService,
+        kb_cleanup_service,
+        redis_lock_service,
     ):
         """
-        Initialize GitLab sync service.
+        Initialize GitLab sync service with all dependencies injected.
 
         Args:
-            db_session: SQLAlchemy database session
-            code_chunking_service: Code chunking service
+            repository_repository: Repository repository instance
+            commit_repository: Commit repository instance
+            sync_queue_repository: Sync queue repository instance
+            file_change_history_repository: File change history repository instance
+            sync_history_repository: Sync history repository instance
+            connector_repository: Connector repository instance
+            user_connection_repository: User connection repository instance
+            knowledge_base_repository: Knowledge base repository instance (SYNC)
+            kb_source_repository: KB source repository instance (SYNC)
             kb_sync_service: Knowledge Base sync service
-            document_repository: Document repository
+            code_chunking_service: Code chunking service
+            connector_service: Connector service
+            kb_cleanup_service: KB Cleanup service (Phase 3.4) - for vector cleanup operations
         """
-        self.db_session = db_session
-        self.repository_repository = repository_repository
+        # Repository dependencies
+        self.repository_repo = repository_repository
         self.commit_repository = commit_repository
-        self.document_repository = document_repository
+        self.sync_queue_repo = sync_queue_repository
+        self.file_change_repo = file_change_history_repository
+        self.sync_history_repo = sync_history_repository
+        self.connector_repo = connector_repository
+        self.connection_repo = user_connection_repository
+        self.knowledge_base_repo = knowledge_base_repository
+        self.kb_source_repo = kb_source_repository
+
+        # Service dependencies
         self.kb_sync_service = kb_sync_service
         self.code_chunking_service = code_chunking_service
-
-        # Initialize repositories
-        self.repository_repo = RepositoryRepository(db_session)
-        self.connection_repo = UserConnectionRepository(db_session)
-        self.sync_history_repo = SyncHistoryRepository(db_session)
-        self.sync_queue_repo = SyncQueueRepository(db_session)
-        self.file_change_repo = FileChangeHistoryRepository(db_session)
-        # Initialize connector service
         self.connector_service = connector_service
+        self.kb_cleanup_service = kb_cleanup_service
+        self.redis_lock_service = redis_lock_service
 
     async def sync_repository_full(
         self,
         user_id: int,
         connector_id: int,
         repository_external_id: str,
-        chatbot_id: int,
-        branch: Optional[str] = None,
+        knowledge_base_id: int,
+        branch: str,
         auto_sync: bool = False,
     ) -> Dict[str, Any]:
         """
-        Perform full repository sync.
+        Perform full repository sync with distributed lock to prevent concurrent syncs.
 
         Args:
             repository_external_id: External repository ID (GitLab project ID)
             knowledge_base_id: Knowledge Base ID
-            group_id: Group ID
             user_id: User ID
             branch: Branch to sync
+            auto_sync: Enable automatic sync on future changes
+
+        Returns:
+            Dictionary with sync results
+
+        Raises:
+            SyncInProgressError: If sync already in progress for this repo/branch (409)
+            ConnectorNotFoundError: If GitLab connector not found (404)
+            KnowledgeBaseNotFoundError: If knowledge base not found (404)
+            GitLabAPIError: If GitLab API request fails (502)
+        """
+        # Generate lock key: sync_lock:repo:{repo_id}:branch:{branch}
+        lock_key = f"sync_lock:repo:{repository_external_id}:branch:{branch or 'default'}"
+
+        # Acquire distributed lock (raises SyncInProgressError if already locked)
+        with self.redis_lock_service.acquire_lock(lock_key, blocking=False):
+            logger.info(
+                f"Sync lock acquired, starting repository sync",
+                extra={
+                    "lock_key": lock_key,
+                    "repo_id": repository_external_id,
+                    "branch": branch,
+                    "user_id": user_id,
+                    "kb_id": knowledge_base_id,
+                },
+            )
+
+            # Perform sync operation within lock context
+            return await self._sync_repository_full_impl(
+                user_id=user_id,
+                connector_id=connector_id,
+                repository_external_id=repository_external_id,
+                knowledge_base_id=knowledge_base_id,
+                branch=branch,
+                auto_sync=auto_sync,
+            )
+
+    async def _sync_repository_full_impl(
+        self,
+        user_id: int,
+        connector_id: int,
+        repository_external_id: str,
+        knowledge_base_id: int,
+        branch: str,
+        auto_sync: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Internal implementation of full repository sync (called within lock context).
+
+        Args:
+            Same as sync_repository_full
 
         Returns:
             Dictionary with sync results
@@ -96,11 +166,14 @@ class GitLabSyncService:
         # Step 1: Get GitLab service
         gitlab_connector = self.connector_service.get_connector_by_id(connector_id)
         if not gitlab_connector:
-            raise ValueError("GitLab connector not configured")
+            raise ConnectorNotFoundError(
+                connector_type="gitlab",
+                message="GitLab connector not configured"
+            )
 
         gitlab_service = self.connector_service.get_gitlab_service(gitlab_connector)
 
-        # 2. Get or create system connection properly
+        # Step 2. Get or create system connection properly
         connection = self.connector_service.get_or_create_system_connection(
             user_id=user_id, connector=gitlab_connector
         )
@@ -108,44 +181,32 @@ class GitLabSyncService:
         # Step 3: Fetch repository information
         project_info = gitlab_service.get_project_info(repository_external_id)
         repository_external_id = str(project_info["id"])
-        repo_name = project_info["name"]
-        branch = branch if branch else project_info.get("default_branch", "main")
+        branch = branch if branch else project_info.get("default_branch", DEFAULT_BRANCH)
 
-        # Step 4: Create/get Knowledge Base (sync version)
-        kb_name = f"{repo_name} Knowledge Base"
+        # Step 3.1: Fetch HEAD commit SHA of the branch
+        head_commit_info = gitlab_service.get_branch_head_commit(repository_external_id, branch)
+        head_commit_sha = head_commit_info["commit_sha"]
 
-        # Try to find existing KB using sync session
-        stmt = select(KnowledgeBaseModel).where(
-            KnowledgeBaseModel.name == kb_name,
-            KnowledgeBaseModel.chatbot_id == chatbot_id
-        )
-        existing_kb = self.db_session.execute(stmt).scalar_one_or_none()
+        # STEP 4: GET OR CREATE KNOWLEDGE BASE
+        kb_entity = self.knowledge_base_repo.get_by_id(knowledge_base_id)
 
-        if existing_kb:
-            kb_entity = existing_kb
-        else:
-            # Create new KB
-            kb_entity = KnowledgeBaseModel(
-                chatbot_id=chatbot_id,
-                name=kb_name,
-                description=f"Knowledge base for {repo_name} repository",
-                vector_store_type="chromadb",
-                vector_store_collection=f"kb_{chatbot_id}_{repo_name.lower().replace(' ', '_')}",
-                is_active=True
-            )
-            self.db_session.add(kb_entity)
-            self.db_session.flush()
-            self.db_session.refresh(kb_entity)
-
-        knowledge_base_id = kb_entity.vector_store_collection or f"kb_{kb_entity.id}"
-        group_id = f"group_gitlab_{repository_external_id}"
-
-        # 2. Get or create repository record
-        repo, created = self.repository_repo.get_or_create(
+        if not kb_entity:
+            raise KnowledgeBaseNotFoundError(kb_id=knowledge_base_id)
+    
+        # Step 5. Get or create repository record
+        repo, = self.repository_repo.get_or_create(
             connection_id=connection.id,
             external_id=repository_external_id,
             defaults={
-                "name": f"repo_{repository_external_id}",
+                "name": project_info.get("name"),
+                "full_name": project_info.get("path_with_namespace"),
+                "html_url": project_info.get("web_url"),
+                "visibility": project_info.get("visibility"),
+                "repo_metadata": {
+                    "description": project_info.get("description"),
+                    "language": project_info.get("language"),
+                    "stars": project_info.get("star_count", 0),
+                },
                 "default_branch": branch,
                 "sync_status": "pending",
             },
@@ -160,182 +221,151 @@ class GitLabSyncService:
             sync_type="full",
             triggered_by="manual",
             user_id=user_id,
-            to_commit_sha="",  # Will update later
+            to_commit_sha="", # Will be set after sync
             status="running",
         )
         sync_history = self.sync_history_repo.create(sync_history)
 
         try:
-            # Update repository model with info (without committing yet)
-            repo.name = project_info.get("name", repo.name)
-            repo.full_name = project_info.get("path_with_namespace")
-            repo.html_url = project_info.get("web_url")
-            repo.visibility = project_info.get("visibility")
-            repo.repo_metadata = {
-                "description": project_info.get("description"),
-                "language": project_info.get("language"),
-                "stars": project_info.get("star_count", 0),
-            }
-            # Don't commit yet - will be part of larger transaction
-            repo.updated_at = datetime.utcnow()
-
-            # 5. Get repository tree
-            tree = gitlab_service.get_repository_tree(
-                project_id=repository_external_id, ref=branch, recursive=True
-            )
-
-            # Filter code files
-            file_paths = [item["path"] for item in tree if item["type"] == "blob"]
-            code_files = gitlab_service.filter_code_files(file_paths)
-
-            # Get or create commit using database repo.id (NOT external_id)
+            # 5. Get repository tree with error handling
+            code_files = gitlab_service.filter_code_files(project_id=repository_external_id, ref=branch)
+            # Check if HEAD commit already synced by comparing real GitLab SHA
             existing_commit = self.commit_repository.get_latest_full_sync_by_repo_id(repo.id)
 
-            if existing_commit:
-                # Commit already exists - check if already processed
-                logger.info(f"Found existing commit {existing_commit.id} for repo {repo.id}")
-
+            if existing_commit and existing_commit.sha == head_commit_sha:
                 # Check if there are pending items for this commit
                 pending_count = self.sync_queue_repo.count_pending_by_commit(existing_commit.id)
 
-                if pending_count > 0:
-                    # Resume processing existing queue
-                    logger.info(f"Resuming {pending_count} pending files from previous sync")
-                    commit = existing_commit
-                else:
-                    # All files already processed - skip queuing
-                    logger.info(f"All files already synced for commit {existing_commit.id}, skipping")
-
+                if pending_count == 0:
                     # Mark sync as completed
-                    self.sync_history_repo.complete_sync(sync_history.id, "completed")
-                    self.repository_repo.mark_completed(repo.id)
-
-                    # Link repository to chatbot
-                    repo.chatbot_id = chatbot_id
-                    self.db_session.commit()
+                    self._complete_sync_for_repo(sync_history_id=sync_history.id, repo_id=repo.id)
 
                     return {
                         "success": True,
-                        "repository": repo_name,
+                        "repository": repo.name,
                         "repository_id": repo.id,
                         "knowledge_base_id": kb_entity.id,
                         "knowledge_base_name": kb_entity.name,
+                        "commit_sha": head_commit_sha,
                         "files_processed": len(code_files),
                         "files_succeeded": len(code_files),
                         "files_failed": 0,
                         "total_embeddings": 0,
-                        "message": "Repository already synced, skipped processing"
                     }
+                # Resume processing existing queue
+                commit = existing_commit
+                    
             else:
-                # Create new commit
-                commit = self.commit_repository.create(repo.id, code_files)
-                logger.info(f"Created new commit {commit.id} for repo {repo.id}")
-
-            # 7. Queue all files for processing (only for new commits or resumed syncs)
-            queue_items = []
-            file_history_items = []
-
-            for file_path in code_files:
-                # Create file change history
-                file_change = FileChangeHistoryModel(
+                # Create commit with real GitLab SHA and metadata
+                commit = self.commit_repository.create_with_metadata(
                     repo_id=repo.id,
-                    commit_id=commit.id,
-                    sync_history_id=sync_history.id,
-                    file_path=file_path,
-                    change_type="added",
-                    sync_status="pending",
+                    sha=head_commit_sha,
+                    external_id=head_commit_sha,
+                    author_name=head_commit_info["author_name"],
+                    author_email=head_commit_info["author_email"],
+                    message=head_commit_info["message"],
+                    committed_at=datetime.fromisoformat(head_commit_info["committed_at"].replace('Z', '+00:00')),
+                    files_changed=len(code_files)
                 )
-                file_history_items.append(file_change)
 
-            # Bulk insert file history
-            self.file_change_repo.create_batch(file_history_items)
+            # 7. Queue all files for processing with batched insertion for large repos
+            file_count = len(code_files)
+            
+            total_queued = 0
+            for batch_start in range(0, file_count, SYNC_QUEUE_BULK_INSERT_BATCH_SIZE):
+                batch_end = min(batch_start + SYNC_QUEUE_BULK_INSERT_BATCH_SIZE, file_count)
+                batch_files = code_files[batch_start:batch_end]
+                
+                # Create file history for this batch
+                file_history_batch = []
+                for file_path in batch_files:
+                    file_change = FileChangeHistoryModel(
+                        repo_id=repo.id,
+                        commit_id=commit.id,
+                        sync_history_id=sync_history.id,
+                        file_path=file_path,
+                        change_type="added",
+                        sync_status="pending",
+                    )
+                    file_history_batch.append(file_change)
+                
+                # Bulk insert file history batch
+                self.file_change_repo.create_batch(file_history_batch)
+                
+                # Create queue items for this batch
+                queue_batch = []
+                for file_change in file_history_batch:
+                    queue_item = SyncQueueModel(
+                        repo_id=repo.id,
+                        commit_id=commit.id,
+                        file_change_history_id=file_change.id,
+                        file_path=file_change.file_path,
+                        change_type="added",
+                        priority=0,  # TODO: Use SYNC_PRIORITY_* constants based on file type
+                        status="pending",
+                    )
+                    queue_batch.append(queue_item)
+                
+                # Bulk insert queue batch
+                self.sync_queue_repo.enqueue_batch(queue_batch)
+                total_queued += len(queue_batch)
 
-            # Refresh file_history_items to get IDs after bulk insert
-            for file_change in file_history_items:
-                self.db_session.refresh(file_change)
-
-            # Create queue items
-            for i, file_change in enumerate(file_history_items):
-                queue_item = SyncQueueModel(
-                    repo_id=repo.id,
-                    commit_id=commit.id,
-                    file_change_history_id=file_change.id,
-                    file_path=file_change.file_path,
-                    change_type="added",
-                    priority=0,
-                    status="pending",
-                )
-                queue_items.append(queue_item)
-
-            # Bulk insert queue items
-            self.sync_queue_repo.enqueue_batch(queue_items)
-
-            sync_history.files_queued = len(queue_items)
+            # Update sync history with queued file count and to_commit_sha
+            sync_history.files_queued = total_queued
             sync_history.to_commit_sha = commit.sha
             self.sync_history_repo.update(sync_history)
-
+            
             # 8. Process queue in batches with connector config
             sync_config = self.connector_service.get_sync_config(gitlab_connector)
-            batch_size = sync_config.get("batch_size", 50)  # Increased from 10 to 50 for better performance
+            batch_size = sync_config.get("batch_size", GITLAB_SYNC_BATCH_SIZE_DEFAULT)
 
             result = await self._process_queue(
                 repo=repo,
                 sync_history=sync_history,
                 gitlab_service=gitlab_service,
-                knowledge_base_id=knowledge_base_id,
-                group_id=group_id,
+                knowledge_base_id=kb_entity.id,
+                persist_directory=kb_entity.vector_store_collection,
                 user_id=user_id,
                 branch=branch,
                 batch_size=batch_size,
             )
 
-            # 9. Mark sync as completed
-            self.sync_history_repo.complete_sync(sync_history.id, "completed")
-            self.repository_repo.mark_completed(repo.id)
+            
 
-            repository_db_id = repo.id
-
-            # Add repository source (sync version)
-            # Check if source already exists
-            source_stmt = select(KnowledgeBaseSourceModel).where(
-                KnowledgeBaseSourceModel.knowledge_base_id == kb_entity.id,
-                KnowledgeBaseSourceModel.source_type == "repository",
-                KnowledgeBaseSourceModel.source_id == str(repository_db_id)
+            # STEP 6: KB SOURCE MANAGEMENT - BRANCH CHANGE DETECTION & CLEANUP
+            existing_source = self.kb_source_repo.get_by_kb_and_source(
+                kb_id=kb_entity.id,
+                source_type="repository",
+                source_id=str(repo.id)
             )
-            existing_source = self.db_session.execute(source_stmt).scalar_one_or_none()
 
             if existing_source:
+                await self._handle_branch_change_cleanup(existing_source, kb_entity.id, branch, repo.id)
                 # Update existing source
                 existing_source.sync_status = "completed"
                 existing_source.auto_sync = auto_sync
                 existing_source.config = {"branch": branch}
                 existing_source.last_synced_at = datetime.utcnow()
-                kb_source = existing_source
+                self.kb_source_repo.update_source_sync_status(existing_source)
             else:
                 # Create new source
-                kb_source = KnowledgeBaseSourceModel(
-                    knowledge_base_id=kb_entity.id,
-                    source_type="repository",
-                    source_id=str(repository_db_id),
-                    config={"branch": branch},
-                    auto_sync=auto_sync,
-                    sync_status="completed",
-                    last_synced_at=datetime.utcnow()
-                )
-                self.db_session.add(kb_source)
-                self.db_session.flush()
+                self.kb_source_repo.create({
+                    "knowledge_base_id": kb_entity.id,
+                    "source_type": "repository",
+                    "source_id": str(repo.id),
+                    "config": {"branch": branch},
+                    "auto_sync": auto_sync,
+                    "sync_status": "completed",
+                    "last_synced_at": datetime.utcnow()
+                })
 
-            # Link repository to chatbot
-            repo.chatbot_id = chatbot_id
-
-            # Commit all changes in one transaction
-            self.db_session.commit()
-            logger.info(f"Successfully synced repository {repo_name} (ID: {repository_db_id})")
+            # 9. Mark sync as completed
+            self._complete_sync_for_repo(sync_history_id=sync_history.id, repo_id=repo.id)
 
             return {
                 "success": True,
-                "repository": repo_name,
-                "repository_id": repository_db_id,
+                "repository": repo.name,
+                "repository_id": repo.id,
                 "knowledge_base_id": kb_entity.id,
                 "knowledge_base_name": kb_entity.name,
                 "files_processed": result.get("files_processed", 0),
@@ -345,82 +375,7 @@ class GitLabSyncService:
             }
 
         except Exception as e:
-            logger.error(f"Full sync failed: {str(e)}")
-            # Rollback all changes in transaction
-            try:
-                self.db_session.rollback()
-            except Exception as rollback_error:
-                logger.error(f"Failed to rollback session: {rollback_error}")
-
-            # Update sync status
-            try:
-                self.sync_history_repo.complete_sync(sync_history.id, "failed", str(e))
-                self.repository_repo.mark_failed(repo.id)
-            except Exception as status_error:
-                logger.error(f"Failed to update sync status: {status_error}")
-
-            raise
-
-    async def sync_repository_incremental(self, repository_id: int, user_id: int) -> Dict[str, Any]:
-        """
-        Perform incremental repository sync (only new commits).
-
-        Args:
-            repository_id: Repository ID
-            user_id: User ID
-
-        Returns:
-            Dictionary with sync results
-        """
-        logger.info(f"Starting incremental sync for repo {repository_id}")
-
-        # 1. Get repository
-        repo = self.repository_repo.get_by_id(repository_id)
-        if not repo:
-            raise ValueError(f"Repository {repository_id} not found")
-
-        # Get GitLab service (uses admin token from settings)
-        gitlab_service = self._get_gitlab_service()
-
-        # 2. Get latest sync
-        latest_sync = self.sync_history_repo.get_latest_sync(repo.id)
-        if not latest_sync:
-            raise ValueError("No previous sync found. Please run full sync first.")
-
-        # Mark as syncing
-        self.repository_repo.mark_syncing(repo.id)
-
-        # 3. Create sync history
-        sync_history = SyncHistoryModel(
-            repo_id=repo.id,
-            sync_type="incremental",
-            triggered_by="manual",
-            user_id=user_id,
-            from_commit_sha=latest_sync.to_commit_sha,
-            to_commit_sha="",  # Will update later
-            status="running",
-        )
-        sync_history = self.sync_history_repo.create(sync_history)
-
-        try:
-            # 4. TODO: Fetch new commits from GitLab API
-            # For now, just mark as completed with no changes
-            logger.info("Incremental sync: No new commits found")
-
-            self.sync_history_repo.complete_sync(sync_history.id, "completed")
-            self.repository_repo.mark_completed(repo.id)
-
-            return {
-                "success": True,
-                "sync_type": "incremental",
-                "new_commits": 0,
-                "files_processed": 0,
-            }
-
-        except Exception as e:
-            logger.error(f"Incremental sync failed: {str(e)}")
-            self.sync_history_repo.complete_sync(sync_history.id, "failed", str(e))
-            self.repository_repo.mark_failed(repo.id)
+            self._fail_sync_for_repo(sync_history.id, repo.id, str(e))
             raise
 
     async def _fetch_file_content_async(
@@ -459,8 +414,8 @@ class GitLabSyncService:
         repo: RepositoryModel,
         sync_history: SyncHistoryModel,
         gitlab_service: GitLabService,
-        knowledge_base_id: str,
-        group_id: str,
+        knowledge_base_id: int,
+        persist_directory: str,
         user_id: int,
         branch: str,
         batch_size: int = 10,
@@ -473,7 +428,6 @@ class GitLabSyncService:
             sync_history: Sync history model
             gitlab_service: GitLab service
             knowledge_base_id: Knowledge Base ID
-            group_id: Group ID
             user_id: User ID
             branch: Branch name
             batch_size: Number of files per batch
@@ -497,7 +451,6 @@ class GitLabSyncService:
             self.sync_queue_repo.mark_processing([item.id for item in batch])
 
             # Fetch all files in parallel
-            logger.info(f"Fetching {len(batch)} files in parallel...")
             fetch_tasks = [
                 self._fetch_file_content_async(
                     gitlab_service,
@@ -546,7 +499,6 @@ class GitLabSyncService:
                             "source": "gitlab",
                             "repository": repo.full_name or repo.name,
                             "knowledge_base_id": knowledge_base_id,
-                            "group_id": group_id,
                             "user_id": user_id,
                         }
                         documents.append({"content": chunk.text, "metadata": doc_metadata})
@@ -576,7 +528,7 @@ class GitLabSyncService:
             if all_documents:
                 try:
                     logger.info(f"Batch syncing {len(all_documents)} documents from {len(batch)} files")
-                    await self.kb_sync_service.sync_documents(all_documents)
+                    await self.kb_sync_service.sync_documents(all_documents, persist_directory)
                 except Exception as e:
                     logger.error(f"Batch embedding failed: {str(e)}")
                     # Mark all as failed if batch embedding fails
@@ -624,3 +576,66 @@ class GitLabSyncService:
             "files_failed": total_failed,
             "total_embeddings": total_embeddings,
         }
+
+    async def _handle_branch_change_cleanup(self, source: KnowledgeBaseSourceModel, kb_id: int, branch: str, repo_id: int):
+        """
+        Detect branch change and cleanup old branch vectors if needed.
+        Raises VectorCleanupException if cleanup fails.
+        """
+        old_branch = source.config.get("branch")
+
+        # BRANCH CHANGE DETECTION & CLEANUP
+        if old_branch and old_branch != branch:
+            # CLEANUP OLD BRANCH VECTORS
+            cleanup_result = await self.kb_cleanup_service.cleanup_branch_change(
+                kb_id=kb_id,
+                source_id=str(source.id),
+                old_branch=old_branch
+            )
+
+            if not cleanup_result["success"]:
+                # CLEANUP FAILED - ABORT SYNC
+                raise VectorCleanupException(
+                    message=cleanup_result.get('error', 'Unknown error during branch cleanup'),
+                    details={
+                        "kb_id": kb_id,
+                        "source_id": str(source.id),
+                        "old_branch": old_branch,
+                        "new_branch": branch,
+                        "repo_id": repo_id
+                    }
+                )
+            logger.info(f"Successfully cleaned up {cleanup_result['deleted_vectors']} vectors from old branch '{old_branch}'")
+
+    def _complete_sync_for_repo(self, sync_history_id: int, repo_id: int, status: str = "completed"):
+        """
+            mark the sync history and repository as completed.
+
+            Args:
+                sync_history_id: ID of the sync history record
+                repo_id: ID of the repository
+                status: Sync status, default "completed"
+        """
+        try:
+            self.sync_history_repo.complete_sync(sync_history_id, status)
+            self.repository_repo.mark_completed(repo_id)
+        except Exception as status_error:
+            logger.error(f"Failed to update completed sync status: {status_error}")
+            raise
+
+    def _fail_sync_for_repo(self, sync_history_id: int, repo_id: int, message: str, status: str = "failed"):
+        """
+            mark the sync history and repository as failed.
+
+            Args:
+                sync_history_id: ID of the sync history record
+                repo_id: ID of the repository
+                message: Failure message
+                status: Sync status, default "failed"
+        """
+        try:
+            self.sync_history_repo.complete_sync(sync_history_id, status, message)
+            self.repository_repo.mark_failed(repo_id)
+        except Exception as status_error:
+            logger.error(f"Failed to update failed sync status: {status_error}")
+            raise

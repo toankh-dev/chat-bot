@@ -8,9 +8,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
 
 from infrastructure.postgresql.models.sync_queue_model import SyncQueueModel
+from shared.interfaces.repositories.sync_queue_repository import ISyncQueueRepository
 
 
-class SyncQueueRepository:
+class SyncQueueRepository(ISyncQueueRepository):
     """Repository for managing sync queue records."""
 
     def __init__(self, db_session: Session):
