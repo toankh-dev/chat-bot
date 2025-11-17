@@ -1,7 +1,3 @@
-"""
-JWT token handling for authentication.
-"""
-
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from jose import JWTError, jwt
@@ -12,14 +8,7 @@ from core.errors import TokenExpiredError, InvalidTokenError
 
 
 class JWTHandler:
-    """
-    JWT token handler for authentication.
-
-    Handles token generation, validation, and password hashing.
-    """
-
     def __init__(self):
-        """Initialize JWT handler."""
         self.secret_key = settings.JWT_SECRET_KEY
         self.algorithm = settings.JWT_ALGORITHM
         self.access_token_expire_minutes = settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
@@ -31,28 +20,9 @@ class JWTHandler:
         )
 
     def hash_password(self, password: str) -> str:
-        """
-        Hash a password using bcrypt.
-
-        Args:
-            password: Plain text password
-
-        Returns:
-            Hashed password
-        """
         return self.pwd_context.hash(password)
 
     def verify_password(self, plain_password: str, password_hash: str) -> bool:
-        """
-        Verify a password against its hash.
-
-        Args:
-            plain_password: Plain text password
-            password_hash: Hashed password
-
-        Returns:
-            True if password matches, False otherwise
-        """
         return self.pwd_context.verify(plain_password, password_hash)
 
     def create_access_token(
@@ -60,16 +30,6 @@ class JWTHandler:
         subject: str,
         additional_claims: Optional[Dict[str, Any]] = None
     ) -> str:
-        """
-        Create a JWT access token.
-
-        Args:
-            subject: Token subject (usually user ID)
-            additional_claims: Optional additional claims to include
-
-        Returns:
-            Encoded JWT token
-        """
         expire = datetime.utcnow() + timedelta(minutes=self.access_token_expire_minutes)
 
         to_encode = {
@@ -92,16 +52,6 @@ class JWTHandler:
         subject: str,
         additional_claims: Optional[Dict[str, Any]] = None
     ) -> str:
-        """
-        Create a JWT refresh token.
-
-        Args:
-            subject: Token subject (usually user ID)
-            additional_claims: Optional additional claims to include
-
-        Returns:
-            Encoded JWT token
-        """
         expire = datetime.utcnow() + timedelta(days=self.refresh_token_expire_days)
 
         to_encode = {
@@ -120,19 +70,6 @@ class JWTHandler:
         return encoded_jwt
 
     def decode_token(self, token: str) -> Dict[str, Any]:
-        """
-        Decode and validate a JWT token.
-
-        Args:
-            token: JWT token string
-
-        Returns:
-            Decoded token payload
-
-        Raises:
-            TokenExpiredError: If token has expired
-            InvalidTokenError: If token is invalid
-        """
         try:
             payload = jwt.decode(
                 token,
@@ -150,19 +87,6 @@ class JWTHandler:
             raise InvalidTokenError(message=f"Invalid token: {str(e)}")
 
     def get_token_subject(self, token: str) -> str:
-        """
-        Extract subject from JWT token.
-
-        Args:
-            token: JWT token string
-
-        Returns:
-            Token subject (user ID)
-
-        Raises:
-            TokenExpiredError: If token has expired
-            InvalidTokenError: If token is invalid
-        """
         payload = self.decode_token(token)
         subject = payload.get("sub")
 
@@ -172,19 +96,6 @@ class JWTHandler:
         return subject
 
     def verify_token_type(self, token: str, expected_type: str) -> bool:
-        """
-        Verify that token is of expected type.
-
-        Args:
-            token: JWT token string
-            expected_type: Expected token type ('access' or 'refresh')
-
-        Returns:
-            True if token type matches
-
-        Raises:
-            InvalidTokenError: If token type doesn't match
-        """
         payload = self.decode_token(token)
         token_type = payload.get("type")
 
@@ -196,12 +107,10 @@ class JWTHandler:
         return True
 
 
-# Singleton instance
 _jwt_handler = None
 
 
 def get_jwt_handler() -> JWTHandler:
-    """Get singleton JWT handler instance."""
     global _jwt_handler
     if _jwt_handler is None:
         _jwt_handler = JWTHandler()

@@ -1,5 +1,3 @@
-"""User management controller."""
-
 from fastapi import Depends
 from typing import List
 from schemas.user_schema import UserResponse, UserCreate, UserUpdate, UserProfileUpdate, ChangePasswordRequest
@@ -31,16 +29,6 @@ async def get_current_user_profile(
     current_user: UserEntity = Depends(get_current_user),
     use_case: GetCurrentUserUseCase = Depends(get_current_user_use_case)
 ) -> UserResponse:
-    """
-    Get current user profile.
-
-    Args:
-        current_user: Authenticated user
-        use_case: Get current user use case instance
-
-    Returns:
-        UserResponse: Current user data
-    """
     return await use_case.execute(current_user.id)
 
 
@@ -50,18 +38,6 @@ async def list_users(
     current_user: UserEntity = Depends(require_admin),
     use_case: ListUsersUseCase = Depends(get_list_users_use_case)
 ) -> List[UserResponse]:
-    """
-    List all users (admin only).
-
-    Args:
-        skip: Number of records to skip
-        limit: Maximum number of records to return
-        current_user: Authenticated admin user
-        use_case: List users use case instance
-
-    Returns:
-        List[UserResponse]: List of users
-    """
     return await use_case.execute(skip=skip, limit=limit)
 
 
@@ -70,17 +46,6 @@ async def get_user(
     current_user: UserEntity = Depends(require_admin),
     use_case: GetUserUseCase = Depends(get_user_use_case)
 ) -> UserResponse:
-    """
-    Get user by ID (admin only).
-
-    Args:
-        user_id: User ID
-        current_user: Authenticated admin user
-        use_case: Get user use case instance
-
-    Returns:
-        UserResponse: User data
-    """
     return await use_case.execute(user_id)
 
 
@@ -89,19 +54,7 @@ async def create_user(
     current_user: UserEntity = Depends(require_admin),
     use_case: CreateUserUseCase = Depends(get_create_user_use_case)
 ) -> UserResponse:
-    """
-    Create new user (admin only).
-
-    Args:
-        user_data: User creation data
-        current_user: Authenticated admin user
-        use_case: Create user use case instance
-
-    Returns:
-        UserResponse: Created user data with group assignments
-    """
-    admin_id = current_user.id
-    return await use_case.execute(user_data, admin_id=admin_id)
+    return await use_case.execute(user_data, admin_id=current_user.id)
 
 
 async def update_user(
@@ -110,20 +63,7 @@ async def update_user(
     current_user: UserEntity = Depends(require_admin),
     use_case: UpdateUserUseCase = Depends(get_update_user_use_case)
 ) -> UserResponse:
-    """
-    Update user (admin only).
-
-    Args:
-        user_id: User ID
-        user_data: User update data
-        current_user: Authenticated admin user
-        use_case: Update user use case instance
-
-    Returns:
-        UserResponse: Updated user data with group assignments
-    """
-    admin_id = current_user.id
-    return await use_case.execute(user_id, user_data, admin_id=admin_id)
+    return await use_case.execute(user_id, user_data, admin_id=current_user.id)
 
 
 async def delete_user(
@@ -131,16 +71,7 @@ async def delete_user(
     current_user: UserEntity = Depends(require_admin),
     use_case: DeleteUserUseCase = Depends(get_delete_user_use_case)
 ) -> None:
-    """
-    Delete user (admin only).
-
-    Args:
-        user_id: User ID
-        current_user: Authenticated admin user
-        use_case: Delete user use case instance
-    """
-    admin_id = current_user.id
-    await use_case.execute(user_id, admin_id=admin_id)
+    await use_case.execute(user_id, admin_id=current_user.id)
 
 
 async def update_own_profile(
@@ -148,17 +79,6 @@ async def update_own_profile(
     current_user: UserEntity = Depends(get_current_user),
     use_case: UpdateOwnProfileUseCase = Depends(get_update_own_profile_use_case)
 ) -> UserResponse:
-    """
-    Update own profile (logged-in user).
-
-    Args:
-        profile_data: Profile update data
-        current_user: Authenticated user
-        use_case: Update own profile use case instance
-
-    Returns:
-        UserResponse: Updated user data
-    """
     return await use_case.execute(current_user.id, profile_data)
 
 
@@ -167,16 +87,5 @@ async def change_password(
     current_user: UserEntity = Depends(get_current_user),
     use_case: ChangePasswordUseCase = Depends(get_change_password_use_case)
 ) -> dict:
-    """
-    Change own password (logged-in user).
-
-    Args:
-        password_data: Password change request
-        current_user: Authenticated user
-        use_case: Change password use case instance
-
-    Returns:
-        dict: Success message
-    """
     await use_case.execute(current_user.id, password_data)
     return {"message": "Password changed successfully"}

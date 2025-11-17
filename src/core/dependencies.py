@@ -86,7 +86,7 @@ from application.services.ai_model_service import AiModelService
 
 # Use Cases
 from src.application.services.group_service import GroupService
-from usecases.auth_use_cases import LoginUseCase, RegisterUseCase
+from usecases.auth_use_cases import LoginUseCase, RegisterUseCase, RefreshTokenUseCase
 from usecases.user_use_cases import (
     GetCurrentUserUseCase,
     ListUsersUseCase,
@@ -431,6 +431,13 @@ def get_login_use_case(
 def get_register_use_case(auth_service: AuthService = Depends(get_auth_service)) -> RegisterUseCase:
     """Get register use case instance."""
     return RegisterUseCase(auth_service)
+
+
+def get_refresh_token_use_case(
+    auth_service: AuthService = Depends(get_auth_service)
+) -> RefreshTokenUseCase:
+    """Get refresh token use case instance."""
+    return RefreshTokenUseCase(auth_service)
 
 
 # ============================================================================

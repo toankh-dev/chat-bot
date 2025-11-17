@@ -1,5 +1,3 @@
-"""JWT authentication middleware."""
-
 from fastapi import Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,7 +16,6 @@ security = HTTPBearer()
 
 
 def get_jwt_handler() -> JWTHandler:
-    """Get JWT handler instance."""
     return JWTHandler()
 
 
@@ -27,24 +24,6 @@ async def get_current_user(
     session: AsyncSession = Depends(get_db_session),
     jwt_handler: JWTHandler = Depends(get_jwt_handler)
 ) -> UserEntity:
-    """
-    Get current authenticated user from JWT token using Clean Architecture.
-
-    Args:
-        credentials: HTTP bearer token credentials
-        db: Database session
-        jwt_handler: JWT handler instance
-
-    Returns:
-        UserEntity: Authenticated user
-
-    Raises:
-        AuthenticationError: If authentication fails
-        InvalidTokenError: If token is invalid
-        AuthorizationError: If user account is not active
-    """
-    # Import here to avoid circular dependency
-    
     token = credentials.credentials
 
     try:
@@ -53,9 +32,8 @@ async def get_current_user(
         if not user_id:
             raise InvalidTokenError("Token does not contain user ID")
 
-        # Use dependency injection for repository
         user_repository: UserRepository = get_user_repository(session)
-        user = await user_repository.find_by_id(int(user_id))
+        user = await user_repository.find_by_id(str(user_id))
 
         if not user:
             raise AuthenticationError("User not found")
@@ -75,18 +53,6 @@ async def get_current_user(
 async def require_admin(
     current_user: UserEntity = Depends(get_current_user)
 ) -> UserEntity:
-    """
-    Require user to be admin.
-
-    Args:
-        current_user: Authenticated user
-
-    Returns:
-        UserEntity: Admin user
-
-    Raises:
-        AuthorizationError: If user is not admin
-    """
     if not current_user.is_admin:
         raise AuthorizationError("Admin privileges required")
     return current_user

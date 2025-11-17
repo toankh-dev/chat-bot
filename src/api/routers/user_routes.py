@@ -1,5 +1,3 @@
-"""User routes."""
-
 from fastapi import APIRouter, status
 from typing import List
 from api.controllers.user_controller import (
