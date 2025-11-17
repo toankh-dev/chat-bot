@@ -12,6 +12,9 @@ alembic==1.13.0
 psycopg2-binary==2.9.9  # Required for Alembic migrations
 chromadb==1.3.4
 
+# Redis (for distributed locking and caching)
+redis==5.0.1
+
 # AWS
 # Note: aioboto3 manages boto3/botocore versions, so we let it handle the dependencies
 aioboto3==12.3.0

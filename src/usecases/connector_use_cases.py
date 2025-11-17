@@ -107,7 +107,7 @@ class SetupGitLabConnectorUseCase:
             )
 
             # Create system connection for admin user
-            system_connection = await self.connector_service.get_or_create_system_connection(
+            system_connection = self.connector_service.get_or_create_system_connection(
                 user_id=admin_user_id,
                 connector=connector
             )

@@ -2,7 +2,7 @@
 GitLab Controller - Admin-only sync with clean architecture.
 """
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Query
 from typing import List
 
 from schemas.gitlab_schema import (
@@ -10,13 +10,16 @@ from schemas.gitlab_schema import (
     SyncRepositoryResponse,
     GitLabRepositoryInfo,
     GitLabRepositoryListResponse,
-    GitLabConnectionTestResponse
+    GitLabConnectionTestResponse,
+    GitLabBranchListResponse
 )
 
 from api.middlewares.jwt_middleware import require_admin
+from core.errors import BusinessRuleViolationError, ResourceNotFoundError
 from core.dependencies import (
     get_test_gitlab_connection_use_case,
     get_fetch_gitlab_repositories_use_case,
+    get_fetch_gitlab_branches_use_case,
     get_sync_repository_use_case
 )
 from domain.entities.user import UserEntity
@@ -46,14 +49,12 @@ async def sync_repository_admin(
         Sync result with statistics
     """
     try:
-        logger.info(f"Admin sync for GitLab repository URL: {request.repository_url}")
-        
         # Execute the sync repository use case
         result = await sync_repository_use_case.execute(request, current_user.id)
-        
+
         return SyncRepositoryResponse(
             success=result["success"],
-            repository=result["repository_name"],
+            repository=result["repository"],  # Fixed: use "repository" not "repository_name"
             repository_id=result["repository_id"],
             knowledge_base_id=result["knowledge_base_id"],
             knowledge_base_name=result["knowledge_base_name"],
@@ -79,49 +80,39 @@ async def sync_repository_admin(
 
 
 async def test_gitlab_connection_admin(
+    connector_id: int = Query(..., description="GitLab connector ID to test"),
     current_user: UserEntity = Depends(require_admin),
     test_gitlab_connection_use_case = Depends(get_test_gitlab_connection_use_case)
 ) -> GitLabConnectionTestResponse:
     """
     Test GitLab connection using GitLab use cases.
-    
+
+    Args:
+        connector_id: GitLab connector ID to test
+
     Returns:
         GitLab connection test result with user information
+
+    Raises:
+        ResourceNotFoundError: If connector not found (404)
+        BusinessRuleViolationError: If connector not active or wrong type (400)
     """
-    try:
-        result = test_gitlab_connection_use_case.execute()
+    result = test_gitlab_connection_use_case.execute(connector_id=connector_id)
 
-        if result["success"]:
-            logger.info(f"GitLab connection test successful: {result['details'].get('user', 'Unknown')}")
-            
-            # Convert to response schema
-            details = result["details"]
-            return GitLabConnectionTestResponse(
-                success=True,
-                user_id=str(details.get("id", "")),
-                username=details.get("username"),
-                name=details.get("name"),
-                email=details.get("email"),
-                message="Connection successful"
-            )
-        else:
-            return GitLabConnectionTestResponse(
-                success=False,
-                message=result["message"]
-            )
-
-    except Exception as e:
-        logger.error(f"GitLab connection failed: {str(e)}")
+    if result["success"]:
+        return GitLabConnectionTestResponse(
+            success=True,
+            message="Connection successful"
+        )
+    else:
         return GitLabConnectionTestResponse(
             success=False,
-            message=f"GitLab connection failed: {str(e)}"
+            message=result["message"]
         )
 
 
 async def fetch_gitlab_repositories_admin(
     connector_id: int,
-    per_page: int = 20,
-    page: int = 1,
     current_user: UserEntity = Depends(require_admin),
     fetch_gitlab_repositories_use_case = Depends(get_fetch_gitlab_repositories_use_case)
 ) -> GitLabRepositoryListResponse:
@@ -133,8 +124,6 @@ async def fetch_gitlab_repositories_admin(
 
     Args:
         connector_id: GitLab connector ID to use for fetching repositories
-        per_page: Number of repositories per page (1-100, default 20)
-        page: Page number to fetch (starting from 1, default 1)
         current_user: Authenticated admin user
         fetch_gitlab_repositories_use_case: Use case for fetching repositories
 
@@ -142,15 +131,10 @@ async def fetch_gitlab_repositories_admin(
         List of GitLab repositories with metadata
     """
     try:
-        logger.info(f"Admin fetching GitLab repositories - connector_id: {connector_id}, page {page}, per_page {per_page}")
-
-        # Use GitLab use case to fetch repositories with specific connector
+        # Use GitLab use case to fetch all repositories with specific connector
         result = fetch_gitlab_repositories_use_case.execute(
-            connector_id=connector_id,
-            per_page=per_page, 
-            page=page
+            connector_id=connector_id
         )
-        logger.info("GitLab repositories fetched successfully via GitLab use cases")
 
         # Transform to response model
         repo_infos = [
@@ -163,8 +147,6 @@ async def fetch_gitlab_repositories_admin(
         return GitLabRepositoryListResponse(
             repositories=repo_infos,
             total=len(repo_infos),
-            page=page,
-            per_page=per_page
         )
 
     except HTTPException:
@@ -181,3 +163,38 @@ async def fetch_gitlab_repositories_admin(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch GitLab repositories: {str(e)}"
         )
+
+
+async def fetch_gitlab_branches_admin(
+    project_id: int = Query(..., description="GitLab project ID (numeric ID from GitLab API)"),
+    connector_id: int = Query(..., description="GitLab connector ID to use"),
+    current_user: UserEntity = Depends(require_admin),
+    fetch_gitlab_branches_use_case = Depends(get_fetch_gitlab_branches_use_case)
+) -> GitLabBranchListResponse:
+    """
+    Fetch branches from a GitLab project using project ID and connector (Admin only).
+
+    This endpoint fetches all branch names from a specific GitLab project.
+
+    Args:
+        project_id: GitLab project ID (numeric ID from GitLab API)
+        connector_id: GitLab connector ID to use for connection
+        current_user: Authenticated admin user
+        fetch_gitlab_branches_use_case: Use case for fetching branches
+
+    Returns:
+        List of branch names
+
+    Raises:
+        ResourceNotFoundError: If connector not found
+        BusinessRuleViolationError: If connector validation fails
+        ValueError: If project or branches not found
+    """
+    result = fetch_gitlab_branches_use_case.execute(
+        connector_id=connector_id,
+        project_id=project_id
+    )
+
+    return GitLabBranchListResponse(
+        branches=result["branches"]
+    )

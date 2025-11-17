@@ -8,30 +8,13 @@ class IGitLabService(ABC):
     """Interface for GitLab service operations."""
 
     @abstractmethod
-    def get_current_user(self) -> Dict[str, Any]:
-        """
-        Get current authenticated user information.
-
-        Returns:
-            User information dictionary
-        """
-        pass
-
-    @abstractmethod
     def get_projects(
-        self,
-        per_page: int = 20,
-        page: int = 1,
-        owned: bool = False,
-        membership: bool = True,
-        visibility: Optional[str] = None
+        self, owned: bool = False, membership: bool = True, visibility: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Get list of projects from GitLab.
 
         Args:
-            per_page: Number of results per page
-            page: Page number
             owned: Only owned projects
             membership: Only member projects
             visibility: Filter by visibility (public, internal, private)
@@ -55,12 +38,21 @@ class IGitLabService(ABC):
         pass
 
     @abstractmethod
-    def get_repository_tree(
-        self,
-        project_id: str,
-        path: str = "",
-        ref: str = "main",
-        recursive: bool = False
+    def get_branches(self, project_id: str) -> List[str]:
+        """
+        Get all branch names of a GitLab project.
+
+        Args:
+            project_id: GitLab project ID or path
+
+        Returns:
+            List of branch names
+        """
+        pass
+
+    @abstractmethod
+    def _get_repository_tree(
+        self, project_id: str, path: str = "", ref: str = "main", recursive: bool = False
     ) -> List[Dict[str, Any]]:
         """
         Get repository tree (file structure).
@@ -77,12 +69,7 @@ class IGitLabService(ABC):
         pass
 
     @abstractmethod
-    def get_file_content(
-        self,
-        project_id: str,
-        file_path: str,
-        ref: str = "main"
-    ) -> bytes:
+    def get_file_content(self, project_id: str, file_path: str, ref: str = "main") -> bytes:
         """
         Get file content from repository.
 
@@ -97,24 +84,16 @@ class IGitLabService(ABC):
         pass
 
     @abstractmethod
-    def get_commits(
-        self,
-        project_id: str,
-        ref_name: str = "main",
-        since: Optional[str] = None,
-        until: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+    def get_branch_head_commit(self, project_id: str, branch_name: str) -> Dict[str, Any]:
         """
-        Get commits for a project.
+        Get HEAD commit SHA and information of a specific branch.
 
         Args:
-            project_id: GitLab project ID
-            ref_name: Branch name
-            since: Only commits after this date
-            until: Only commits before this date
+            project_id: Project ID or path
+            branch_name: Branch name (e.g., 'main', 'develop')
 
         Returns:
-            List of commit dictionaries
+            Dictionary with HEAD commit information including commit_sha
         """
         pass
 
@@ -128,5 +107,40 @@ class IGitLabService(ABC):
 
         Returns:
             Project path (e.g., "group/project")
+        """
+        pass
+
+    @abstractmethod
+    def filter_code_files(self, project_id: str, ref: str = "main", extensions: Optional[List[str]] = None, exclude_patterns: Optional[List[str]] = None) -> List[str]:
+        """
+        Filter code files from file list.
+
+        Args:
+            project_id: Project ID or path
+            ref: Branch/tag/commit reference
+            file_list: List of file paths
+            extensions: List of file extensions to include (e.g., ['.py', '.js'])
+            exclude_patterns: List of patterns to exclude (e.g., ['test_', '__pycache__'])
+
+        Returns:
+            Filtered list of code files
+        """
+        pass
+    
+    @abstractmethod
+    def _list_repositories(self, visibility: Optional[str] = None, owned: bool = False, membership: bool = True, search: Optional[str] = None, order_by: str = "last_activity_at", sort: str = "desc") -> List[Dict[str, Any]]:
+        """
+        List GitLab repositories accessible to the authenticated user.
+
+        Args:
+            visibility: Filter by visibility (public, internal, private)
+            owned: Limit to owned projects only
+            membership: Limit to projects user is a member of
+            search: Search term to filter repositories by name/description
+            order_by: Sort by field (id, name, path, created_at, updated_at, last_activity_at)
+            sort: Sort order (asc or desc)
+
+        Returns:
+            List of repository information dictionaries
         """
         pass

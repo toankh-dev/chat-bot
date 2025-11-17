@@ -142,6 +142,102 @@ class Settings(BaseSettings):
     RATE_LIMIT_PER_USER: int = 100
     RATE_LIMIT_WINDOW_SECONDS: int = 60
 
+
+    # ============================================================================
+    # GitLab Sync Configuration (Phase 1.2 - Centralized Configuration)
+    # ============================================================================
+
+    # Branch defaults
+    GITLAB_DEFAULT_BRANCH: str = "main"
+    GITLAB_AUTO_CLEANUP_ON_BRANCH_CHANGE: bool = True
+    GITLAB_ABORT_ON_CLEANUP_FAILURE: bool = True
+
+    # Batch processing
+    GITLAB_SYNC_BATCH_SIZE_DEFAULT: int = 50
+    GITLAB_SYNC_BATCH_SIZE_MIN: int = 5
+    GITLAB_SYNC_BATCH_SIZE_MAX: int = 200
+    SYNC_QUEUE_BULK_INSERT_BATCH_SIZE: int = 1000
+    SYNC_QUEUE_PROCESSING_TIMEOUT_MINUTES: int = 30
+
+    # API configuration
+    GITLAB_API_MAX_PER_PAGE: int = 100
+    GITLAB_API_DEFAULT_PER_PAGE: int = 50
+    GITLAB_API_TIMEOUT_SECONDS: int = 30
+    GITLAB_API_MAX_RETRIES: int = 3
+    GITLAB_API_RETRY_DELAY_SECONDS: int = 5
+
+    # Code chunking
+    CODE_CHUNK_MAX_FILE_SIZE: int = 50_000  # 50KB in bytes
+    CODE_CHUNK_SIZE: int = 1000
+    CODE_CHUNK_OVERLAP: int = 200
+    CODE_CHUNK_MAX_LINES_PER_CHUNK: int = 500
+
+    # Vector store
+    VECTOR_STORE_MIN_SUCCESS_RATE: float = 0.9  # 90% success rate required
+    VECTOR_STORE_BATCH_SIZE: int = 100
+
+    # Document upload limits
+    DOCUMENT_MAX_FILE_SIZE_MB: int = 50
+    DOCUMENT_MAX_FILE_SIZE: int = 50 * 1024 * 1024  # Computed
+
+    # Redis configuration (for distributed locks)
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+    REDIS_DB: int = 0
+    REDIS_PASSWORD: Optional[str] = None
+    REDIS_LOCK_TIMEOUT_SECONDS: int = 3600  # 1 hour
+
+    # File storage provider
+    FILE_STORAGE_PROVIDER: str = "local"  # local or s3
+
+
+    # ============================================================================
+    # GitLab Sync Configuration (Phase 1.2 - Centralized Configuration)
+    # ============================================================================
+
+    # Branch defaults
+    GITLAB_DEFAULT_BRANCH: str = "main"
+    GITLAB_AUTO_CLEANUP_ON_BRANCH_CHANGE: bool = True
+    GITLAB_ABORT_ON_CLEANUP_FAILURE: bool = True
+
+    # Batch processing
+    GITLAB_SYNC_BATCH_SIZE_DEFAULT: int = 50
+    GITLAB_SYNC_BATCH_SIZE_MIN: int = 5
+    GITLAB_SYNC_BATCH_SIZE_MAX: int = 200
+    SYNC_QUEUE_BULK_INSERT_BATCH_SIZE: int = 1000
+    SYNC_QUEUE_PROCESSING_TIMEOUT_MINUTES: int = 30
+
+    # API configuration
+    GITLAB_API_MAX_PER_PAGE: int = 100
+    GITLAB_API_DEFAULT_PER_PAGE: int = 50
+    GITLAB_API_TIMEOUT_SECONDS: int = 30
+    GITLAB_API_MAX_RETRIES: int = 3
+    GITLAB_API_RETRY_DELAY_SECONDS: int = 5
+
+    # Code chunking
+    CODE_CHUNK_MAX_FILE_SIZE: int = 50_000  # 50KB in bytes
+    CODE_CHUNK_SIZE: int = 1000
+    CODE_CHUNK_OVERLAP: int = 200
+    CODE_CHUNK_MAX_LINES_PER_CHUNK: int = 500
+
+    # Vector store
+    VECTOR_STORE_MIN_SUCCESS_RATE: float = 0.9  # 90% success rate required
+    VECTOR_STORE_BATCH_SIZE: int = 100
+
+    # Document upload limits
+    DOCUMENT_MAX_FILE_SIZE_MB: int = 50
+    DOCUMENT_MAX_FILE_SIZE: int = 50 * 1024 * 1024  # Computed
+
+    # Redis configuration (for distributed locks)
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+    REDIS_DB: int = 0
+    REDIS_PASSWORD: Optional[str] = None
+    REDIS_LOCK_TIMEOUT_SECONDS: int = 3600  # 1 hour
+
+    # File storage provider
+    FILE_STORAGE_PROVIDER: str = "local"  # local or s3
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

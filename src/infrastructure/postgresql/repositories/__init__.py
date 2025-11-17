@@ -13,10 +13,12 @@ from .ingestion_job_repository import IngestionJobRepositoryImpl
 from .user_group_repository import UserGroupRepositoryImpl
 from .user_chatbot_repository import UserChatbotRepositoryImpl
 from .ai_model_repository import AiModelRepositoryImpl
+from .repository_repository import RepositoryRepository
+from .commit_model_repository import CommitRepository
 
 __all__ = [
     "UserRepositoryImpl",
-    "ChatbotRepositoryImpl", 
+    "ChatbotRepositoryImpl",
     "ConversationRepositoryImpl",
     "MessageRepositoryImpl",
     "DocumentRepositoryImpl",
@@ -26,5 +28,7 @@ __all__ = [
     "IngestionJobRepositoryImpl",
     "UserGroupRepositoryImpl",
     "UserChatbotRepositoryImpl",
-    "AiModelRepositoryImpl"
+    "AiModelRepositoryImpl",
+    "RepositoryRepository",
+    "CommitRepository",
 ]

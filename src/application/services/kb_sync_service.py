@@ -6,8 +6,11 @@ from typing import List, Dict, Any, Optional
 from application.services.document_chunking_service import TextChunk
 from shared.interfaces.services.ai_services.embedding_service import IEmbeddingService
 from shared.interfaces.services.ai_services.vector_store_service import IVectorStore
+from shared.interfaces.services.ai_services.vector_store_factory import IVectorStoreFactory
 from shared.interfaces.repositories.document_repository import DocumentRepository
 from domain.entities.document import DocumentEntity
+from core.logger import logger
+from core.errors import VectorStoreError, VectorInsertionError
 import asyncio
 
 
@@ -17,7 +20,7 @@ class KBSyncService:
     def __init__(
         self,
         embedding_service: IEmbeddingService,
-        vector_store: IVectorStore,
+        vector_store_factory: IVectorStoreFactory,
         document_repository: DocumentRepository
     ):
         """
@@ -25,11 +28,11 @@ class KBSyncService:
 
         Args:
             embedding_service: Service for creating embeddings
-            vector_store: Vector store for storing embeddings
+            vector_store_factory: Factory for creating vector store instances
             document_repository: Repository for updating document status
         """
         self.embedding_service = embedding_service
-        self.vector_store = vector_store
+        self.vector_store_factory = vector_store_factory
         self.document_repository = document_repository
 
     async def add_document_to_kb(
@@ -64,14 +67,20 @@ class KBSyncService:
             chunk_texts = [chunk.text for chunk in chunks]
 
             # Create embeddings for all chunks
-            print(f"Creating embeddings for {len(chunk_texts)} chunks...")
+            logger.info(
+                "Creating embeddings for chunks",
+                extra={"chunk_count": len(chunk_texts), "document_id": str(document.id)}
+            )
             embeddings = await self.embedding_service.create_embeddings(chunk_texts)
 
             if len(embeddings) != len(chunks):
                 raise ValueError(f"Embedding count mismatch: {len(embeddings)} != {len(chunks)}")
 
             # Add vectors to vector store
-            print(f"Adding {len(embeddings)} vectors to KB: {knowledge_base_id}")
+            logger.info(
+                "Adding vectors to knowledge base",
+                extra={"vector_count": len(embeddings), "kb_id": knowledge_base_id}
+            )
             vector_ids = []
 
             for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
@@ -91,7 +100,10 @@ class KBSyncService:
                     vector_ids.append(vector_id)
 
                 except Exception as e:
-                    print(f"Error adding chunk {i} to vector store: {e}")
+                    logger.error(
+                        f"Error adding chunk to vector store",
+                        extra={"chunk_index": i, "document_id": str(document.id), "error": str(e)}
+                    )
                     continue
 
             if not vector_ids:
@@ -239,24 +251,25 @@ class KBSyncService:
                 "error": str(e)
             }
 
-    async def sync_documents(self, documents: List[Dict[str, Any]]) -> Dict[str, Any]:
+    async def sync_documents(self, documents: List[Dict[str, Any]], persist_directory: str) -> Dict[str, Any]:
         """
         Synchronously sync documents to vector store (for GitLab sync).
-
-        Args:
-            documents: List of documents with 'content' and 'metadata' keys
-
-        Returns:
-            Dictionary with sync results
         """
         try:
+            collection_name = persist_directory
+            actual_persist_dir = f".chromadb/{collection_name}"
+
+            vector_store = self.vector_store_factory.create(
+                config={
+                    "collection_name": collection_name,
+                    "persist_directory": actual_persist_dir
+                }
+            )
+           
             # Extract texts and metadata
             texts = [doc["content"] for doc in documents]
             metadatas = [doc["metadata"] for doc in documents]
-
-            # Get knowledge_base_id from first document's metadata
-            knowledge_base_id = metadatas[0].get("knowledge_base_id") if metadatas else "default"
-
+    
             # Create embeddings asynchronously
             embeddings = await self.embedding_service.create_embeddings(texts)
 
@@ -272,7 +285,7 @@ class KBSyncService:
                     }
 
                     # Add vector to store
-                    vector_id = self.vector_store.add_vector(embedding, full_metadata)
+                    vector_id = vector_store.add_vector(embedding, full_metadata)
                     vector_ids.append(vector_id)
 
                 except Exception as e:
@@ -281,7 +294,7 @@ class KBSyncService:
 
             return {
                 "success": True,
-                "kb_id": knowledge_base_id,
+                "persist_directory": persist_directory,
                 "total_documents": len(documents),
                 "vectors_added": len(vector_ids)
             }
