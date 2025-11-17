@@ -2,9 +2,9 @@
 KnowledgeBase Sync Repository - Database operations for knowledge base management (SYNC).
 """
 
-from typing import Optional
-from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
+from typing import Optional, Tuple
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import and_, or_, select
 
 from infrastructure.postgresql.models.knowledge_base_model import KnowledgeBaseModel
 from shared.interfaces.repositories.knowledge_base_repository import IKnowledgeBaseRepository
@@ -13,7 +13,7 @@ from shared.interfaces.repositories.knowledge_base_repository import IKnowledgeB
 class KnowledgeBaseRepository(IKnowledgeBaseRepository):
     """Repository for managing knowledge base records (SYNC version for GitLab)."""
 
-    def __init__(self, db_session: Session):
+    def __init__(self, db_session: AsyncSession):
         """
         Initialize knowledge base repository.
 
@@ -22,27 +22,12 @@ class KnowledgeBaseRepository(IKnowledgeBaseRepository):
         """
         self.db_session = db_session
 
-    def get_by_name_and_chatbot(
-        self, kb_name: str, chatbot_id: int
-    ) -> Optional[KnowledgeBaseModel]:
-        """
-        Get knowledge base by name and chatbot ID.
+    async def get_by_chatbot_id(self, chatbot_id: int):
+        stmt = select(KnowledgeBaseModel).filter_by(chatbot_id=chatbot_id)
+        result = await self.db_session.execute(stmt)
+        return result.scalars().first()
 
-        Args:
-            kb_name: Knowledge base name
-            chatbot_id: Chatbot ID
-
-        Returns:
-            KnowledgeBase model or None
-        """
-        return self.db_session.query(KnowledgeBaseModel).filter(
-            and_(
-                KnowledgeBaseModel.name == kb_name,
-                KnowledgeBaseModel.chatbot_id == chatbot_id
-            )
-        ).first()
-
-    def create(self, kb_data: dict) -> KnowledgeBaseModel:
+    async def create(self, kb_data: dict) -> KnowledgeBaseModel:
         """
         Create a new knowledge base.
 
@@ -54,51 +39,39 @@ class KnowledgeBaseRepository(IKnowledgeBaseRepository):
         """
         kb = KnowledgeBaseModel(**kb_data)
         self.db_session.add(kb)
-        self.db_session.flush()
-        self.db_session.refresh(kb)
+
+        await self.db_session.flush()
+        await self.db_session.refresh(kb)
         return kb
 
-    def get_by_id(self, kb_id: int) -> Optional[KnowledgeBaseModel]:
+    async def get_by_id(self, kb_id: int) -> Optional[KnowledgeBaseModel]:
         """
         Get knowledge base by ID.
-
-        Args:
-            kb_id: Knowledge base ID
-
-        Returns:
-            KnowledgeBase model or None
         """
-        return self.db_session.query(KnowledgeBaseModel).filter(
-            KnowledgeBaseModel.id == kb_id
-        ).first()
+        stmt = select(KnowledgeBaseModel).where(KnowledgeBaseModel.id == kb_id)
 
-    def get_or_create(
-        self,
-        knowledge_base_id: Optional[int] = None,
-        defaults: dict = None
-    ) -> tuple[KnowledgeBaseModel, bool]:
-        """
-        Get existing knowledge base or create new one.
+        result = await self.db_session.execute(stmt)
+        return result.scalars().first()
 
-        Args:
-            knowledge_base_id: knowledge base ID
-            defaults: Default values if creating new knowledge base
+    async def get_or_create(
+        self, knowledge_base_id: Optional[int] = None, defaults: dict = None
+    ) -> Tuple[KnowledgeBaseModel, bool]:
 
-        Returns:
-            Tuple of (knowledge base, created) where created is True if new
-        """
-        knowledge_base = self.db_session.query(KnowledgeBaseModel).filter(
-            and_(
-                KnowledgeBaseModel.id == knowledge_base_id,
-            )
-        ).first()
+        # --- 1. Try to get existing KB ---
+        stmt = select(KnowledgeBaseModel).where(KnowledgeBaseModel.id == knowledge_base_id)
+
+        result = await self.db_session.execute(stmt)
+        knowledge_base = result.scalars().first()
 
         if knowledge_base:
             return knowledge_base, False
 
-        # Create new knowledge base
-        repo_data = defaults or {}
-        knowledge_base = KnowledgeBaseModel(
-            **repo_data
-        )
-        return self.create(knowledge_base), True
+        # --- 2. Create new KB ---
+        data = defaults or {}
+        knowledge_base = KnowledgeBaseModel(**data)
+
+        self.db_session.add(knowledge_base)
+        await self.db_session.flush()
+        await self.db_session.refresh(knowledge_base)
+
+        return knowledge_base, True

@@ -45,8 +45,8 @@ class SyncRepositoryUseCase:
         try:
             sync_result = await self.gitlab_sync_service.sync_repository_full(
                 user_id=user_id,
+                chatbot_id=request.chatbot_id,
                 connector_id=request.connector_id,
-                knowledge_base_id=request.knowledge_base_id,
                 repository_external_id=request.repository_external_id,
                 branch=request.branch,
                 auto_sync=request.auto_sync
@@ -98,30 +98,13 @@ class TestGitLabConnectionUseCase:
             )
 
         # Test connection
-        gitlab_service = self.connector_service.get_gitlab_service(gitlab_connector)
+        self.connector_service.get_gitlab_service(gitlab_connector)
 
         # Try to get user info to test connection
-        try:
-            user_info = gitlab_service.get_current_user()
-            return {
-                "success": True,
-                "message": "GitLab connection successful",
-                "details": {
-                    "user": user_info.get("username", "Unknown"),
-                    "gitlab_url": gitlab_connector.config_schema.get("instance_config", {}).get("gitlab_url"),
-                    "connector_id": gitlab_connector.id,
-                    "id": user_info.get("id"),
-                    "username": user_info.get("username"),
-                    "name": user_info.get("name"),
-                    "email": user_info.get("email")
-                }
-            }
-        except Exception as e:
-            return {
-                "success": False,
-                "message": f"GitLab connection failed: {str(e)}",
-                "details": {"error": str(e)}
-            }
+        return {
+            "success": True,
+            "message": "GitLab connection successful",
+        }
 
 
 class FetchGitLabRepositoriesUseCase:

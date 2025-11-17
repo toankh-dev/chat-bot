@@ -15,7 +15,6 @@ from schemas.gitlab_schema import (
 )
 
 from api.middlewares.jwt_middleware import require_admin
-from core.errors import BusinessRuleViolationError, ResourceNotFoundError
 from core.dependencies import (
     get_test_gitlab_connection_use_case,
     get_fetch_gitlab_repositories_use_case,
@@ -80,9 +79,9 @@ async def sync_repository_admin(
 
 
 async def test_gitlab_connection_admin(
-    connector_id: int = Query(..., description="GitLab connector ID to test"),
     current_user: UserEntity = Depends(require_admin),
-    test_gitlab_connection_use_case = Depends(get_test_gitlab_connection_use_case)
+    test_gitlab_connection_use_case = Depends(get_test_gitlab_connection_use_case),
+    connector_id: int = Query(..., description="GitLab connector ID to test"),
 ) -> GitLabConnectionTestResponse:
     """
     Test GitLab connection using GitLab use cases.
@@ -92,10 +91,6 @@ async def test_gitlab_connection_admin(
 
     Returns:
         GitLab connection test result with user information
-
-    Raises:
-        ResourceNotFoundError: If connector not found (404)
-        BusinessRuleViolationError: If connector not active or wrong type (400)
     """
     result = test_gitlab_connection_use_case.execute(connector_id=connector_id)
 

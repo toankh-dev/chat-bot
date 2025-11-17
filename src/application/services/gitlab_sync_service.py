@@ -101,14 +101,14 @@ class GitLabSyncService:
     async def sync_repository_full(
         self,
         user_id: int,
+        chatbot_id: int,
         connector_id: int,
         repository_external_id: str,
-        knowledge_base_id: int,
         branch: str,
         auto_sync: bool = False,
     ) -> Dict[str, Any]:
         """
-        Perform full repository sync with distributed lock to prevent concurrent syncs.
+            Perform full repository sync with distributed lock to prevent concurrent syncs.
         """
         # Generate lock key with user_id for multi-tenant isolation
         lock_key = (
@@ -124,16 +124,15 @@ class GitLabSyncService:
                     "repo_id": repository_external_id,
                     "branch": branch,
                     "user_id": user_id,
-                    "kb_id": knowledge_base_id,
                 },
             )
 
             # Perform sync operation within lock context
             return await self._sync_repository_full_impl(
                 user_id=user_id,
+                chatbot_id=chatbot_id,
                 connector_id=connector_id,
                 repository_external_id=repository_external_id,
-                knowledge_base_id=knowledge_base_id,
                 branch=branch,
                 auto_sync=auto_sync,
             )
@@ -141,9 +140,9 @@ class GitLabSyncService:
     async def _sync_repository_full_impl(
         self,
         user_id: int,
+        chatbot_id: int,
         connector_id: int,
         repository_external_id: str,
-        knowledge_base_id: int,
         branch: str,
         auto_sync: bool = False,
     ) -> Dict[str, Any]:
@@ -180,13 +179,13 @@ class GitLabSyncService:
         head_commit_sha = head_commit_info["commit_sha"]
 
         # STEP 4: GET OR CREATE KNOWLEDGE BASE
-        kb_entity = self.knowledge_base_repo.get_by_id(knowledge_base_id)
+        kb_entity = await self.knowledge_base_repo.get_by_chatbot_id(chatbot_id)
 
         if not kb_entity:
-            raise KnowledgeBaseNotFoundError(kb_id=knowledge_base_id)
+            raise KnowledgeBaseNotFoundError(kb_id=chatbot_id)
 
         # Step 5. Get or create repository record
-        (repo,) = self.repository_repo.get_or_create(
+        repo, created = self.repository_repo.get_or_create(
             connection_id=connection.id,
             external_id=repository_external_id,
             defaults={

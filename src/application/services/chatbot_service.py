@@ -29,10 +29,10 @@ class ChatbotService:
     def __init__(
         self,
         chatbot_repository: ChatbotRepository,
-        group_chatbot_repository: Optional[GroupChatbotRepository] = None,
-        user_chatbot_repository: Optional[UserChatbotRepository] = None,
-        group_repository: Optional[GroupRepository] = None,
-        user_repository: Optional[UserRepository] = None
+        group_chatbot_repository: GroupChatbotRepository,
+        user_chatbot_repository: UserChatbotRepository,
+        group_repository: GroupRepository,
+        user_repository: UserRepository,
     ):
         self.chatbot_repository = chatbot_repository
         self.group_chatbot_repository = group_chatbot_repository

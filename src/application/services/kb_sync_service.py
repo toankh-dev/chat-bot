@@ -252,15 +252,20 @@ class KBSyncService:
     async def sync_documents(self, documents: List[Dict[str, Any]], persist_directory: str) -> Dict[str, Any]:
         """
         Synchronously sync documents to vector store (for GitLab sync).
+
+        Args:
+            persist_directory: Collection identifier (e.g., kb_chatbot_9_default) 
+            Factory will auto-handle ChromaDB vs S3 based on settings
+        Returns:
+            Dict with sync results
         """
         try:
             collection_name = persist_directory
-            actual_persist_dir = f".chromadb/{collection_name}"
 
+            # Factory auto-handles provider-specific config (ChromaDB local path vs S3 bucket/prefix)
             vector_store = self.vector_store_factory.create(
                 config={
-                    "collection_name": collection_name,
-                    "persist_directory": actual_persist_dir
+                    "collection_name": collection_name
                 }
             )
            

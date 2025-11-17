@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 class SyncRepositoryRequest(BaseModel):
     """Request model for syncing a repository."""
     connector_id: int = Field(..., description="GitLab connector ID")
-    knowledge_base_id: Optional[int] = Field(..., description="Knowledege base ID to link this chatbot to")
+    chatbot_id: int = Field(..., description="Chatbot ID")
     repository_external_id: int = Field(..., description="GitLab project ID")
     branch: str = Field(..., description="Branch to sync (uses default branch if not specified)")
     auto_sync: bool = Field(default=False, description="Auto-sync on GitLab webhook events")

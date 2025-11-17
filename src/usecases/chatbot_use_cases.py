@@ -253,13 +253,7 @@ class CreateChatbotUseCase:
             "is_active": True
         }
 
-        try:
-            self.knowledge_base_repository.create(default_kb_data)
-        except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Failed to create default knowledge base for chatbot {chatbot_id}: {e}")
-            # Continue execution even if KB creation fails - chatbot is already created
+        await self.knowledge_base_repository.create(default_kb_data)
         
         chatbot = await self.chatbot_service.get_chatbot_by_id(chatbot_id, include_assignments=True)
         model_data = await self.chatbot_service.get_chatbot_model_data(chatbot_id)

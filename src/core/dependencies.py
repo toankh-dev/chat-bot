@@ -8,8 +8,8 @@ Provides dependencies for controllers and use cases following Clean Architecture
 from typing import Generator, Callable
 
 # Third-party imports
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends
+from fastapi.security import HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
@@ -273,8 +273,8 @@ def get_file_change_history_repository(db_session: Session = Depends(get_db)) ->
     return FileChangeHistoryRepository(db_session)
 
 
-def get_knowledge_base_sync_repository(db_session: Session = Depends(get_db)) -> KnowledgeBaseRepository:
-    """Get knowledge base repository instance (SYNC)."""
+def get_knowledge_base_sync_repository(db_session: AsyncSession = Depends(get_db_session)) -> KnowledgeBaseRepository:
+    """Get knowledge base repository instance (uses AsyncSession to share transaction with chatbot_service)."""
     return KnowledgeBaseRepository(db_session)
 
 

@@ -3,7 +3,7 @@ Chatbot domain entity.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import datetime
 from decimal import Decimal
 from typing import List, Optional
 
@@ -46,8 +46,8 @@ class ChatbotEntity:
     enable_function_calling: bool = True
     created_by: int = None
     status: str = "active"
-    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = field(default_factory=lambda: datetime.now())
+    updated_at: datetime = field(default_factory=lambda: datetime.now())
 
     def __post_init__(self):
         """Validate chatbot invariants."""
@@ -63,12 +63,12 @@ class ChatbotEntity:
     def deactivate(self) -> None:
         """Deactivate chatbot."""
         self.status = "disabled"
-        self.updated_at = datetime.now(UTC)
+        self.updated_at = datetime.now()
 
     def activate(self) -> None:
         """Activate chatbot."""
         self.status = "active"
-        self.updated_at = datetime.now(UTC)
+        self.updated_at = datetime.now()
         
     @property
     def is_active(self) -> bool:
@@ -109,7 +109,7 @@ class ChatbotEntity:
             self.max_conversation_length = max_conversation_length
         if enable_function_calling is not None:
             self.enable_function_calling = enable_function_calling
-        self.updated_at = datetime.now(UTC)
+        self.updated_at = datetime.now()
 
     def to_dict(self) -> dict:
         """Convert to dictionary."""

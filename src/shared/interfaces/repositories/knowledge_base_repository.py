@@ -12,14 +12,11 @@ class IKnowledgeBaseRepository(ABC):
     """Interface for knowledge base repository operations."""
 
     @abstractmethod
-    def get_by_name_and_chatbot(
-        self, kb_name: str, chatbot_id: int
-    ) -> Optional[KnowledgeBaseModel]:
+    async def get_by_chatbot_id(self, chatbot_id: int) -> Optional[KnowledgeBaseModel]:
         """
-        Get knowledge base by name and chatbot ID.
+        Get knowledge base by chatbot ID.
 
         Args:
-            kb_name: Knowledge base name
             chatbot_id: Chatbot ID
 
         Returns:
@@ -28,7 +25,7 @@ class IKnowledgeBaseRepository(ABC):
         pass
 
     @abstractmethod
-    def create(self, kb_data: dict) -> KnowledgeBaseModel:
+    async def create(self, kb_data: dict) -> KnowledgeBaseModel:
         """
         Create a new knowledge base.
 
@@ -41,7 +38,7 @@ class IKnowledgeBaseRepository(ABC):
         pass
 
     @abstractmethod
-    def get_by_id(self, kb_id: int) -> Optional[KnowledgeBaseModel]:
+    async def get_by_id(self, kb_id: int) -> Optional[KnowledgeBaseModel]:
         """
         Get knowledge base by ID.
 
@@ -54,7 +51,7 @@ class IKnowledgeBaseRepository(ABC):
         pass
 
     @abstractmethod
-    def get_or_create(
+    async def get_or_create(
         self,
         knowledge_base_id: int,
         defaults: dict = None

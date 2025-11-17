@@ -5,7 +5,7 @@ Represents a group of users in the system.
 """
 
 from dataclasses import dataclass
-from datetime import datetime, UTC
+from datetime import datetime
 from typing import Optional, List
 from domain.value_objects.uuid_vo import UUID
 

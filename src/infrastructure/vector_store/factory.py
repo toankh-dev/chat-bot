@@ -22,6 +22,36 @@ class VectorStoreFactory(IVectorStoreFactory):
         """Register a new vector store provider."""
         cls._providers[name] = provider_cls
 
+    @staticmethod
+    def _extract_domain_from_collection(collection_name: str) -> str:
+        """
+        Extract domain from collection name.
+
+        Examples:
+            kb_chatbot_9_default -> chatbot
+            kb_gitlab_123_repo -> gitlab
+            custom_collection -> custom
+        """
+        if collection_name.startswith('kb_'):
+            parts = collection_name.split('_')
+            if len(parts) >= 2:
+                return parts[1]  # Return the domain part (chatbot, gitlab, etc.)
+        return 'default'
+
+    @staticmethod
+    def _extract_prefix_from_collection(collection_name: str) -> str:
+        """
+        Extract S3 prefix from collection name.
+
+        Examples:
+            kb_chatbot_9_default -> chatbot_9_default
+            kb_gitlab_123_repo -> gitlab_123_repo
+            custom_collection -> custom_collection
+        """
+        if collection_name.startswith('kb_'):
+            return collection_name[3:]  # Remove 'kb_' prefix
+        return collection_name
+
     @classmethod
     def create(cls, config: Optional[dict] = None, **kwargs) -> BaseVectorStore:
         """
@@ -51,6 +81,8 @@ class VectorStoreFactory(IVectorStoreFactory):
 
         # Create instance with provider-specific configuration
         try:
+            collection_name = config.get('collection_name')
+
             if provider == 'chromadb':
                 # ============================================================
                 # CRITICAL FIX: Pass collection_name to ChromaDB (Phase 1.3)
@@ -59,28 +91,49 @@ class VectorStoreFactory(IVectorStoreFactory):
                 # Format: kb_{knowledge_base_id}
                 # ============================================================
 
-                collection_name = config.get('collection_name')
                 if not collection_name:
                     raise ValueError(
                         "collection_name is required for chromadb provider. "
                         "Expected format: kb_{knowledge_base_id}"
                     )
 
-                persist_directory = config.get('persist_directory', '.chromadb')
+                # Auto-generate persist_directory from collection_name if not provided
+                persist_directory = config.get('persist_directory')
+                if not persist_directory:
+                    persist_directory = f'.chromadb/{collection_name}'
 
                 return provider_cls(
                     collection_name=collection_name,
                     persist_directory=persist_directory
                 )
+
             elif provider == 's3':
+                # ============================================================
+                # S3 Provider: Auto-extract domain/prefix from collection_name
+                # ============================================================
+                # If domain/prefix not explicitly provided, extract from collection_name
+                # Format: kb_{domain}_{id}_{name} -> domain={domain}, prefix={domain}_{id}_{name}
+                # ============================================================
+
                 bucket = config.get('bucket_name', settings.S3_BUCKET_EMBEDDINGS)
+
+                # Allow explicit domain/prefix, otherwise auto-extract from collection_name
                 domain = config.get('domain')
-                if not domain:
-                    raise ValueError("domain is required for s3 provider")
                 prefix = config.get('prefix')
-                if not prefix:
-                    raise ValueError("prefix is required for s3 provider") 
+
+                if not domain or not prefix:
+                    if not collection_name:
+                        raise ValueError(
+                            "Either (domain + prefix) or collection_name is required for s3 provider"
+                        )
+                    # Auto-extract from collection_name
+                    if not domain:
+                        domain = cls._extract_domain_from_collection(collection_name)
+                    if not prefix:
+                        prefix = cls._extract_prefix_from_collection(collection_name)
+
                 return provider_cls(bucket_name=bucket, domain=domain, prefix=prefix)
+
             else:
                 # Allow custom provider to handle config
                 return provider_cls(**config)
