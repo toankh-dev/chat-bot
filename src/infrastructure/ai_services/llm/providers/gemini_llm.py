@@ -184,6 +184,12 @@ class GeminiLLMService(ILLMService):
                 generation_config["temperature"] = temperature
             if max_tokens is not None:
                 generation_config["max_output_tokens"] = max_tokens
+            # Support top_p (nucleus sampling) parameter
+            if "top_p" in kwargs and kwargs["top_p"] is not None:
+                generation_config["top_p"] = kwargs["top_p"]
+            # Support top_k parameter if provided
+            if "top_k" in kwargs and kwargs["top_k"] is not None:
+                generation_config["top_k"] = kwargs["top_k"]
 
             response = self.model.generate_content(
                 prompt,

@@ -45,14 +45,16 @@ class ChatService:
             Dict with conversation_id, conversation_title, user_message, assistant_message
         """
         try:
-            # 1. Get chatbot configuration
             chatbot = await self.chatbot_service.get_chatbot_by_id(bot_id)
             if not chatbot or not chatbot.is_active:
                 raise ValueError("Chatbot not found or inactive")
 
-            # 2. Handle conversation (create or get existing)
+            chatbot_model_data = await self.chatbot_service.get_chatbot_model_data(bot_id)
+            model_name = chatbot_model_data["model_name"]
+            if not model_name:
+                raise ValueError(f"AI model not found for chatbot {bot_id}")
+
             if not conversation_id:
-                # Create new conversation
                 title = self._generate_title(message)
                 conversation = await self.conversation_service.create_conversation(
                     user_id=user_id,
@@ -62,13 +64,11 @@ class ChatService:
                 conversation_id = conversation.id
                 conversation_title = conversation.title
             else:
-                # Get existing conversation
                 conversation = await self.conversation_service.get_conversation_by_id(
                     conversation_id, user_id
                 )
                 conversation_title = conversation.title
 
-            # 3. Save user message directly using MessageModel
             from infrastructure.postgresql.models.conversation_model import MessageModel
             from core.dependencies import get_db_session
 
@@ -83,54 +83,56 @@ class ChatService:
                 await session.flush()
                 await session.refresh(user_msg_model)
 
-                # 4. Get conversation history for AI context
                 conversation_with_messages = await self.conversation_service.get_conversation_with_messages(
                     conversation_id, user_id
                 )
 
-                # Get recent messages (limit to last 10 for context)
-                recent_messages = conversation_with_messages.messages[-10:]
+                all_messages = sorted(
+                    conversation_with_messages.messages,
+                    key=lambda m: m.created_at if m.created_at else m.id
+                )
+                max_context_messages = chatbot.max_conversation_length or 50
+                recent_messages = all_messages[-max_context_messages:]
 
-                # 5. Build context and call AI
-                llm = LLMFactory.create(model_name="gemini-2.5-flash")
+                llm = LLMFactory.create(config={"model_name": model_name})
 
-                # Format messages for Gemini (convert to single prompt)
                 formatted_prompt = self._format_messages_for_gemini(
                     recent_messages,
                     chatbot.system_prompt,
                     message
                 )
 
-                # Call Gemini
-                ai_response_text = await llm.generate_response(
-                    prompt=formatted_prompt,
-                    max_tokens=chatbot.max_tokens or 1000,
-                    temperature=chatbot.temperature or 0.7
-                )
+                try:
+                    ai_response_text = await llm.generate_response(
+                        prompt=formatted_prompt,
+                        max_tokens=chatbot.max_tokens or 1000,
+                        temperature=chatbot.temperature or 0.7,
+                        top_p=chatbot.top_p or 1.0
+                    )
+                except Exception as e:
+                    logger.error(f"LLM generation failed: {e}")
+                    if chatbot.fallback_message:
+                        ai_response_text = chatbot.fallback_message
+                        logger.info(f"Using fallback message for chatbot {bot_id}")
+                    else:
+                        raise
 
-                # 6. Save assistant message
                 ai_token_count = self._count_tokens(ai_response_text)
                 assistant_msg_model = MessageModel(
                     conversation_id=conversation_id,
                     role="assistant",
                     content=ai_response_text,
-                    msg_metadata={"token_count": ai_token_count, "model": "gemini-2.5-flash"}
+                    msg_metadata={"token_count": ai_token_count, "model": model_name}
                 )
                 session.add(assistant_msg_model)
                 await session.flush()
                 await session.refresh(assistant_msg_model)
 
-                # Commit the transaction
                 await session.commit()
 
-                # Map to user_msg and assistant_msg for response
                 user_msg = user_msg_model
                 assistant_msg = assistant_msg_model
                 break
-
-            # 7. Update conversation metadata
-            # Note: update_conversation_metadata may not exist yet, skip for now
-            # Will update message_count manually if needed
 
             return {
                 "conversation_id": conversation_id,

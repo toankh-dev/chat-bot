@@ -29,13 +29,17 @@ class ConversationRepositoryImpl(ConversationRepository):
         return result.scalar_one_or_none()
 
     async def find_by_id_with_messages(self, id: int) -> Optional[ConversationModel]:
-        """Find conversation by ID with all messages."""
+        """Find conversation by ID with all messages, ordered by creation time."""
         result = await self.session.execute(
             select(ConversationModel)
             .options(selectinload(ConversationModel.messages))
             .where(ConversationModel.id == id)
         )
-        return result.scalar_one_or_none()
+        conversation = result.scalar_one_or_none()
+        # Ensure messages are sorted by created_at for proper conversation context
+        if conversation and conversation.messages:
+            conversation.messages.sort(key=lambda m: m.created_at if m.created_at else m.id)
+        return conversation
 
     async def find_all(self, skip: int = 0, limit: int = 100) -> List[ConversationModel]:
         """Find all conversations with pagination."""
