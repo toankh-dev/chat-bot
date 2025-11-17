@@ -17,6 +17,8 @@ from schemas.chatbot_schema import (
 from domain.entities.user import UserEntity
 from domain.entities.group import GroupEntity
 from shared.utils.user_id_helper import extract_user_id_int
+from shared.interfaces.repositories.knowledge_base_repository import IKnowledgeBaseRepository
+from core.config import get_settings
 
 
 def _convert_user_to_chatbot_user(user: UserEntity) -> UserInChatbot:
@@ -184,8 +186,13 @@ class CreateChatbotUseCase:
     Use case for creating chatbot.
     """
 
-    def __init__(self, chatbot_service: ChatbotService):
+    def __init__(
+        self,
+        chatbot_service: ChatbotService,
+        knowledge_base_repository: IKnowledgeBaseRepository
+    ):
         self.chatbot_service = chatbot_service
+        self.knowledge_base_repository = knowledge_base_repository
 
     async def execute(self, request: ChatbotCreate, creator_id: int) -> ChatbotResponse:
         """
@@ -231,6 +238,28 @@ class CreateChatbotUseCase:
             logger = logging.getLogger(__name__)
             logger.error(f"Chatbot creation failed: ID not assigned. Entity: {created_chatbot}")
             raise ValueError("Failed to create chatbot: ID not assigned by database")
+
+        # Create default knowledge base for the chatbot
+        settings = get_settings()
+        # Generate unique collection name for vector store
+        collection_name = f"kb_chatbot_{chatbot_id}_default"
+        
+        default_kb_data = {
+            "chatbot_id": chatbot_id,
+            "name": "Default Knowledge Base",
+            "description": "Default knowledge base for this chatbot",
+            "vector_store_type": settings.VECTOR_STORE_PROVIDER,
+            "vector_store_collection": collection_name,
+            "is_active": True
+        }
+
+        try:
+            self.knowledge_base_repository.create(default_kb_data)
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to create default knowledge base for chatbot {chatbot_id}: {e}")
+            # Continue execution even if KB creation fails - chatbot is already created
         
         chatbot = await self.chatbot_service.get_chatbot_by_id(chatbot_id, include_assignments=True)
         model_data = await self.chatbot_service.get_chatbot_model_data(chatbot_id)

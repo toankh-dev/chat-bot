@@ -247,3 +247,216 @@ class ConnectionNotFoundError(WebSocketError):
             message=f"Connection {connection_id} not found",
             details={"connection_id": connection_id}
         )
+
+
+# ============================================================================
+# GitLab Integration Errors (Phase 2.1)
+# ============================================================================
+
+class GitLabError(ExternalServiceError):
+    """Base exception for GitLab-related errors."""
+
+    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+        super().__init__(
+            service_name="GitLab",
+            message=message,
+            details=details
+        )
+
+
+class GitLabAuthenticationError(GitLabError):
+    """Raised when GitLab authentication fails."""
+
+    def __init__(self, message: str = "GitLab authentication failed. Invalid token or credentials."):
+        super().__init__(
+            message=message,
+            details={"error_type": "authentication_failed"}
+        )
+        self.status_code = 401
+        self.error_code = "GITLAB_AUTH_FAILED"
+
+
+class GitLabNetworkError(GitLabError):
+    """Raised when cannot connect to GitLab server."""
+
+    def __init__(self, gitlab_url: str, message: str = "Cannot connect to GitLab"):
+        super().__init__(
+            message=f"{message}: {gitlab_url}",
+            details={"gitlab_url": gitlab_url, "error_type": "network_error"}
+        )
+
+
+class GitLabAPIError(GitLabError):
+    """Raised when GitLab API request fails."""
+
+    def __init__(self, message: str, status_code: Optional[int] = None, details: Optional[Dict[str, Any]] = None):
+        error_details = details or {}
+        if status_code:
+            error_details["status_code"] = status_code
+        super().__init__(message=message, details=error_details)
+
+
+class GitLabRateLimitError(GitLabError):
+    """Raised when GitLab API rate limit is exceeded."""
+
+    def __init__(self, retry_after: int = 60):
+        super().__init__(
+            message=f"GitLab API rate limit exceeded. Please retry after {retry_after} seconds.",
+            details={"retry_after": retry_after, "error_type": "rate_limit"}
+        )
+        self.status_code = 429
+        self.error_code = "GITLAB_RATE_LIMIT"
+
+
+class RepositoryNotFoundError(GitLabError):
+    """Raised when GitLab repository not found."""
+
+    def __init__(self, repo_id: str):
+        super().__init__(
+            message=f"Repository '{repo_id}' not found in GitLab",
+            details={"repo_id": repo_id}
+        )
+        self.status_code = 404
+
+
+class RepositoryBranchNotFoundError(GitLabError):
+    """Raised when repository branch not found."""
+
+    def __init__(self, repo_id: str, branch: str):
+        super().__init__(
+            message=f"Branch '{branch}' not found in repository '{repo_id}'",
+            details={"repo_id": repo_id, "branch": branch}
+        )
+        self.status_code = 404
+
+
+class FileContentFetchError(GitLabError):
+    """Raised when cannot fetch file content from GitLab."""
+
+    def __init__(self, file_path: str, message: str = "Failed to fetch file content"):
+        super().__init__(
+            message=f"{message}: {file_path}",
+            details={"file_path": file_path}
+        )
+
+
+# ============================================================================
+# Connector Errors
+# ============================================================================
+
+class ConnectorNotFoundError(NotFoundError):
+    """Raised when connector not found."""
+
+    def __init__(self, connector_type: str, message: Optional[str] = None):
+        default_message = (
+            f"{connector_type.capitalize()} connector not found. "
+            f"Please setup connector via POST /api/v1/connectors/{connector_type}/token"
+        )
+        super().__init__(
+            message=message or default_message,
+            details={"connector_type": connector_type}
+        )
+
+
+class KnowledgeBaseNotFoundError(NotFoundError):
+    """Raised when knowledge base not found."""
+
+    def __init__(self, kb_id: int):
+        super().__init__(
+            message=f"Knowledge base with ID {kb_id} not found",
+            details={"kb_id": kb_id}
+        )
+
+
+# ============================================================================
+# Sync Operation Errors
+# ============================================================================
+
+class SyncError(BaseAppException):
+    """Base exception for synchronization errors."""
+
+    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+        super().__init__(
+            message=message,
+            status_code=500,
+            error_code="SYNC_ERROR",
+            details=details
+        )
+
+
+class SyncInProgressError(SyncError):
+    """Raised when sync already in progress for the same resource."""
+
+    def __init__(self, resource_type: str, resource_id: str):
+        super().__init__(
+            message=f"Sync already in progress for {resource_type} '{resource_id}'. "
+                    f"Please wait for current sync to complete.",
+            details={"resource_type": resource_type, "resource_id": resource_id}
+        )
+        self.status_code = 409
+        self.error_code = "SYNC_IN_PROGRESS"
+
+
+class SyncQueueCreationError(SyncError):
+    """Raised when failed to create sync queue items."""
+
+    def __init__(self, message: str):
+        super().__init__(
+            message=f"Failed to create sync queue: {message}",
+            details={"error_type": "queue_creation_failed"}
+        )
+
+
+# ============================================================================
+# Vector Store Errors
+# ============================================================================
+
+class VectorStoreError(BaseAppException):
+    """Base exception for vector store operations."""
+
+    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+        super().__init__(
+            message=message,
+            status_code=500,
+            error_code="VECTOR_STORE_ERROR",
+            details=details
+        )
+
+
+class VectorStoreDimensionMismatchError(VectorStoreError):
+    """Raised when embedding dimension doesn't match vector store collection."""
+
+    def __init__(self, expected_dim: int, actual_dim: int):
+        super().__init__(
+            message=(
+                f"Embedding dimension mismatch: collection expects {expected_dim} dimensions "
+                f"but current provider uses {actual_dim} dimensions. "
+                f"Please recreate the collection or use matching embedding provider."
+            ),
+            details={"expected_dimension": expected_dim, "actual_dimension": actual_dim}
+        )
+
+
+class VectorCleanupException(VectorStoreError):
+    """Raised when vector cleanup operation fails."""
+
+    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+        super().__init__(
+            message=f"Vector cleanup failed: {message}",
+            details=details
+        )
+
+
+class VectorInsertionError(VectorStoreError):
+    """Raised when vector insertion fails."""
+
+    def __init__(self, message: str, failed_count: int, total_count: int):
+        success_rate = (total_count - failed_count) / total_count if total_count > 0 else 0
+        super().__init__(
+            message=f"{message}. Failed: {failed_count}/{total_count} ({success_rate:.1%} success rate)",
+            details={
+                "failed_count": failed_count,
+                "total_count": total_count,
+                "success_rate": success_rate
+            }
+        )

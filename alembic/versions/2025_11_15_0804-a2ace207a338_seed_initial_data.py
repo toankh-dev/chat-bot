@@ -1,8 +1,8 @@
-"""seed_admin_user
+"""seed_initial_data
 
-Revision ID: 5af2ce4ce67a
-Revises: 2b7cff221de5
-Create Date: 2025-11-14 03:30:14.394052+00:00
+Revision ID: a2ace207a338
+Revises: 90341b031afb
+Create Date: 2025-11-15 08:04:15.130577+00:00
 
 """
 from alembic import op
@@ -13,21 +13,39 @@ from datetime import datetime
 
 
 # revision identifiers, used by Alembic.
-revision = "5af2ce4ce67a"
-down_revision = "2b7cff221de5"
+revision = "a2ace207a338"
+down_revision = "90341b031afb"
 branch_labels = None
 depends_on = None
 
 
 def upgrade() -> None:
-    """Seed initial admin user."""
+    """Seed initial data: AI models and admin user."""
     conn = op.get_bind()
+    now = datetime.utcnow()
 
-    # Check if any admin users exist
+    # 1. Seed AI models
+    predefined_models = [
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
+    ]
+
+    for model_name in predefined_models:
+        conn.execute(
+            text("""
+                INSERT INTO ai_models (name, created_at, updated_at)
+                VALUES (:name, :created_at, :updated_at)
+                ON CONFLICT (name) DO NOTHING
+            """),
+            {"name": model_name, "created_at": now, "updated_at": now}
+        )
+
+    print(f"✓ Seeded {len(predefined_models)} AI models")
+
+    # 2. Seed admin user (only if no admin exists)
     result = conn.execute(text("SELECT COUNT(*) FROM users WHERE is_admin = true"))
     admin_count = result.scalar()
 
-    # Only create admin if no admin users exist
     if admin_count == 0:
         # Hash the default password: Admin@123
         password = "Admin@123"
@@ -45,8 +63,8 @@ def upgrade() -> None:
                 "name": "System Administrator",
                 "is_admin": True,
                 "status": "active",
-                "created_at": datetime.utcnow(),
-                "updated_at": datetime.utcnow()
+                "created_at": now,
+                "updated_at": now
             }
         )
         print("✓ Created default admin user (admin@example.com / Admin@123)")
@@ -55,10 +73,18 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Remove seeded admin user."""
+    """Remove seeded initial data."""
     conn = op.get_bind()
 
-    # Remove the seeded admin user
+    # Remove AI models
+    predefined_models = ["gemini-2.5-flash", "gemini-2.5-pro"]
+    for model_name in predefined_models:
+        conn.execute(
+            text("DELETE FROM ai_models WHERE name = :name"),
+            {"name": model_name}
+        )
+
+    # Remove admin user
     conn.execute(
         text("DELETE FROM users WHERE email = :email"),
         {"email": "admin@example.com"}

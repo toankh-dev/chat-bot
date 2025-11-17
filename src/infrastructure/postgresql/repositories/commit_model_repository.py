@@ -24,28 +24,28 @@ class CommitRepository(ICommitRepository):
 
     def get_latest_full_sync_by_repo_id(self, repo_id: int) -> CommitModel:
         """
-        Get the latest full sync commit for a repository.
+        Get the latest synced commit for a repository.
 
         Args:
             repo_id: Repository database ID (not external ID)
 
         Returns:
-            Latest full sync commit or None
+            Latest commit or None
 
+        Note:
+            Returns any commit (real GitLab SHA or synthetic) ordered by committed_at.
+            Use this to check if repository has been synced before.
         """
         return (
             self.db_session.query(CommitModel)
-            .filter(
-                CommitModel.repo_id == repo_id,
-                CommitModel.sha.like("full_sync_%")
-            )
+            .filter(CommitModel.repo_id == repo_id)
             .order_by(CommitModel.committed_at.desc())
             .first()
         )
 
     def create(self, repo_id: int, code_files: list) -> CommitModel:
         """
-        Create a new commit.
+        Create a new commit with synthetic SHA (legacy method).
 
         Args:
             repo_id: Repository database ID (not external ID)
@@ -56,6 +56,10 @@ class CommitRepository(ICommitRepository):
 
         Raises:
             IntegrityError: If foreign key constraint fails
+
+        Note:
+            DEPRECATED: Use create_with_metadata() for new code.
+            This method creates commits with synthetic SHA pattern "full_sync_{timestamp}".
         """
         sync_timestamp = datetime.utcnow().isoformat()
         commit = CommitModel(
@@ -70,4 +74,50 @@ class CommitRepository(ICommitRepository):
         self.db_session.add(commit)
         self.db_session.commit()
         self.db_session.refresh(commit)
+        return commit
+
+    def create_with_metadata(
+        self,
+        repo_id: int,
+        sha: str,
+        external_id: str,
+        author_name: str,
+        author_email: str,
+        message: str,
+        committed_at: datetime,
+        files_changed: int
+    ) -> CommitModel:
+        """
+        Create a new commit with full GitLab metadata.
+
+        Args:
+            repo_id: Repository database ID
+            sha: Real GitLab commit SHA (40 chars hex)
+            external_id: External commit ID (usually same as SHA)
+            author_name: Commit author name
+            author_email: Commit author email
+            message: Commit message
+            committed_at: Commit timestamp from GitLab
+            files_changed: Number of files changed
+
+        Returns:
+            Created commit model
+
+        Raises:
+            IntegrityError: If SHA already exists or foreign key constraint fails
+        """
+        commit = CommitModel(
+            repo_id=repo_id,
+            external_id=external_id,
+            sha=sha,
+            author_name=author_name,
+            author_email=author_email,
+            message=message,
+            committed_at=committed_at,
+            files_changed=files_changed,
+        )
+        self.db_session.add(commit)
+        self.db_session.commit()
+        self.db_session.refresh(commit)
+        logger.info(f"Created commit {commit.id} with SHA {sha[:8]} for repo {repo_id}")
         return commit

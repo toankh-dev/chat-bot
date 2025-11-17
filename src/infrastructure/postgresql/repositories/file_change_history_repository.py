@@ -8,9 +8,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc
 
 from infrastructure.postgresql.models.file_change_history_model import FileChangeHistoryModel
+from shared.interfaces.repositories.file_change_history_repository import IFileChangeHistoryRepository
 
 
-class FileChangeHistoryRepository:
+class FileChangeHistoryRepository(IFileChangeHistoryRepository):
     """Repository for managing file change history records."""
 
     def __init__(self, db_session: Session):

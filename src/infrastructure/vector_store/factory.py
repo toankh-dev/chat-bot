@@ -5,8 +5,9 @@ from .providers.chromadb import ChromaDBVectorStore
 from .providers.s3_vector import S3VectorStore
 from .base import BaseVectorStore
 from core.config import settings
+from shared.interfaces.services.ai_services.vector_store_factory import IVectorStoreFactory
 
-class VectorStoreFactory:
+class VectorStoreFactory(IVectorStoreFactory):
     """
     Factory for creating vector store instances through abstract interface.
     Returns BaseVectorStore interface instead of concrete implementations.
@@ -26,17 +27,24 @@ class VectorStoreFactory:
         """
         Factory method to create a vector store provider through interface.
         Returns BaseVectorStore interface for polymorphic usage.
-        
+
         Args:
             config: dict config for provider
-            
+                For ChromaDB:
+                    - collection_name (required): Unique collection name (e.g., kb_{kb_id})
+                    - persist_directory (optional): Storage directory (default: .chromadb)
+
         Returns:
             BaseVectorStore: Abstract interface implementation
+
+        USE CASES:
+            - UC-2.1, UC-2.2: Different collection_names → isolated vector stores
+            - UC-4.3: KB deletion → delete collection by name
         """
         provider = settings.VECTOR_STORE_PROVIDER
         if provider not in cls._providers:
             raise ValueError(f"Unknown vector store provider: {provider}. Available: {list(cls._providers.keys())}")
-        
+
         provider_cls = cls._providers[provider]
         config = config or {}
         config.update(kwargs)
@@ -44,10 +52,26 @@ class VectorStoreFactory:
         # Create instance with provider-specific configuration
         try:
             if provider == 'chromadb':
-                persist_directory = config.get('persist_directory')
-                if not persist_directory:
-                    raise ValueError("persist_directory is required for chromadb provider")
-                return provider_cls(persist_directory=persist_directory)
+                # ============================================================
+                # CRITICAL FIX: Pass collection_name to ChromaDB (Phase 1.3)
+                # ============================================================
+                # Required for collection-per-KB isolation
+                # Format: kb_{knowledge_base_id}
+                # ============================================================
+
+                collection_name = config.get('collection_name')
+                if not collection_name:
+                    raise ValueError(
+                        "collection_name is required for chromadb provider. "
+                        "Expected format: kb_{knowledge_base_id}"
+                    )
+
+                persist_directory = config.get('persist_directory', '.chromadb')
+
+                return provider_cls(
+                    collection_name=collection_name,
+                    persist_directory=persist_directory
+                )
             elif provider == 's3':
                 bucket = config.get('bucket_name', settings.S3_BUCKET_EMBEDDINGS)
                 domain = config.get('domain')
