@@ -2,7 +2,7 @@
 Commit SQLAlchemy ORM model.
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Index
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import JSONB
@@ -12,7 +12,10 @@ from infrastructure.postgresql.connection.base import Base
 class CommitModel(Base):
     """Commit model for tracking repository commits."""
     __tablename__ = "commits"
-    __table_args__ = {'extend_existing': True}
+    __table_args__ = (
+        Index('idx_commits_repo_sha', 'repo_id', 'sha'),
+        {'extend_existing': True}
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     repo_id = Column(

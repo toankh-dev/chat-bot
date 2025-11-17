@@ -16,13 +16,6 @@ from usecases.chatbot_use_cases import (
     UpdateChatbotUseCase,
     DeleteChatbotUseCase
 )
-from usecases.conversation_use_cases import (
-    ListConversationsUseCase,
-    GetConversationUseCase,
-    CreateConversationUseCase,
-    CreateMessageUseCase,
-    DeleteConversationUseCase
-)
 
 __all__ = [
     "LoginUseCase",
@@ -38,9 +31,5 @@ __all__ = [
     "CreateChatbotUseCase",
     "UpdateChatbotUseCase",
     "DeleteChatbotUseCase",
-    "ListConversationsUseCase",
-    "GetConversationUseCase",
-    "CreateConversationUseCase",
     "CreateMessageUseCase",
-    "DeleteConversationUseCase"
 ]

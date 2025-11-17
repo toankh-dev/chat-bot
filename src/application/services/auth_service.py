@@ -4,7 +4,6 @@ Authentication service.
 Handles user authentication and token management.
 """
 
-from typing import Optional
 import bcrypt
 from shared.interfaces.repositories.user_repository import UserRepository
 from shared.interfaces.services.auth.jwt_handler import IJWTHandler
@@ -12,7 +11,7 @@ from domain.entities.user import UserEntity
 from domain.value_objects.email import Email
 from core.errors import AuthenticationError, ValidationError
 
-class AuthService:
+class AuthService(IJWTHandler):
     """
     Service for authentication operations.
     """

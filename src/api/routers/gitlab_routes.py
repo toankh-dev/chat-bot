@@ -11,7 +11,6 @@ from api.controllers.gitlab_controller import (
     fetch_gitlab_branches_admin
 )
 from schemas.gitlab_schema import (
-    SyncRepositoryRequest,
     SyncRepositoryResponse,
     GitLabRepositoryListResponse,
     GitLabBranchListResponse

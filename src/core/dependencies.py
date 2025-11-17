@@ -71,7 +71,6 @@ from application.services.auth_service import AuthService
 from application.services.user_service import UserService
 from application.services.chatbot_service import ChatbotService
 from application.services.conversation_service import ConversationService
-from application.services.vector_store_service import VectorStoreService
 from application.services.document_upload_service import DocumentUploadService
 from application.services.document_processing_service import DocumentProcessingService
 from application.services.document_chunking_service import DocumentChunkingService
@@ -92,7 +91,6 @@ from application.services.ai_model_service import AiModelService
 from infrastructure.lock.redis_lock_service import RedisLockService
 
 # Use Cases
-from application.services.group_service import GroupService
 from usecases.auth_use_cases import LoginUseCase, RegisterUseCase
 from usecases.user_use_cases import (
     GetCurrentUserUseCase,
@@ -125,19 +123,10 @@ from usecases.ai_model_use_cases import (
     UpdateAiModelUseCase,
     DeleteAiModelUseCase
 )
-from usecases.conversation_use_cases import (
-    ListConversationsUseCase,
-    GetConversationUseCase,
-    CreateConversationUseCase,
-    CreateMessageUseCase,
-    DeleteConversationUseCase
-)
 from usecases.document_use_cases import (
     UploadDocumentUseCase,
     DeleteDocumentUseCase,
     ListUserDocumentsUseCase,
-    ProcessDocumentUseCase,
-    GetDocumentStatusUseCase
 )
 from usecases.connector_use_cases import (
     ListConnectorsUseCase,
@@ -740,42 +729,6 @@ def get_delete_chatbot_use_case(chatbot_service: ChatbotService = Depends(get_ch
     """Get delete chatbot use case instance."""
     return DeleteChatbotUseCase(chatbot_service)
 
-
-# ============================================================================
-# CONVERSATION USE CASE DEPENDENCIES
-# ============================================================================
-
-def get_list_conversations_use_case(conversation_service: ConversationService = Depends(get_conversation_service)) -> ListConversationsUseCase:
-    """Get list conversations use case instance."""
-    return ListConversationsUseCase(conversation_service)
-
-
-def get_conversation_use_case(conversation_service: ConversationService = Depends(get_conversation_service)) -> GetConversationUseCase:
-    """Get conversation use case instance."""
-    return GetConversationUseCase(conversation_service)
-
-
-def get_create_conversation_use_case(conversation_service: ConversationService = Depends(get_conversation_service)) -> CreateConversationUseCase:
-    """Get create conversation use case instance."""
-    return CreateConversationUseCase(conversation_service)
-
-
-def get_create_message_use_case(
-    conversation_service: ConversationService = Depends(get_conversation_service),
-    chatbot_repository: ChatbotRepository = Depends(get_chatbot_repository)
-) -> CreateMessageUseCase:
-    """Get create message use case instance with RAG integration."""
-    return CreateMessageUseCase(
-        conversation_service,
-        chatbot_repository,
-        domain="general"  # Default domain, can be made configurable
-    )
-
-
-def get_delete_conversation_use_case(conversation_service: ConversationService = Depends(get_conversation_service)) -> DeleteConversationUseCase:
-    """Get delete conversation use case instance."""
-    return DeleteConversationUseCase(conversation_service)
-
 # ============================================================================
 # DOCUMENT USE CASE DEPENDENCIES
 # ============================================================================
@@ -793,42 +746,6 @@ def get_delete_document_use_case(upload_service: IDocumentUploadService = Depend
 def get_list_user_documents_use_case(document_repository: DocumentRepository = Depends(get_document_repository)) -> ListUserDocumentsUseCase:
     """Get list user documents use case."""
     return ListUserDocumentsUseCase(document_repository)
-
-
-def get_process_document_use_case(
-    document_repository: DocumentRepository = Depends(get_document_repository),
-    file_storage_service: IFileStorageService = Depends(get_file_storage_service),
-    processing_service: DocumentProcessingService = Depends(get_document_processing_service),
-    chunking_service: DocumentChunkingService = Depends(get_document_chunking_service),
-    kb_sync_service: KBSyncService = Depends(get_kb_sync_service)
-) -> ProcessDocumentUseCase:
-    """Get process document use case."""
-    # Get KB configuration from settings
-    kb_config = {
-        "healthcare": getattr(settings, "KNOWLEDGE_BASE_HEALTHCARE_ID", "kb_healthcare"),
-        "finance": getattr(settings, "KNOWLEDGE_BASE_FINANCE_ID", "kb_finance"),
-        "general": getattr(settings, "KNOWLEDGE_BASE_GENERAL_ID", "kb_general")
-    }
-
-    return ProcessDocumentUseCase(
-        document_repository,
-        file_storage_service,
-        processing_service,
-        chunking_service,
-        kb_sync_service,
-        kb_config
-    )
-
-
-def get_document_status_use_case(document_repository: DocumentRepository = Depends(get_document_repository)) -> GetDocumentStatusUseCase:
-    """Get document status use case."""
-    return GetDocumentStatusUseCase(document_repository)
-
-
-# ============================================================================
-# RAG USE CASE DEPENDENCIES
-# ============================================================================
-
 
 # ============================================================================
 # CONNECTOR USE CASE DEPENDENCIES
@@ -887,13 +804,3 @@ def get_sync_repository_use_case(
         connector_service=connector_service,
         gitlab_sync_service=gitlab_sync_service,
     )
-
-
-# ============================================================================
-# AUTHENTICATION & AUTHORIZATION  
-# ============================================================================
-
-# Note: Authentication functions are handled directly by middleware.
-# Use `get_current_user` for user authentication.
-# Use `require_admin` for admin authentication.
-# Import them directly from api.middlewares.jwt_middleware as needed.

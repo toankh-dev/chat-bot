@@ -4,7 +4,7 @@ KnowledgeBaseSource SQLAlchemy model.
 Represents knowledge_base_sources table in PostgreSQL.
 """
 
-from sqlalchemy import Boolean, Column, Integer, String, JSON, TIMESTAMP, ForeignKey
+from sqlalchemy import Boolean, Column, Integer, String, JSON, TIMESTAMP, ForeignKey, UniqueConstraint, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -20,7 +20,11 @@ class KnowledgeBaseSourceModel(Base):
     """
 
     __tablename__ = "knowledge_base_sources"
-    __table_args__ = {'extend_existing': True}
+    __table_args__ = (
+        UniqueConstraint('knowledge_base_id', 'source_type', 'source_id', name='uq_kb_sources_kb_type_id'),
+        Index('idx_kb_sources_kb_type_id', 'knowledge_base_id', 'source_type', 'source_id'),
+        {'extend_existing': True}
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     knowledge_base_id = Column(Integer, ForeignKey("knowledge_bases.id", ondelete="CASCADE"), nullable=False, index=True)

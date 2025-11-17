@@ -12,26 +12,32 @@ from application.services.code_chunking_service import CodeChunkingService
 from application.services.kb_sync_service import KBSyncService
 from application.services.connector_service import ConnectorService
 from infrastructure.postgresql.repositories.repository_repository import RepositoryRepository
-from infrastructure.postgresql.repositories.user_connection_repository import UserConnectionRepository
+from infrastructure.postgresql.repositories.user_connection_repository import (
+    UserConnectionRepository,
+)
 from infrastructure.postgresql.repositories.sync_history_repository import SyncHistoryRepository
 from infrastructure.postgresql.repositories.sync_queue_repository import SyncQueueRepository
-from infrastructure.postgresql.repositories.file_change_history_repository import FileChangeHistoryRepository
+from infrastructure.postgresql.repositories.file_change_history_repository import (
+    FileChangeHistoryRepository,
+)
 from infrastructure.postgresql.repositories.commit_model_repository import CommitRepository
 from infrastructure.postgresql.repositories.connector_repository import ConnectorRepository
 from infrastructure.postgresql.models.knowledge_base_source_model import KnowledgeBaseSourceModel
 from infrastructure.postgresql.repositories.knowledge_base_repository import KnowledgeBaseRepository
-from infrastructure.postgresql.repositories.knowledge_base_source_repository import KnowledgeBaseSourceRepository
+from infrastructure.postgresql.repositories.knowledge_base_source_repository import (
+    KnowledgeBaseSourceRepository,
+)
 from infrastructure.postgresql.models.repository_model import RepositoryModel
 from infrastructure.postgresql.models.sync_history_model import SyncHistoryModel
 from infrastructure.postgresql.models.sync_queue_model import SyncQueueModel
 from infrastructure.postgresql.models.file_change_history_model import FileChangeHistoryModel
-from core.errors import (
-    ConnectorNotFoundError,
-    KnowledgeBaseNotFoundError,
-    VectorCleanupException
-)
+from core.errors import ConnectorNotFoundError, KnowledgeBaseNotFoundError, VectorCleanupException
 from shared.interfaces.services.lock.redis_lock_service import IRedisLockService
-from shared.constants import DEFAULT_BRANCH, GITLAB_SYNC_BATCH_SIZE_DEFAULT, SYNC_QUEUE_BULK_INSERT_BATCH_SIZE
+from shared.constants import (
+    DEFAULT_BRANCH,
+    GITLAB_SYNC_BATCH_SIZE_DEFAULT,
+    SYNC_QUEUE_BULK_INSERT_BATCH_SIZE,
+)
 
 
 class GitLabSyncService:
@@ -105,8 +111,9 @@ class GitLabSyncService:
         Perform full repository sync with distributed lock to prevent concurrent syncs.
         """
         # Generate lock key with user_id for multi-tenant isolation
-        # Format: sync_lock:user:{user_id}:repo:{repo_id}:branch:{branch}
-        lock_key = f"sync_lock:user:{user_id}:repo:{repository_external_id}:branch:{branch or 'default'}"
+        lock_key = (
+            f"sync_lock:user:{user_id}:repo:{repository_external_id}:branch:{branch or 'default'}"
+        )
 
         # Acquire distributed lock (raises SyncInProgressError if already locked)
         with self.redis_lock_service.acquire_lock(lock_key, blocking=False):
@@ -153,8 +160,7 @@ class GitLabSyncService:
         gitlab_connector = self.connector_service.get_connector_by_id(connector_id)
         if not gitlab_connector:
             raise ConnectorNotFoundError(
-                connector_type="gitlab",
-                message="GitLab connector not configured"
+                connector_type="gitlab", message="GitLab connector not configured"
             )
 
         gitlab_service = self.connector_service.get_gitlab_service(gitlab_connector)
@@ -178,9 +184,9 @@ class GitLabSyncService:
 
         if not kb_entity:
             raise KnowledgeBaseNotFoundError(kb_id=knowledge_base_id)
-    
+
         # Step 5. Get or create repository record
-        repo, = self.repository_repo.get_or_create(
+        (repo,) = self.repository_repo.get_or_create(
             connection_id=connection.id,
             external_id=repository_external_id,
             defaults={
@@ -207,14 +213,16 @@ class GitLabSyncService:
             sync_type="full",
             triggered_by="manual",
             user_id=user_id,
-            to_commit_sha="", # Will be set after sync
+            to_commit_sha="",  # Will be set after sync
             status="running",
         )
         sync_history = self.sync_history_repo.create(sync_history)
 
         try:
             # 5. Get repository tree with error handling
-            code_files = gitlab_service.filter_code_files(project_id=repository_external_id, ref=branch)
+            code_files = gitlab_service.filter_code_files(
+                project_id=repository_external_id, ref=branch
+            )
             # Check if HEAD commit already synced by comparing real GitLab SHA
             existing_commit = self.commit_repository.get_latest_full_sync_by_repo_id(repo.id)
 
@@ -240,7 +248,7 @@ class GitLabSyncService:
                     }
                 # Resume processing existing queue
                 commit = existing_commit
-                    
+
             else:
                 # Create commit with real GitLab SHA and metadata
                 commit = self.commit_repository.create_with_metadata(
@@ -250,18 +258,20 @@ class GitLabSyncService:
                     author_name=head_commit_info["author_name"],
                     author_email=head_commit_info["author_email"],
                     message=head_commit_info["message"],
-                    committed_at=datetime.fromisoformat(head_commit_info["committed_at"].replace('Z', '+00:00')),
-                    files_changed=len(code_files)
+                    committed_at=datetime.fromisoformat(
+                        head_commit_info["committed_at"].replace("Z", "+00:00")
+                    ),
+                    files_changed=len(code_files),
                 )
 
             # 7. Queue all files for processing with batched insertion for large repos
             file_count = len(code_files)
-            
+
             total_queued = 0
             for batch_start in range(0, file_count, SYNC_QUEUE_BULK_INSERT_BATCH_SIZE):
                 batch_end = min(batch_start + SYNC_QUEUE_BULK_INSERT_BATCH_SIZE, file_count)
                 batch_files = code_files[batch_start:batch_end]
-                
+
                 # Create file history for this batch
                 file_history_batch = []
                 for file_path in batch_files:
@@ -274,10 +284,10 @@ class GitLabSyncService:
                         sync_status="pending",
                     )
                     file_history_batch.append(file_change)
-                
+
                 # Bulk insert file history batch
                 self.file_change_repo.create_batch(file_history_batch)
-                
+
                 # Create queue items for this batch
                 queue_batch = []
                 for file_change in file_history_batch:
@@ -291,7 +301,7 @@ class GitLabSyncService:
                         status="pending",
                     )
                     queue_batch.append(queue_item)
-                
+
                 # Bulk insert queue batch
                 self.sync_queue_repo.enqueue_batch(queue_batch)
                 total_queued += len(queue_batch)
@@ -300,30 +310,32 @@ class GitLabSyncService:
             sync_history.files_queued = total_queued
             sync_history.to_commit_sha = commit.sha
             self.sync_history_repo.update(sync_history)
-            
+
             # STEP 6: KB SOURCE MANAGEMENT - GET OR CREATE BEFORE PROCESSING
             # This ensures kb_source_id is available for vector metadata
             existing_source = self.kb_source_repo.get_by_kb_and_source(
-                kb_id=kb_entity.id,
-                source_type="repository",
-                source_id=str(repo.id)
+                kb_id=kb_entity.id, source_type="repository", source_id=str(repo.id)
             )
 
             if existing_source:
                 # Detect and handle branch changes BEFORE processing
-                await self._handle_branch_change_cleanup(existing_source, kb_entity.id, branch, repo.id)
+                await self._handle_branch_change_cleanup(
+                    existing_source, kb_entity.id, branch, repo.id
+                )
                 kb_source_id = existing_source.id
             else:
                 # Create new KB source for first-time sync
-                new_source = self.kb_source_repo.create({
-                    "knowledge_base_id": kb_entity.id,
-                    "source_type": "repository",
-                    "source_id": str(repo.id),
-                    "config": {"branch": branch},
-                    "auto_sync": False,  # Will be updated after successful sync
-                    "sync_status": "syncing",
-                    "last_synced_at": None
-                })
+                new_source = self.kb_source_repo.create(
+                    {
+                        "knowledge_base_id": kb_entity.id,
+                        "source_type": "repository",
+                        "source_id": str(repo.id),
+                        "config": {"branch": branch},
+                        "auto_sync": False,  # Will be updated after successful sync
+                        "sync_status": "syncing",
+                        "last_synced_at": None,
+                    }
+                )
                 kb_source_id = new_source.id
 
             # 8. Process queue in batches with connector config
@@ -376,11 +388,7 @@ class GitLabSyncService:
             raise
 
     async def _fetch_file_content_async(
-        self,
-        gitlab_service: GitLabService,
-        project_id: str,
-        file_path: str,
-        ref: str
+        self, gitlab_service: GitLabService, project_id: str, file_path: str, ref: str
     ) -> Optional[str]:
         """
         Async wrapper for fetching file content.
@@ -398,8 +406,7 @@ class GitLabSyncService:
             # Run sync GitLab API call in executor to avoid blocking
             loop = asyncio.get_event_loop()
             content = await loop.run_in_executor(
-                None,
-                lambda: gitlab_service.get_file_content(project_id, file_path, ref)
+                None, lambda: gitlab_service.get_file_content(project_id, file_path, ref)
             )
             return content
         except Exception as e:
@@ -453,10 +460,7 @@ class GitLabSyncService:
             # Fetch all files in parallel
             fetch_tasks = [
                 self._fetch_file_content_async(
-                    gitlab_service,
-                    repo.external_id,
-                    queue_item.file_path,
-                    branch
+                    gitlab_service, repo.external_id, queue_item.file_path, branch
                 )
                 for queue_item in batch
             ]
@@ -473,7 +477,11 @@ class GitLabSyncService:
 
                     # Check if content fetch failed or is exception
                     if content is None or isinstance(content, Exception):
-                        error_msg = str(content) if isinstance(content, Exception) else "Failed to fetch content"
+                        error_msg = (
+                            str(content)
+                            if isinstance(content, Exception)
+                            else "Failed to fetch content"
+                        )
                         raise Exception(error_msg)
 
                     # Chunk code with proper metadata
@@ -511,25 +519,27 @@ class GitLabSyncService:
                     process_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
 
                     # Track successful processing
-                    file_results.append({
-                        "queue_item": queue_item,
-                        "status": "success",
-                        "chunks": len(chunks),
-                        "process_time": process_time
-                    })
+                    file_results.append(
+                        {
+                            "queue_item": queue_item,
+                            "status": "success",
+                            "chunks": len(chunks),
+                            "process_time": process_time,
+                        }
+                    )
 
                 except Exception as e:
                     logger.error(f"Failed to process {queue_item.file_path}: {str(e)}")
-                    file_results.append({
-                        "queue_item": queue_item,
-                        "status": "failed",
-                        "error": str(e)
-                    })
+                    file_results.append(
+                        {"queue_item": queue_item, "status": "failed", "error": str(e)}
+                    )
 
             # Batch sync all documents to vector store at once
             if all_documents:
                 try:
-                    logger.info(f"Batch syncing {len(all_documents)} documents from {len(batch)} files")
+                    logger.info(
+                        f"Batch syncing {len(all_documents)} documents from {len(batch)} files"
+                    )
                     await self.kb_sync_service.sync_documents(all_documents, persist_directory)
                 except Exception as e:
                     logger.error(f"Batch embedding failed: {str(e)}")
@@ -579,17 +589,11 @@ class GitLabSyncService:
             "total_embeddings": total_embeddings,
         }
 
-    async def _handle_branch_change_cleanup(self, source: KnowledgeBaseSourceModel, kb_id: int, branch: str, repo_id: int):
+    async def _handle_branch_change_cleanup(
+        self, source: KnowledgeBaseSourceModel, kb_id: int, branch: str, repo_id: int
+    ):
         """
         Detect repository OR branch change and cleanup old vectors if needed.
-
-        SCENARIOS:
-          1. Repository changed (old_repo_id != new_repo_id) → Delete ALL source vectors
-          2. Same repository, branch changed → Delete only old branch vectors
-          3. Same repository, same branch → No cleanup needed
-
-        Raises VectorCleanupException if cleanup fails.
-
         Args:
             source: Existing KB source record
             kb_id: Knowledge base ID
@@ -601,12 +605,6 @@ class GitLabSyncService:
 
         # CASE 1: REPOSITORY CHANGED
         if old_repo_id != repo_id:
-            logger.info(
-                f"Repository change detected: "
-                f"old_repo_id={old_repo_id}, new_repo_id={repo_id}. "
-                f"Cleaning up ALL vectors from old repository."
-            )
-
             # Delete ALL vectors from old repository (all branches)
             cleanup_result = self.kb_cleanup_service.cleanup_source_removal(source.id)
 
@@ -618,61 +616,40 @@ class GitLabSyncService:
                         "kb_source_id": source.id,
                         "old_repo_id": old_repo_id,
                         "new_repo_id": repo_id,
-                        "deleted_vectors": cleanup_result.get('deleted_vectors', 0)
-                    }
+                        "deleted_vectors": cleanup_result.get("deleted_vectors", 0),
+                    },
                 )
-
-            logger.info(
-                f"Repository change cleanup completed: "
-                f"deleted {cleanup_result['deleted_vectors']} vectors from old repository"
-            )
-
         # CASE 2: SAME REPOSITORY, BRANCH CHANGED
         elif old_branch and old_branch != branch:
-            logger.info(
-                f"Branch change detected: "
-                f"old_branch='{old_branch}', new_branch='{branch}'. "
-                f"Cleaning up vectors from old branch only."
-            )
-
             cleanup_result = self.kb_cleanup_service.cleanup_branch_change(
-                kb_id=kb_id,
-                source_id=str(source.id),
-                old_branch=old_branch
+                kb_id=kb_id, source_id=str(source.id), old_branch=old_branch
             )
 
             if not cleanup_result["success"]:
                 raise VectorCleanupException(
-                    message=cleanup_result.get('error', 'Unknown error during branch cleanup'),
+                    message=cleanup_result.get("error", "Unknown error during branch cleanup"),
                     details={
                         "kb_id": kb_id,
                         "source_id": str(source.id),
                         "old_branch": old_branch,
                         "new_branch": branch,
-                        "repo_id": repo_id
-                    }
+                        "repo_id": repo_id,
+                    },
                 )
-
-            logger.info(
-                f"Branch change cleanup completed: "
-                f"deleted {cleanup_result['deleted_vectors']} vectors from old branch '{old_branch}'"
-            )
-
         # CASE 3: SAME REPOSITORY, SAME BRANCH
         else:
-            logger.info(
-                f"No cleanup needed: "
-                f"same repository (id={repo_id}) and branch ('{branch}')"
-            )
+            logger.info(f"No cleanup needed: " f"same repository (id={repo_id}) and branch ('{branch}')")
 
-    def _complete_sync_for_repo(self, sync_history_id: int, repo_id: int, status: str = "completed"):
+    def _complete_sync_for_repo(
+        self, sync_history_id: int, repo_id: int, status: str = "completed"
+    ):
         """
-            mark the sync history and repository as completed.
+        mark the sync history and repository as completed.
 
-            Args:
-                sync_history_id: ID of the sync history record
-                repo_id: ID of the repository
-                status: Sync status, default "completed"
+        Args:
+            sync_history_id: ID of the sync history record
+            repo_id: ID of the repository
+            status: Sync status, default "completed"
         """
         try:
             self.sync_history_repo.complete_sync(sync_history_id, status)
@@ -681,15 +658,17 @@ class GitLabSyncService:
             logger.error(f"Failed to update completed sync status: {status_error}")
             raise
 
-    def _fail_sync_for_repo(self, sync_history_id: int, repo_id: int, message: str, status: str = "failed"):
+    def _fail_sync_for_repo(
+        self, sync_history_id: int, repo_id: int, message: str, status: str = "failed"
+    ):
         """
-            mark the sync history and repository as failed.
+        mark the sync history and repository as failed.
 
-            Args:
-                sync_history_id: ID of the sync history record
-                repo_id: ID of the repository
-                message: Failure message
-                status: Sync status, default "failed"
+        Args:
+            sync_history_id: ID of the sync history record
+            repo_id: ID of the repository
+            message: Failure message
+            status: Sync status, default "failed"
         """
         try:
             self.sync_history_repo.complete_sync(sync_history_id, status, message)

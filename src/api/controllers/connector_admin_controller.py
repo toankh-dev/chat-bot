@@ -23,7 +23,6 @@ from usecases.connector_use_cases import (
     UpdateConnectorCredentialsUseCase,
     DeleteConnectorUseCase
 )
-from schemas.user_schema import UserResponse
 from schemas.connector_schema import (
     ConnectorResponse,
     ConnectorCredentialsUpdateRequest,

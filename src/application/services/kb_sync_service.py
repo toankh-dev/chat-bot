@@ -5,12 +5,10 @@ Knowledge Base Sync Service - Add processed documents to vector store.
 from typing import List, Dict, Any, Optional
 from application.services.document_chunking_service import TextChunk
 from shared.interfaces.services.ai_services.embedding_service import IEmbeddingService
-from shared.interfaces.services.ai_services.vector_store_service import IVectorStore
 from shared.interfaces.services.ai_services.vector_store_factory import IVectorStoreFactory
 from shared.interfaces.repositories.document_repository import DocumentRepository
 from domain.entities.document import DocumentEntity
 from core.logger import logger
-from core.errors import VectorStoreError, VectorInsertionError
 import asyncio
 
 

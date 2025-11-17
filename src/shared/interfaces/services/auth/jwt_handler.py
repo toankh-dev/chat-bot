@@ -1,19 +1,57 @@
 """JWT handler interface for application layer.
-
-This defines the contract the application layer expects from any JWT handler
-implementation. Infrastructure code can implement this interface.
 """
-from typing import Protocol, Dict, Any
-
+from typing import Protocol
+from src.domain.entities.user import UserEntity
 
 class IJWTHandler(Protocol):
-    """Protocol describing JWT handler behaviour expected by the application layer."""
+    """
+    Service for authentication operations.
+    """
 
-    def create_access_token(self, subject: str, additional_claims: Dict[str, Any] | None = None) -> str:
+    def verify_password(self, plain_password: str, password_hash: str) -> bool:
+        """Verify password against hash."""
         ...
 
-    def create_refresh_token(self, subject: str) -> str:
+    def hash_password(self, password: str) -> str:
+        """Hash password."""
+        ...
+    
+    async def authenticate_user(self, email: str, password: str) -> UserEntity:
+        """
+        Authenticate user with email and password.
+
+        Args:
+            email: User email
+            password: Plain password
+
+        Returns:
+            UserModel: Authenticated user
+        """
+        ...
+    
+    async def register_user(self, email: str, password: str, name: str) -> UserEntity:
+        """
+        Register new user.
+
+        Args:
+            email: User email
+            password: Plain password
+            name: User full name
+
+        Returns:
+            UserEntity: Created user
+        """
+        ...
+    
+    def create_tokens(self, user: UserEntity) -> dict:
+        """
+        Create access and refresh tokens for user.
+
+        Args:
+            user: UserEntity to create tokens for
+
+        Returns:
+            dict: Contains access_token, refresh_token, and token_type
+        """
         ...
 
-    def decode_token(self, token: str) -> Dict[str, Any]:
-        ...

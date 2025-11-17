@@ -2,7 +2,7 @@
 Repository SQLAlchemy ORM model.
 """
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, UniqueConstraint
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import JSONB
@@ -12,7 +12,10 @@ from infrastructure.postgresql.connection.base import Base
 class RepositoryModel(Base):
     """Repository model for tracking synced repositories."""
     __tablename__ = "repositories"
-    __table_args__ = {'extend_existing': True}
+    __table_args__ = (
+        UniqueConstraint('connection_id', 'external_id', name='uq_repositories_connection_external'),
+        {'extend_existing': True}
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     connection_id = Column(

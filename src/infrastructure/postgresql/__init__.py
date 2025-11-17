@@ -20,10 +20,8 @@ from .repositories import (
     ConversationRepositoryImpl,
     MessageRepositoryImpl,
     DocumentRepositoryImpl,
-    EmbeddingIndexRepositoryImpl,
     GroupRepositoryImpl,
     GroupChatbotRepositoryImpl,
-    IngestionJobRepositoryImpl,
     UserGroupRepositoryImpl,
     UserChatbotRepositoryImpl
 )
@@ -52,9 +50,9 @@ __all__ = [
     # Repositories
     "UserRepositoryImpl", "ChatbotRepositoryImpl", 
     "ConversationRepositoryImpl", "MessageRepositoryImpl",
-    "DocumentRepositoryImpl", "EmbeddingIndexRepositoryImpl", 
+    "DocumentRepositoryImpl",
     "GroupRepositoryImpl", "GroupChatbotRepositoryImpl",
-    "IngestionJobRepositoryImpl", "UserGroupRepositoryImpl",
+    "UserGroupRepositoryImpl",
     "UserChatbotRepositoryImpl",
     
     # Mappers

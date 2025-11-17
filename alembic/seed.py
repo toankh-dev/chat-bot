@@ -121,7 +121,7 @@ def seed_database():
         chatbot = ChatbotModel(
             name="Code Assistant",
             description="AI assistant that helps with code questions using repository knowledge",
-            model_id=6,  # claude-3-5-sonnet
+            model_id=1,
             temperature=0.7,
             max_tokens=2048,
             top_p=1.0,

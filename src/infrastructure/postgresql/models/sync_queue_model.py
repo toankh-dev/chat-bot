@@ -2,7 +2,7 @@
 SyncQueue SQLAlchemy ORM model.
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Index
 from sqlalchemy.sql import func
 from infrastructure.postgresql.connection.base import Base
 
@@ -10,7 +10,10 @@ from infrastructure.postgresql.connection.base import Base
 class SyncQueueModel(Base):
     """Sync queue model for pending file processing."""
     __tablename__ = "sync_queue"
-    __table_args__ = {'extend_existing': True}
+    __table_args__ = (
+        Index('idx_sync_queue_repo_status_priority', 'repo_id', 'status', 'priority'),
+        {'extend_existing': True}
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     repo_id = Column(

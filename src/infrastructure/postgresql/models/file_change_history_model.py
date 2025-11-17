@@ -2,7 +2,7 @@
 FileChangeHistory SQLAlchemy ORM model.
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Index
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from infrastructure.postgresql.connection.base import Base
@@ -11,7 +11,10 @@ from infrastructure.postgresql.connection.base import Base
 class FileChangeHistoryModel(Base):
     """File change history model for tracking file modifications."""
     __tablename__ = "file_change_history"
-    __table_args__ = {'extend_existing': True}
+    __table_args__ = (
+        Index('idx_file_change_history_commit_path', 'commit_id', 'file_path'),
+        {'extend_existing': True}
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     repo_id = Column(
