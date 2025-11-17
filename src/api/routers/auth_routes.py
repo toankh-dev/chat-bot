@@ -1,7 +1,5 @@
-"""Authentication routes."""
-
 from fastapi import APIRouter, status
-from api.controllers.auth_controller import login, register, logout
+from api.controllers.auth_controller import login, register, logout, refresh_token
 from schemas.auth_schema import LoginResponse
 
 router = APIRouter()
@@ -24,6 +22,16 @@ router.add_api_route(
     status_code=status.HTTP_201_CREATED,
     summary="User registration",
     description="Register new user and return JWT tokens"
+)
+
+router.add_api_route(
+    "/refresh",
+    refresh_token,
+    methods=["POST"],
+    response_model=LoginResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Refresh access token",
+    description="Refresh access token using a valid refresh token"
 )
 
 router.add_api_route(
