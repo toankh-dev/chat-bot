@@ -1,77 +1,64 @@
 """
-KnowledgeBase repository implementation.
-
-Handles database operations for knowledge bases.
+KnowledgeBase Sync Repository - Database operations for knowledge base management (SYNC).
 """
 
-from typing import List, Optional
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Optional
+from sqlalchemy.orm import Session
+from sqlalchemy import and_, or_
 
-from domain.entities.knowledge_base import KnowledgeBaseEntity
 from infrastructure.postgresql.models.knowledge_base_model import KnowledgeBaseModel
-from infrastructure.postgresql.mappers.knowledge_base_mapper import KnowledgeBaseMapper
+from shared.interfaces.repositories.knowledge_base_repository import IKnowledgeBaseRepository
 
 
-class KnowledgeBaseRepository:
-    """
-    Repository for KnowledgeBase CRUD operations.
-    """
+class KnowledgeBaseRepository(IKnowledgeBaseRepository):
+    """Repository for managing knowledge base records (SYNC version for GitLab)."""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, db_session: Session):
         """
-        Initialize repository with database session.
+        Initialize knowledge base repository.
 
         Args:
-            session: SQLAlchemy async session
+            db_session: SQLAlchemy database session (sync)
         """
-        self.session = session
+        self.db_session = db_session
 
-    async def create(self, entity: KnowledgeBaseEntity) -> KnowledgeBaseEntity:
+    def get_by_name_and_chatbot(
+        self, kb_name: str, chatbot_id: int
+    ) -> Optional[KnowledgeBaseModel]:
+        """
+        Get knowledge base by name and chatbot ID.
+
+        Args:
+            kb_name: Knowledge base name
+            chatbot_id: Chatbot ID
+
+        Returns:
+            KnowledgeBase model or None
+        """
+        return self.db_session.query(KnowledgeBaseModel).filter(
+            and_(
+                KnowledgeBaseModel.name == kb_name,
+                KnowledgeBaseModel.chatbot_id == chatbot_id
+            )
+        ).first()
+
+    def create(self, kb_data: dict) -> KnowledgeBaseModel:
         """
         Create a new knowledge base.
 
         Args:
-            entity: KnowledgeBase entity to create
+            kb_data: Dictionary with KB fields (chatbot_id, name, description, etc.)
 
         Returns:
-            Created KnowledgeBase entity with ID
+            Created KnowledgeBase model
         """
-        model = KnowledgeBaseMapper.to_model(entity)
-        self.session.add(model)
-        await self.session.flush()
-        await self.session.refresh(model)
-        return KnowledgeBaseMapper.to_entity(model)
+        kb = KnowledgeBaseModel(**kb_data)
+        self.db_session.add(kb)
+        self.db_session.flush()
+        self.db_session.refresh(kb)
+        return kb
 
-    async def update(self, entity: KnowledgeBaseEntity) -> KnowledgeBaseEntity:
-        """
-        Update an existing knowledge base.
-
-        Args:
-            entity: KnowledgeBase entity to update
-
-        Returns:
-            Updated KnowledgeBase entity
-
-        Raises:
-            ValueError: If knowledge base not found
-        """
-        if entity.id is None:
-            raise ValueError("Cannot update knowledge base without ID")
-
-        stmt = select(KnowledgeBaseModel).where(KnowledgeBaseModel.id == entity.id)
-        result = await self.session.execute(stmt)
-        existing_model = result.scalar_one_or_none()
-
-        if not existing_model:
-            raise ValueError(f"Knowledge base with ID {entity.id} not found")
-
-        updated_model = KnowledgeBaseMapper.to_model(entity, existing_model)
-        await self.session.flush()
-        await self.session.refresh(updated_model)
-        return KnowledgeBaseMapper.to_entity(updated_model)
-
-    async def get_by_id(self, kb_id: int) -> Optional[KnowledgeBaseEntity]:
+    def get_by_id(self, kb_id: int) -> Optional[KnowledgeBaseModel]:
         """
         Get knowledge base by ID.
 
@@ -79,88 +66,39 @@ class KnowledgeBaseRepository:
             kb_id: Knowledge base ID
 
         Returns:
-            KnowledgeBase entity or None if not found
+            KnowledgeBase model or None
         """
-        stmt = select(KnowledgeBaseModel).where(KnowledgeBaseModel.id == kb_id)
-        result = await self.session.execute(stmt)
-        model = result.scalar_one_or_none()
-        return KnowledgeBaseMapper.to_entity(model) if model else None
+        return self.db_session.query(KnowledgeBaseModel).filter(
+            KnowledgeBaseModel.id == kb_id
+        ).first()
 
-    async def get_by_chatbot_id(self, chatbot_id: int) -> List[KnowledgeBaseEntity]:
-        """
-        Get all knowledge bases for a chatbot.
-
-        Args:
-            chatbot_id: Chatbot ID
-
-        Returns:
-            List of KnowledgeBase entities
-        """
-        stmt = select(KnowledgeBaseModel).where(
-            KnowledgeBaseModel.chatbot_id == chatbot_id
-        ).order_by(KnowledgeBaseModel.created_at.desc())
-        result = await self.session.execute(stmt)
-        models = result.scalars().all()
-        return [KnowledgeBaseMapper.to_entity(model) for model in models]
-
-    async def get_active_by_chatbot_id(self, chatbot_id: int) -> List[KnowledgeBaseEntity]:
-        """
-        Get all active knowledge bases for a chatbot.
-
-        Args:
-            chatbot_id: Chatbot ID
-
-        Returns:
-            List of active KnowledgeBase entities
-        """
-        stmt = select(KnowledgeBaseModel).where(
-            KnowledgeBaseModel.chatbot_id == chatbot_id,
-            KnowledgeBaseModel.is_active == True
-        ).order_by(KnowledgeBaseModel.created_at.desc())
-        result = await self.session.execute(stmt)
-        models = result.scalars().all()
-        return [KnowledgeBaseMapper.to_entity(model) for model in models]
-
-    async def find_by_name_and_chatbot(
+    def get_or_create(
         self,
-        name: str,
-        chatbot_id: int
-    ) -> Optional[KnowledgeBaseEntity]:
+        knowledge_base_id: Optional[int] = None,
+        defaults: dict = None
+    ) -> tuple[KnowledgeBaseModel, bool]:
         """
-        Find knowledge base by name and chatbot ID.
+        Get existing knowledge base or create new one.
 
         Args:
-            name: Knowledge base name
-            chatbot_id: Chatbot ID
+            knowledge_base_id: knowledge base ID
+            defaults: Default values if creating new knowledge base
 
         Returns:
-            KnowledgeBase entity or None if not found
+            Tuple of (knowledge base, created) where created is True if new
         """
-        stmt = select(KnowledgeBaseModel).where(
-            KnowledgeBaseModel.name == name,
-            KnowledgeBaseModel.chatbot_id == chatbot_id
+        knowledge_base = self.db_session.query(KnowledgeBaseModel).filter(
+            and_(
+                KnowledgeBaseModel.id == knowledge_base_id,
+            )
+        ).first()
+
+        if knowledge_base:
+            return knowledge_base, False
+
+        # Create new knowledge base
+        repo_data = defaults or {}
+        knowledge_base = KnowledgeBaseModel(
+            **repo_data
         )
-        result = await self.session.execute(stmt)
-        model = result.scalar_one_or_none()
-        return KnowledgeBaseMapper.to_entity(model) if model else None
-
-    async def delete(self, kb_id: int) -> bool:
-        """
-        Delete knowledge base by ID.
-
-        Args:
-            kb_id: Knowledge base ID
-
-        Returns:
-            True if deleted, False if not found
-        """
-        stmt = select(KnowledgeBaseModel).where(KnowledgeBaseModel.id == kb_id)
-        result = await self.session.execute(stmt)
-        model = result.scalar_one_or_none()
-
-        if not model:
-            return False
-
-        await self.session.delete(model)
-        await self.session.flush()
-        return True
+        return self.create(knowledge_base), True

@@ -295,23 +295,3 @@ class TestExtractProjectPath:
 
         with pytest.raises(ValueError, match="Invalid repository URL"):
             gitlab_service._extract_project_path(url)
-
-
-class TestCleanupClone:
-    """Test cleanup_clone method."""
-
-    def test_cleanup_existing_directory(self, gitlab_service):
-        """Test cleaning up existing clone directory."""
-        with patch('os.path.exists', return_value=True):
-            with patch('shutil.rmtree') as mock_rmtree:
-                gitlab_service.cleanup_clone("/tmp/test_clone")
-
-                mock_rmtree.assert_called_once_with("/tmp/test_clone")
-
-    def test_cleanup_nonexistent_directory(self, gitlab_service):
-        """Test cleaning up non-existent directory."""
-        with patch('os.path.exists', return_value=False):
-            with patch('shutil.rmtree') as mock_rmtree:
-                gitlab_service.cleanup_clone("/tmp/nonexistent")
-
-                mock_rmtree.assert_not_called()

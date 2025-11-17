@@ -14,9 +14,10 @@ from pydantic import BaseModel, Field
 
 class SyncRepositoryRequest(BaseModel):
     """Request model for syncing a repository."""
-    repository_url: str = Field(..., description="GitLab repository URL (e.g., https://gitlab.com/group/project)")
-    chatbot_id: int = Field(..., description="Chatbot ID to link this repository to")
-    branch: Optional[str] = Field(default=None, description="Branch to sync (uses default branch if not specified)")
+    connector_id: int = Field(..., description="GitLab connector ID")
+    knowledge_base_id: Optional[int] = Field(..., description="Knowledege base ID to link this chatbot to")
+    repository_external_id: int = Field(..., description="GitLab project ID")
+    branch: str = Field(..., description="Branch to sync (uses default branch if not specified)")
     auto_sync: bool = Field(default=False, description="Auto-sync on GitLab webhook events")
 
 
@@ -61,15 +62,13 @@ class GitLabRepositoryListResponse(BaseModel):
     """Response for fetching GitLab repositories."""
     repositories: List[GitLabRepositoryInfo]
     total: int
-    page: int
-    per_page: int
-
 
 class GitLabConnectionTestResponse(BaseModel):
     """Response for GitLab connection test."""
     success: bool
-    user_id: Optional[str] = None
-    username: Optional[str] = None
-    name: Optional[str] = None
-    email: Optional[str] = None
     message: Optional[str] = None
+
+
+class GitLabBranchListResponse(BaseModel):
+    """Response for fetching GitLab branches."""
+    branches: List[str]  # Simple list of branch names

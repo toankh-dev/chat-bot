@@ -90,13 +90,27 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         extra={"request_id": request.state.request_id}
     )
 
+    # Ensure all error details are JSON serializable
+    errors = exc.errors()
+    serializable_errors = []
+
+    for error in errors:
+        serializable_error = {}
+        for key, value in error.items():
+            if isinstance(value, Exception):
+                # Convert Exception objects to string
+                serializable_error[key] = str(value)
+            else:
+                serializable_error[key] = value
+        serializable_errors.append(serializable_error)
+
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
             "error": {
                 "code": "VALIDATION_ERROR",
                 "message": "Request validation failed",
-                "details": exc.errors()
+                "details": serializable_errors
             }
         }
     )
@@ -111,13 +125,21 @@ async def global_exception_handler(request: Request, exc: Exception):
         exc_info=True
     )
 
+    # Ensure error details are JSON serializable
+    error_details = {}
+    if settings.DEBUG:
+        try:
+            error_details = {"error": str(exc)}
+        except Exception:
+            error_details = {"error": "Unable to serialize error details"}
+
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
             "error": {
                 "code": "INTERNAL_ERROR",
                 "message": "An unexpected error occurred",
-                "details": {"error": str(exc)} if settings.DEBUG else {}
+                "details": error_details
             }
         }
     )
@@ -210,7 +232,6 @@ app.include_router(gitlab_router, prefix="/api/v1/gitlab", tags=["GitLab Sync (A
 app.include_router(connector_admin_router, prefix="/api/v1/connectors", tags=["Admin - Connector Management"])
 app.include_router(document_router, prefix="/api/v1", tags=["Documents"])
 app.include_router(ai_model_router, prefix="/api/v1/ai-models", tags=["AI Models"])
-app.include_router(gitlab_router, tags=["GitLab Integration"])
 
 
 if __name__ == "__main__":

@@ -42,3 +42,60 @@ class KnowledgeBaseSourceModel(Base):
             f"<KnowledgeBaseSourceModel(id={self.id}, kb_id={self.knowledge_base_id}, "
             f"type='{self.source_type}', source_id='{self.source_id}')>"
         )
+
+
+# ============================================================================
+# SQLALCHEMY EVENT LISTENER FOR AUTO-CLEANUP
+# ============================================================================
+# Automatically cleanup vectors when KB source is deleted
+# ============================================================================
+
+from sqlalchemy import event
+from core.logger import logger
+
+
+@event.listens_for(KnowledgeBaseSourceModel, 'before_delete')
+def cleanup_vectors_before_kb_source_delete(mapper, connection, target):
+    """
+    Auto-cleanup vectors when KB source is deleted.
+
+    This event fires BEFORE the DELETE but WITHIN the transaction.
+    If cleanup fails, KB source is still deleted (vectors become orphaned but logged).
+
+    Args:
+        mapper: SQLAlchemy mapper
+        connection: Database connection
+        target: KnowledgeBaseSourceModel instance being deleted
+    """
+    try:
+        logger.info(f"[EVENT] KB Source deletion detected: kb_source_id={target.id}")
+
+        # Import here to avoid circular dependencies
+        from core.dependencies import get_kb_cleanup_service_sync
+
+        # Get cleanup service with sync repositories
+        cleanup_service = get_kb_cleanup_service_sync()
+
+        # Perform cleanup
+        result = cleanup_service.cleanup_source_removal_sync(target.id)
+
+        if result["success"]:
+            logger.info(
+                f"[EVENT] Vector cleanup successful: "
+                f"kb_source_id={target.id}, deleted_vectors={result.get('deleted_vectors', 0)}"
+            )
+        else:
+            logger.error(
+                f"[EVENT] Vector cleanup failed: "
+                f"kb_source_id={target.id}, error={result.get('error')}"
+            )
+            # Don't raise - allow KB source deletion to proceed
+            # Vectors become orphaned but can be cleaned up manually
+
+    except Exception as e:
+        logger.error(
+            f"[EVENT] Unexpected error in cleanup listener: "
+            f"kb_source_id={target.id}, error={e}",
+            exc_info=True
+        )
+        # Don't raise - allow KB source deletion to proceed

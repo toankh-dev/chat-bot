@@ -31,6 +31,8 @@ class CreatorInfo(BaseModel):
 
 class ChatbotCreate(BaseModel):
     """Chatbot creation request."""
+    model_config = ConfigDict(protected_namespaces=())
+
     name: str = Field(..., min_length=3)
     description: Optional[str] = None
     model_id: int = Field(..., description="ID of the AI model to use")
@@ -48,6 +50,8 @@ class ChatbotCreate(BaseModel):
 
 class ChatbotUpdate(BaseModel):
     """Chatbot update request."""
+    model_config = ConfigDict(protected_namespaces=())
+
     name: Optional[str] = None
     description: Optional[str] = None
     model_id: Optional[int] = Field(None, description="ID of the AI model to use")
