@@ -19,7 +19,7 @@ CRITICAL FIX (2025-11-16):
 
 from ..base import BaseVectorStore
 import chromadb
-from chromadb.config import Settings
+from core.config import settings
 from typing import List, Any, Dict, Optional
 import uuid
 import logging
@@ -30,15 +30,6 @@ logger = logging.getLogger(__name__)
 class ChromaDBVectorStore(BaseVectorStore):
     """
     ChromaDB-based vector storage with collection-per-KB isolation.
-
-    DESIGN DECISION:
-      Collection name = kb_{knowledge_base_id} for perfect isolation.
-      Each KB gets its own collection to prevent vector mixing.
-
-    CRITICAL ARCHITECTURE:
-      - Collection isolation prevents UC-2.2 collision (same chatbot, multiple KBs)
-      - Metadata filtering enables UC-1.3 cleanup (branch change)
-      - Collection deletion supports UC-4.3 (KB deletion)
     """
 
     def __init__(self, collection_name: str, persist_directory: str = ".chromadb"):
@@ -47,25 +38,17 @@ class ChromaDBVectorStore(BaseVectorStore):
 
         Args:
             collection_name: Unique collection name (format: kb_{kb_id})
-            persist_directory: Directory to persist ChromaDB data
-
-        USE CASES:
-            - UC-2.1: Different chatbots get different collection_names
-            - UC-2.2: Different KBs get different collection_names
-
-        EDGE CASES:
-            - Collection already exists → get_or_create reuses it
-            - Invalid collection_name → ChromaDB validates and raises error
-            - Persist directory doesn't exist → ChromaDB creates it
-
-        CRITICAL FIX:
-            OLD: self.collection = self.client.get_or_create_collection("vectors")
-            NEW: self.collection = self.client.get_or_create_collection(collection_name)
+            persist_directory: Directory to persist ChromaDB data (unused when using HTTP client)
         """
         try:
+
             self.collection_name = collection_name
-            self.client = chromadb.Client(
-                Settings(persist_directory=persist_directory)
+
+            # Use HTTP client to connect to ChromaDB server (docker-compose service)
+            # This ensures persistence via Docker volume
+            self.client = chromadb.HttpClient(
+                host=settings.CHROMADB_HOST,
+                port=settings.CHROMADB_PORT
             )
 
             # CRITICAL: Use dynamic collection name (not hardcoded "vectors")
@@ -73,7 +56,7 @@ class ChromaDBVectorStore(BaseVectorStore):
 
             logger.info(
                 f"Initialized ChromaDB collection: {collection_name} "
-                f"at {persist_directory}"
+                f"via HTTP client at {settings.CHROMADB_HOST}:{settings.CHROMADB_PORT}"
             )
 
         except Exception as e:
@@ -87,25 +70,6 @@ class ChromaDBVectorStore(BaseVectorStore):
         Args:
             vector: Embedding vector (e.g., 768-dim for Gemini, 1536-dim for Titan)
             metadata: Metadata dict (MUST include: kb_source_id, branch, commit_sha)
-
-        Returns:
-            Vector ID in collection
-
-        USE CASES:
-            - UC-1.1: First time sync → add all file vectors
-            - UC-1.2: Incremental sync → add changed file vectors
-            - UC-1.3: Branch change → add new branch vectors (after cleanup)
-
-        CRITICAL METADATA REQUIRED:
-            - kb_source_id: Link to kb_source record (for cleanup UC-4.2)
-            - branch: Branch name (for branch change cleanup UC-1.3)
-            - commit_sha: Commit SHA (for audit trail)
-            - file_path: Source file path
-
-        EDGE CASES:
-            - Duplicate vector_id → ChromaDB upserts (updates existing)
-            - Missing required metadata → still added (validation should happen before)
-            - Vector dimension mismatch → ChromaDB auto-detects on first add
         """
         vector_id = str(uuid.uuid4())
         self.collection.add(
@@ -176,18 +140,6 @@ class ChromaDBVectorStore(BaseVectorStore):
             vectors: List of embedding vectors
             metadatas: List of metadata dicts (same length as vectors)
             vector_ids: Optional list of IDs
-
-        Returns:
-            List of vector IDs
-
-        USE CASES:
-            - UC-1.1: Batch add during initial sync
-            - UC-6.1: Large repo → process in batches of 20 files
-
-        EDGE CASES:
-            - Empty batch → skip silently
-            - Vectors/metadatas length mismatch → ChromaDB raises error
-            - Partial failure → ChromaDB transaction (all-or-nothing)
         """
         try:
             if not vectors:
@@ -225,33 +177,6 @@ class ChromaDBVectorStore(BaseVectorStore):
 
         Args:
             filters: Metadata filter dict (e.g., {"branch": "main", "kb_source_id": "15"})
-
-        Returns:
-            Number of vectors deleted
-
-        USE CASES:
-            - UC-1.3: Branch change → delete old branch vectors
-            - UC-4.2: Source removal → delete all source vectors
-
-        IMPLEMENTATION:
-            1. Query to get IDs matching filters (using where clause)
-            2. Delete by IDs
-
-        EDGE CASES:
-            - No matches → delete 0, return 0
-            - Large result set → ChromaDB handles pagination internally
-            - Invalid filter → ChromaDB raises error
-
-        CRITICAL FOR:
-            - Preventing vector pollution when branch changes
-            - Cleanup when KB source removed
-
-        EXAMPLE:
-            # Delete all main branch vectors for a specific source
-            deleted = store.delete_by_metadata({
-                "kb_source_id": "15",
-                "branch": "main"
-            })
         """
         try:
             # Query to get IDs matching filters
@@ -280,16 +205,6 @@ class ChromaDBVectorStore(BaseVectorStore):
 
         Args:
             vector_ids: List of vector IDs to delete
-
-        Returns:
-            Number of vectors deleted
-
-        USE CASES:
-            - UC-4.1: Content change → delete old file vectors (tracked in file_embeddings)
-
-        EDGE CASES:
-            - IDs don't exist → ChromaDB silently skips
-            - Empty list → delete 0
         """
         try:
             if not vector_ids:
@@ -310,16 +225,6 @@ class ChromaDBVectorStore(BaseVectorStore):
 
         Returns:
             True if successful
-
-        USE CASES:
-            - UC-4.3: KB deletion → remove all vectors
-
-        WARNING:
-            This is destructive and irreversible!
-
-        EDGE CASES:
-            - Collection doesn't exist → ChromaDB raises error (catch and return True)
-            - Collection in use → ChromaDB may block
         """
         try:
             self.client.delete_collection(self.collection_name)
@@ -343,13 +248,6 @@ class ChromaDBVectorStore(BaseVectorStore):
 
         Returns:
             Vector count
-
-        USE CASES:
-            - Monitoring, metrics
-            - Verification after sync
-
-        EDGE CASES:
-            - Empty collection → returns 0
         """
         try:
             return self.collection.count()

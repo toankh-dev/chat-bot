@@ -249,12 +249,44 @@ class KBSyncService:
                 "error": str(e)
             }
 
+    def _sanitize_chromadb_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Sanitize metadata for ChromaDB compatibility.
+
+        ChromaDB only accepts: str, int, float, bool (no None, no nested objects)
+
+        Args:
+            metadata: Raw metadata dict
+
+        Returns:
+            Sanitized metadata dict safe for ChromaDB
+        """
+        sanitized = {}
+        for key, value in metadata.items():
+            # Skip None values
+            if value is None:
+                continue
+
+            # Skip very long strings (> 1000 chars)
+            if isinstance(value, str) and len(value) > 1000:
+                logger.warning(f"Skipping metadata field '{key}' (too long: {len(value)} chars)")
+                continue
+
+            # Only allow primitive types
+            if isinstance(value, (str, int, float, bool)):
+                sanitized[key] = value
+            else:
+                # Convert to string as fallback
+                sanitized[key] = str(value)
+
+        return sanitized
+
     async def sync_documents(self, documents: List[Dict[str, Any]], persist_directory: str) -> Dict[str, Any]:
         """
         Synchronously sync documents to vector store (for GitLab sync).
 
         Args:
-            persist_directory: Collection identifier (e.g., kb_chatbot_9_default) 
+            persist_directory: Collection identifier (e.g., kb_chatbot_9_default)
             Factory will auto-handle ChromaDB vs S3 based on settings
         Returns:
             Dict with sync results
@@ -280,15 +312,17 @@ class KBSyncService:
             vector_ids = []
             for i, (text, metadata, embedding) in enumerate(zip(texts, metadatas, embeddings)):
                 try:
-                    # Add text to metadata
+                    # Prepare metadata (text already in document content, no need to duplicate)
                     full_metadata = {
                         **metadata,
-                        "text": text,
                         "chunk_index": i
                     }
 
+                    # Sanitize metadata for ChromaDB compatibility
+                    sanitized_metadata = self._sanitize_chromadb_metadata(full_metadata)
+
                     # Add vector to store
-                    vector_id = vector_store.add_vector(embedding, full_metadata)
+                    vector_id = vector_store.add_vector(embedding, sanitized_metadata)
                     vector_ids.append(vector_id)
 
                 except Exception as e:

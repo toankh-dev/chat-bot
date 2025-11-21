@@ -19,9 +19,9 @@ class ILLMService(ABC):
     async def generate_response(
         self,
         prompt: str,
+        max_output_tokens: int,
+        temperature: float,
         context: Optional[str] = None,
-        max_tokens: int = 1000,
-        temperature: float = 0.7,
         **kwargs
     ) -> str:
         """
@@ -30,7 +30,7 @@ class ILLMService(ABC):
         Args:
             prompt: User prompt/question
             context: Retrieved context from knowledge base (optional)
-            max_tokens: Maximum tokens to generate
+            max_output_tokens: Maximum tokens to generate
             temperature: Sampling temperature (0.0-2.0)
             **kwargs: Additional provider-specific parameters
 
@@ -47,9 +47,9 @@ class ILLMService(ABC):
     async def generate_streaming_response(
         self,
         prompt: str,
+        max_output_tokens: int,
+        temperature: float,
         context: Optional[str] = None,
-        max_tokens: int = 1000,
-        temperature: float = 0.7,
         **kwargs
     ):
         """
@@ -61,13 +61,6 @@ class ILLMService(ABC):
             max_tokens: Maximum tokens to generate
             temperature: Sampling temperature (0.0-2.0)
             **kwargs: Additional provider-specific parameters
-
-        Yields:
-            str: Response chunks
-
-        Raises:
-            ValueError: If parameters are invalid
-            RuntimeError: If LLM call fails
         """
         pass
 

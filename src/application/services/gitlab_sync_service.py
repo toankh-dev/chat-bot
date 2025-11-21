@@ -17,9 +17,6 @@ from infrastructure.postgresql.repositories.user_connection_repository import (
 )
 from infrastructure.postgresql.repositories.sync_history_repository import SyncHistoryRepository
 from infrastructure.postgresql.repositories.sync_queue_repository import SyncQueueRepository
-from infrastructure.postgresql.repositories.file_change_history_repository import (
-    FileChangeHistoryRepository,
-)
 from infrastructure.postgresql.repositories.commit_model_repository import CommitRepository
 from infrastructure.postgresql.repositories.connector_repository import ConnectorRepository
 from infrastructure.postgresql.models.knowledge_base_source_model import KnowledgeBaseSourceModel
@@ -30,7 +27,6 @@ from infrastructure.postgresql.repositories.knowledge_base_source_repository imp
 from infrastructure.postgresql.models.repository_model import RepositoryModel
 from infrastructure.postgresql.models.sync_history_model import SyncHistoryModel
 from infrastructure.postgresql.models.sync_queue_model import SyncQueueModel
-from infrastructure.postgresql.models.file_change_history_model import FileChangeHistoryModel
 from core.errors import ConnectorNotFoundError, KnowledgeBaseNotFoundError, VectorCleanupException
 from shared.interfaces.services.lock.redis_lock_service import IRedisLockService
 from shared.constants import (
@@ -45,11 +41,10 @@ class GitLabSyncService:
 
     def __init__(
         self,
-        # 9 Repository dependencies (all SYNC)
+        # 8 Repository dependencies (all SYNC)
         repository_repository: RepositoryRepository,
         commit_repository: CommitRepository,
         sync_queue_repository: SyncQueueRepository,
-        file_change_history_repository: FileChangeHistoryRepository,
         sync_history_repository: SyncHistoryRepository,
         connector_repository: ConnectorRepository,
         user_connection_repository: UserConnectionRepository,
@@ -69,7 +64,6 @@ class GitLabSyncService:
             repository_repository: Repository repository instance
             commit_repository: Commit repository instance
             sync_queue_repository: Sync queue repository instance
-            file_change_history_repository: File change history repository instance
             sync_history_repository: Sync history repository instance
             connector_repository: Connector repository instance
             user_connection_repository: User connection repository instance
@@ -84,7 +78,6 @@ class GitLabSyncService:
         self.repository_repo = repository_repository
         self.commit_repository = commit_repository
         self.sync_queue_repo = sync_queue_repository
-        self.file_change_repo = file_change_history_repository
         self.sync_history_repo = sync_history_repository
         self.connector_repo = connector_repository
         self.connection_repo = user_connection_repository
@@ -223,7 +216,7 @@ class GitLabSyncService:
                 project_id=repository_external_id, ref=branch
             )
             # Check if HEAD commit already synced by comparing real GitLab SHA
-            existing_commit = self.commit_repository.get_latest_full_sync_by_repo_id(repo.id)
+            existing_commit = await self.commit_repository.get_latest_full_sync_by_repo_id(repo.id)
 
             if existing_commit and existing_commit.sha == head_commit_sha:
                 # Check if there are pending items for this commit
@@ -250,7 +243,7 @@ class GitLabSyncService:
 
             else:
                 # Create commit with real GitLab SHA and metadata
-                commit = self.commit_repository.create_with_metadata(
+                commit = await self.commit_repository.create_with_metadata(
                     repo_id=repo.id,
                     sha=head_commit_sha,
                     external_id=head_commit_sha,
@@ -262,7 +255,6 @@ class GitLabSyncService:
                     ),
                     files_changed=len(code_files),
                 )
-
             # 7. Queue all files for processing with batched insertion for large repos
             file_count = len(code_files)
 
@@ -271,30 +263,13 @@ class GitLabSyncService:
                 batch_end = min(batch_start + SYNC_QUEUE_BULK_INSERT_BATCH_SIZE, file_count)
                 batch_files = code_files[batch_start:batch_end]
 
-                # Create file history for this batch
-                file_history_batch = []
-                for file_path in batch_files:
-                    file_change = FileChangeHistoryModel(
-                        repo_id=repo.id,
-                        commit_id=commit.id,
-                        sync_history_id=sync_history.id,
-                        file_path=file_path,
-                        change_type="added",
-                        sync_status="pending",
-                    )
-                    file_history_batch.append(file_change)
-
-                # Bulk insert file history batch
-                self.file_change_repo.create_batch(file_history_batch)
-
                 # Create queue items for this batch
                 queue_batch = []
-                for file_change in file_history_batch:
+                for file_path in batch_files:
                     queue_item = SyncQueueModel(
                         repo_id=repo.id,
                         commit_id=commit.id,
-                        file_change_history_id=file_change.id,
-                        file_path=file_change.file_path,
+                        file_path=file_path,
                         change_type="added",
                         priority=0,  # TODO: Use SYNC_PRIORITY_* constants based on file type
                         status="pending",
@@ -510,6 +485,8 @@ class GitLabSyncService:
                             "kb_source_id": str(kb_source_id),
                             "user_id": user_id,
                         }
+                        print(f"Created document with metadata: {doc_metadata}")
+                        print(f"content: {content}")
                         documents.append({"content": chunk.text, "metadata": doc_metadata})
 
                     # Accumulate for batch processing
@@ -554,16 +531,10 @@ class GitLabSyncService:
 
                 if result["status"] == "success":
                     self.sync_queue_repo.mark_completed(queue_item.id)
-                    self.file_change_repo.mark_synced(
-                        queue_item.file_change_history_id, result["process_time"]
-                    )
                     total_succeeded += 1
                     total_embeddings += result["chunks"]
                 else:
                     self.sync_queue_repo.mark_failed(queue_item.id, result["error"])
-                    self.file_change_repo.mark_failed(
-                        queue_item.file_change_history_id, "processing_error", result["error"]
-                    )
                     total_failed += 1
 
                 total_processed += 1

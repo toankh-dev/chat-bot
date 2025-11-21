@@ -28,11 +28,6 @@ class SyncQueueModel(Base):
         nullable=False,
         comment="Commit that changed this file"
     )
-    file_change_history_id = Column(
-        Integer,
-        ForeignKey("file_change_history.id", ondelete="SET NULL"),
-        comment="Reference to file change history"
-    )
     file_path = Column(Text, nullable=False)
     change_type = Column(String(20), nullable=False)  # added, modified, deleted, renamed
     priority = Column(Integer, default=0, comment="Higher priority processed first")

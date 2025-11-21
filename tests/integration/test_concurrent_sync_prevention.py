@@ -23,7 +23,6 @@ def mock_dependencies():
         "repository_repository": MagicMock(),
         "commit_repository": MagicMock(),
         "sync_queue_repository": MagicMock(),
-        "file_change_history_repository": MagicMock(),
         "sync_history_repository": MagicMock(),
         "connector_repository": MagicMock(),
         "user_connection_repository": MagicMock(),

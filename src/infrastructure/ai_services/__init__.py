@@ -19,16 +19,6 @@ from infrastructure.ai_services.llm import (
     LLMFactory
 )
 
-# Embeddings
-from infrastructure.ai_services.embeddings import (
-    BedrockEmbeddingService,
-    GeminiEmbeddingService,
-    EmbeddingFactory
-)
-
-# Knowledge Base
-from infrastructure.ai_services.knowledge_base import BedrockKnowledgeBaseService
-
 # Bedrock Client (shared across services) - optional
 try:
     from infrastructure.ai_services.bedrock_client import BedrockClient, get_bedrock_client
@@ -41,14 +31,6 @@ __all__ = [
     "BedrockLLMService",
     "GeminiLLMService",
     "LLMFactory",
-
-    # Embeddings
-    "BedrockEmbeddingService",
-    "GeminiEmbeddingService",
-    "EmbeddingFactory",
-
-    # Knowledge Base
-    "BedrockKnowledgeBaseService",
 
     # Bedrock Client
     "BedrockClient",

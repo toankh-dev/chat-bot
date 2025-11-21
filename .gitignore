@@ -99,3 +99,6 @@ __pycache__/
 *$py.class
 *.so
 .Python
+
+chromadb_data/
+redis_data/

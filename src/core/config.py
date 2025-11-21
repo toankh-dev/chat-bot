@@ -238,6 +238,15 @@ class Settings(BaseSettings):
     # File storage provider
     FILE_STORAGE_PROVIDER: str = "local"  # local or s3
 
+    # ============================================================================
+    # Agent Configuration
+    # ============================================================================
+    ENABLE_AGENTS: bool = True
+    AGENT_MAX_ITERATIONS: int = 5
+    AGENT_TIMEOUT_SECONDS: int = 60
+    LANGCHAIN_VERBOSE: bool = False
+    LANGCHAIN_TRACING_V2: bool = False  # Enable for debugging with LangSmith
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

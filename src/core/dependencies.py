@@ -5,7 +5,7 @@ Provides dependencies for controllers and use cases following Clean Architecture
 """
 
 # Standard library imports
-from typing import Generator, Callable
+from typing import Generator, Callable, Optional
 
 # Third-party imports
 from fastapi import Depends
@@ -60,7 +60,6 @@ from infrastructure.postgresql.repositories.user_connection_repository import Us
 from infrastructure.postgresql.repositories.repository_repository import RepositoryRepository
 from infrastructure.postgresql.repositories.commit_model_repository import CommitRepository
 from infrastructure.postgresql.repositories.sync_queue_repository import SyncQueueRepository
-from infrastructure.postgresql.repositories.file_change_history_repository import FileChangeHistoryRepository
 from infrastructure.postgresql.repositories.sync_history_repository import SyncHistoryRepository
 from infrastructure.postgresql.repositories.knowledge_base_repository import KnowledgeBaseRepository
 from infrastructure.postgresql.repositories.knowledge_base_source_repository import KnowledgeBaseSourceRepository
@@ -79,6 +78,8 @@ from application.services.kb_sync_service import KBSyncService
 from application.services.connector_service import ConnectorService
 from application.services.code_chunking_service import CodeChunkingService
 from application.services.group_service import GroupService
+from application.services.agent_service import AgentService
+from application.services.rag_service import RAGService
 
 # Infrastructure Services
 from infrastructure.vector_store.factory import VectorStoreFactory
@@ -189,6 +190,10 @@ def get_vector_store_factory():
     """Get vector store factory instance."""
     return VectorStoreFactory()
 
+def get_embedding_factory():
+    """Get vector store factory instance."""
+    return EmbeddingFactory()
+
 
 # ============================================================================
 # REPOSITORY DEPENDENCIES
@@ -242,7 +247,7 @@ def get_repository_repository(db_session: Session = Depends(get_db)) -> Reposito
     """Get repository repository instance (SYNC)."""
     return RepositoryRepository(db_session)
 
-def get_commit_repository(db_session: Session = Depends(get_db)) -> CommitRepository:
+def get_commit_repository(db_session: Session = Depends(get_db_session)) -> CommitRepository:
     """Get commit repository instance (SYNC)."""
     return CommitRepository(db_session)
 
@@ -266,11 +271,6 @@ def get_ai_model_repository(
 def get_sync_queue_repository(db_session: Session = Depends(get_db)) -> SyncQueueRepository:
     """Get sync queue repository instance (SYNC)."""
     return SyncQueueRepository(db_session)
-
-
-def get_file_change_history_repository(db_session: Session = Depends(get_db)) -> FileChangeHistoryRepository:
-    """Get file change history repository instance (SYNC)."""
-    return FileChangeHistoryRepository(db_session)
 
 
 def get_knowledge_base_sync_repository(db_session: AsyncSession = Depends(get_db_session)) -> KnowledgeBaseRepository:
@@ -304,7 +304,7 @@ def get_kb_source_repository(db_session: Session = Depends(get_db)) -> Knowledge
 def get_embedding_service() -> IEmbeddingService:
     """Get embedding service instance based on LLM_PROVIDER."""
     model_id = getattr(settings, "EMBEDDING_MODEL", None)
-    return EmbeddingFactory.create(model_id=model_id)
+    return EmbeddingFactory.create(provider="gemini", config={"model_name": model_id})
 
 # ============================================================================
 # APPLICATION SERVICE DEPENDENCIES
@@ -360,14 +360,12 @@ def get_chatbot_service(
         user_repository
     )
 
-
 def get_conversation_service(
     conversation_repository: ConversationRepository = Depends(get_conversation_repository),
     message_repository: MessageRepository = Depends(get_message_repository)
 ) -> ConversationService:
     """Get conversation service instance."""
     return ConversationService(conversation_repository, message_repository)
-
 
 def get_document_upload_service(
     file_storage: IFileStorageService = Depends(get_file_storage_service),
@@ -497,7 +495,6 @@ def get_gitlab_sync_service(
     repository_repository: RepositoryRepository = Depends(get_repository_repository),
     commit_repository: CommitRepository = Depends(get_commit_repository),
     sync_queue_repository: SyncQueueRepository = Depends(get_sync_queue_repository),
-    file_change_history_repository: FileChangeHistoryRepository = Depends(get_file_change_history_repository),
     sync_history_repository: SyncHistoryRepository = Depends(get_sync_history_repository),
     connector_repository: ConnectorRepository = Depends(get_connector_repository),
     user_connection_repository: UserConnectionRepository = Depends(get_user_connection_repository),
@@ -517,7 +514,6 @@ def get_gitlab_sync_service(
         repository_repository=repository_repository,
         commit_repository=commit_repository,
         sync_queue_repository=sync_queue_repository,
-        file_change_history_repository=file_change_history_repository,
         sync_history_repository=sync_history_repository,
         connector_repository=connector_repository,
         user_connection_repository=user_connection_repository,

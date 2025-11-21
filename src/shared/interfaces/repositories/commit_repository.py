@@ -1,9 +1,11 @@
 """Connector Repository Interface."""
 
 from abc import ABC, abstractmethod
+import datetime
 from typing import Any
 
 from src.infrastructure.postgresql.models.commit_model import CommitModel
+
 
 class ICommitRepository(ABC):
     """Interface for commit repository operations."""
@@ -38,4 +40,32 @@ class ICommitRepository(ABC):
         """
         pass
 
-    
+    @abstractmethod
+    async def create_with_metadata(
+        self,
+        repo_id: int,
+        sha: str,
+        external_id: str,
+        author_name: str,
+        author_email: str,
+        message: str,
+        committed_at: datetime,
+        files_changed: int,
+    ) -> CommitModel:
+        """
+        Create a new commit with full GitLab metadata.
+
+        Args:
+            repo_id: Repository database ID
+            sha: Real GitLab commit SHA (40 chars hex)
+            external_id: External commit ID (usually same as SHA)
+            author_name: Commit author name
+            author_email: Commit author email
+            message: Commit message
+            committed_at: Commit timestamp from GitLab
+            files_changed: Number of files changed
+
+        Returns:
+            Created commit model
+        """
+        pass

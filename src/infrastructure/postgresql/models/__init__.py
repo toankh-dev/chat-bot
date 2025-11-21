@@ -17,7 +17,6 @@ from infrastructure.postgresql.models.user_connection_model import UserConnectio
 from infrastructure.postgresql.models.repository_model import RepositoryModel
 from infrastructure.postgresql.models.sync_history_model import SyncHistoryModel
 from infrastructure.postgresql.models.sync_queue_model import SyncQueueModel
-from infrastructure.postgresql.models.file_change_history_model import FileChangeHistoryModel
 from infrastructure.postgresql.models.knowledge_base_model import KnowledgeBaseModel
 from infrastructure.postgresql.models.knowledge_base_source_model import KnowledgeBaseSourceModel
 from infrastructure.postgresql.models.ai_model_model import AiModelModel
@@ -39,8 +38,7 @@ __all__ = [
     "RepositoryModel",
     "SyncHistoryModel",
     "SyncQueueModel",
-    "FileChangeHistoryModel",
     "KnowledgeBaseModel",
-    "KnowledgeBaseSourceModel"
+    "KnowledgeBaseSourceModel",
     "AiModelModel"
 ]

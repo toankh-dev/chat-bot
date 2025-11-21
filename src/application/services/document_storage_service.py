@@ -1,8 +1,6 @@
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 from infrastructure.s3.s3_file_storage_service import S3FileStorageService
-
-if TYPE_CHECKING:
-    from domain.entities.document import DocumentEntity  # type: ignore
+from domain.entities.document import DocumentEntity
 
 
 class DocumentStorageService:

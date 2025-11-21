@@ -99,8 +99,8 @@ class CodeChunkingService:
         metadata: Dict[str, Any]
     ) -> List[CodeChunk]:
         """
-        Split large code file using LangChain RecursiveCharacterTextSplitter.from_language.
-        Giữ nguyên ý tưởng 'split theo function/class' nếu có hỗ trợ.
+        Split large code files using LangChain RecursiveCharacterTextSplitter.from_language.
+        Keep the 'split by function/class' idea if supported.
         """
         language = self._detect_langchain_language(file_path)
 
@@ -209,13 +209,13 @@ class CodeChunkingService:
         language = self.detect_language(file_path)
         lines = content.split("\n")
         return {
-            "repo": repo_info.get("repo"),
-            "repo_url": repo_info.get("repo_url"),
-            "branch": repo_info.get("branch"),
-            "commit": repo_info.get("commit"),
-            "commit_message": repo_info.get("commit_message"),
-            "author": repo_info.get("author"),
-            "timestamp": repo_info.get("timestamp"),
+            "repo": repo_info.get("repo") or "unknown",
+            "repo_url": repo_info.get("repo_url") or "",
+            "branch": repo_info.get("branch") or "main",
+            "commit": repo_info.get("commit") or "",
+            "commit_message": repo_info.get("commit_message") or "",
+            "author": repo_info.get("author") or "unknown",
+            "timestamp": repo_info.get("timestamp") or "",
             "file_path": file_path,
             "filename": os.path.basename(file_path),
             "language": language,

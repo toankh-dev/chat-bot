@@ -1,9 +1,7 @@
 from typing import List, Dict, Any
 import re
 from dataclasses import dataclass
-
-from langchain_text_splitters import RecursiveCharacterTextSplitter  # sử dụng LangChain
-
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 @dataclass
 class TextChunk:
     text: str
@@ -20,7 +18,6 @@ class DocumentChunkingService:
         self.chunk_overlap = chunk_overlap
         self.max_chunks = max_chunks
 
-        # Khởi tạo LangChain splitter với cùng thông số chunk_size và chunk_overlap
         self.splitter = RecursiveCharacterTextSplitter(
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
@@ -55,9 +52,6 @@ class DocumentChunkingService:
         for i, chunk_text in enumerate(texts):
             start_char = None
             end_char = None
-            # Nếu muốn giữ start_char/end_char, cần tìm vị trí trong cleaned_text
-            # (Bản gốc của bạn có tính start/end theo vị trí) => thêm logic sau
-            # (đơn giản: tìm chunk_text bắt đầu tại vị trí nào)
             try:
                 start_char = cleaned_text.index(chunk_text)
                 end_char = start_char + len(chunk_text)
@@ -118,7 +112,6 @@ class DocumentChunkingService:
                 continue
 
             if len(section_text) > self.chunk_size:
-                # lớn hơn giới hạn => sử dụng splitter
                 texts = self.splitter.split_text(section_text)
                 for j, chunk_text in enumerate(texts):
                     try:

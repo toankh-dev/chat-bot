@@ -84,9 +84,9 @@ class BedrockLLMService(ILLMService):
     async def generate_streaming_response(
         self,
         prompt: str,
+        max_tokens: int,
+        temperature: float,
         context: Optional[str] = None,
-        max_tokens: int = 1000,
-        temperature: float = 0.7,
         **kwargs
     ):
         """
@@ -106,8 +106,6 @@ class BedrockLLMService(ILLMService):
             # Build full prompt with context if provided
             full_prompt = f"Context:\n{context}\n\nQuestion: {prompt}" if context else prompt
 
-            # For now, yield the complete response as single chunk
-            # TODO: Implement proper streaming with Bedrock streaming API
             response_text = await self.generate_response(
                 prompt=prompt,
                 context=context,

@@ -1,17 +1,14 @@
 """
 Bedrock embedding service implementation.
 """
-from typing import List, Optional, TYPE_CHECKING
+from typing import List, Optional
 import asyncio
 
-from shared.interfaces.services.ai_services.embedding_service import IEmbeddingService
+from infrastructure.ai_services.embeddings.base import BaseEmbeddingService
 from ..utils import validate_text_input, numpy_to_list
-if TYPE_CHECKING:
-    from ...bedrock_client import BedrockClient
-from core.logger import logger
+from ...bedrock_client import BedrockClient
 
-
-class BedrockEmbeddingService(IEmbeddingService):
+class BedrockEmbeddingService(BaseEmbeddingService):
     """
     Bedrock implementation of embedding service.
 

@@ -27,27 +27,3 @@ class IVectorStoreFactory(ABC):
             RuntimeError: If vector store creation fails
         """
         pass
-
-    @abstractmethod
-    def create_domain_specific(self, domain: str, **config) -> IVectorStore:
-        """
-        Create domain-specific vector store instance.
-
-        Args:
-            domain: Domain name (healthcare, education, gitlab, etc.)
-            **config: Additional configuration
-
-        Returns:
-            IVectorStore: Domain-specific vector store instance
-        """
-        pass
-
-    @abstractmethod
-    def get_available_providers(self) -> List[str]:
-        """
-        Get list of available vector store providers.
-
-        Returns:
-            List[str]: Available provider names
-        """
-        pass

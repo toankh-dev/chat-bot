@@ -2,8 +2,9 @@
 Connector Repository - Database operations for connectors.
 """
 
-from datetime import datetime
-from sqlalchemy.orm import Session
+from datetime import datetime, timezone
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from core.logger import logger
 from src.infrastructure.postgresql.models.commit_model import CommitModel
@@ -13,7 +14,7 @@ from src.shared.interfaces.repositories.commit_repository import ICommitReposito
 class CommitRepository(ICommitRepository):
     """Repository for managing commit records."""
 
-    def __init__(self, db_session: Session):
+    def __init__(self, db_session: AsyncSession):
         """
         Initialize commit repository.
 
@@ -22,7 +23,7 @@ class CommitRepository(ICommitRepository):
         """
         self.db_session = db_session
 
-    def get_latest_full_sync_by_repo_id(self, repo_id: int) -> CommitModel:
+    async def get_latest_full_sync_by_repo_id(self, repo_id: int) -> CommitModel:
         """
         Get the latest synced commit for a repository.
 
@@ -36,14 +37,17 @@ class CommitRepository(ICommitRepository):
             Returns any commit (real GitLab SHA or synthetic) ordered by committed_at.
             Use this to check if repository has been synced before.
         """
-        return (
-            self.db_session.query(CommitModel)
-            .filter(CommitModel.repo_id == repo_id)
+        stmt = (
+            select(CommitModel)
+            .where(CommitModel.repo_id == repo_id)
             .order_by(CommitModel.committed_at.desc())
-            .first()
+            .limit(1)
         )
 
-    def create(self, repo_id: int, code_files: list) -> CommitModel:
+        result = await self.db_session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def create(self, repo_id: int, code_files: list) -> CommitModel:
         """
         Create a new commit with synthetic SHA (legacy method).
 
@@ -53,30 +57,26 @@ class CommitRepository(ICommitRepository):
 
         Returns:
             Created commit
-
-        Raises:
-            IntegrityError: If foreign key constraint fails
-
-        Note:
-            DEPRECATED: Use create_with_metadata() for new code.
-            This method creates commits with synthetic SHA pattern "full_sync_{timestamp}".
         """
-        sync_timestamp = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc)
+        sync_timestamp = now.isoformat()
+
         commit = CommitModel(
-            repo_id=repo_id,  # Use database repo.id, not external_id
+            repo_id=repo_id,
             external_id=f"full_sync_{sync_timestamp}",
-            sha=f"full_sync_{sync_timestamp}",  # Make SHA unique
+            sha=f"full_sync_{sync_timestamp}",
             author_name="System",
             message="Full repository sync",
             committed_at=datetime.utcnow(),
             files_changed=len(code_files),
         )
+
         self.db_session.add(commit)
-        self.db_session.commit()
-        self.db_session.refresh(commit)
+        await self.db_session.commit()
+        await self.db_session.refresh(commit)
         return commit
 
-    def create_with_metadata(
+    async def create_with_metadata(
         self,
         repo_id: int,
         sha: str,
@@ -97,15 +97,16 @@ class CommitRepository(ICommitRepository):
             author_name: Commit author name
             author_email: Commit author email
             message: Commit message
-            committed_at: Commit timestamp from GitLab
+            committed_at: Commit timestamp from GitLab (timezone-aware or naive)
             files_changed: Number of files changed
 
         Returns:
             Created commit model
-
-        Raises:
-            IntegrityError: If SHA already exists or foreign key constraint fails
         """
+        # Convert timezone-aware datetime to naive UTC for PostgreSQL TIMESTAMP WITHOUT TIME ZONE
+        if committed_at.tzinfo is not None:
+            committed_at = committed_at.replace(tzinfo=None)
+
         commit = CommitModel(
             repo_id=repo_id,
             external_id=external_id,
@@ -116,8 +117,9 @@ class CommitRepository(ICommitRepository):
             committed_at=committed_at,
             files_changed=files_changed,
         )
+
         self.db_session.add(commit)
-        self.db_session.commit()
-        self.db_session.refresh(commit)
-        logger.info(f"Created commit {commit.id} with SHA {sha[:8]} for repo {repo_id}")
+        await self.db_session.commit()
+        await self.db_session.refresh(commit)
         return commit
+

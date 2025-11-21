@@ -1,16 +1,16 @@
 """
 Gemini embedding service implementation.
 """
-from typing import List, Optional
-import google.generativeai as genai
+from typing import List
 import asyncio
 
-from shared.interfaces.services.ai_services.embedding_service import IEmbeddingService
+from infrastructure.ai_services.gemini_client import GeminiClient
+from infrastructure.ai_services.embeddings.base import BaseEmbeddingService
 from ..utils import validate_text_input
 from core.logger import logger
 
 
-class GeminiEmbeddingService(IEmbeddingService):
+class GeminiEmbeddingService(BaseEmbeddingService):
     """
     Gemini implementation of embedding service.
 
@@ -18,7 +18,7 @@ class GeminiEmbeddingService(IEmbeddingService):
     Uses: embedding utilities from utils module (no inheritance needed)
     """
 
-    def __init__(self, api_key: Optional[str] = None, model_name: str = "models/embedding-001"):
+    def __init__(self, gemini_client: GeminiClient):
         """
         Initialize Gemini embedding service.
 
@@ -26,10 +26,8 @@ class GeminiEmbeddingService(IEmbeddingService):
             api_key: Optional API key
             model_name: Embedding model name
         """
-        if api_key:
-            genai.configure(api_key=api_key)
-        self.model_name = model_name
-        self._embedding_dimension = 768  # Fixed for current Gemini models
+        self.client = gemini_client
+        self._embedding_dimension = 768
 
     async def create_single_embedding(self, text: str) -> List[float]:
         """
@@ -51,13 +49,12 @@ class GeminiEmbeddingService(IEmbeddingService):
             loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(
                 None,
-                lambda: genai.embed_content(
-                    model=self.model_name,
-                    content=text,
+                lambda: self.client.embed(
+                    text=text,
                     task_type="retrieval_document"
                 )
             )
-            return result['embedding']
+            return result
         except Exception as e:
             logger.error(f"Error creating embedding with Gemini: {e}")
             raise
