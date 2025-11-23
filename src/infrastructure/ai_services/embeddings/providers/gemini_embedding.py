@@ -29,7 +29,11 @@ class GeminiEmbeddingService(BaseEmbeddingService):
         self.client = gemini_client
         self._embedding_dimension = 768
 
-    async def create_single_embedding(self, text: str) -> List[float]:
+    async def create_single_embedding(
+        self,
+        text: str,
+        task_type: str = "retrieval_document"
+    ) -> List[float]:
         """
         Convert single text to vector embedding.
 
@@ -37,6 +41,10 @@ class GeminiEmbeddingService(BaseEmbeddingService):
 
         Args:
             text: Text to embed
+            task_type: Gemini task type for optimization
+                - "retrieval_document": Optimize for storing documents (default)
+                - "retrieval_query": Optimize for search queries
+                - "semantic_similarity": Optimize for similarity comparison
 
         Returns:
             List[float]: Vector embedding
@@ -51,7 +59,7 @@ class GeminiEmbeddingService(BaseEmbeddingService):
                 None,
                 lambda: self.client.embed(
                     text=text,
-                    task_type="retrieval_document"
+                    task_type=task_type
                 )
             )
             return result

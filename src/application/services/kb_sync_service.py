@@ -267,10 +267,12 @@ class KBSyncService:
             if value is None:
                 continue
 
-            # Skip very long strings (> 1000 chars)
-            if isinstance(value, str) and len(value) > 1000:
-                logger.warning(f"Skipping metadata field '{key}' (too long: {len(value)} chars)")
-                continue
+            # Skip very long strings (> 10000 chars), except for "text" field which contains code content
+            if isinstance(value, str) and len(value) > 10000:
+                # Allow unlimited length for "text" field (actual code content)
+                if key != "text":
+                    logger.warning(f"Skipping metadata field '{key}' (too long: {len(value)} chars)")
+                    continue
 
             # Only allow primitive types
             if isinstance(value, (str, int, float, bool)):
@@ -293,36 +295,32 @@ class KBSyncService:
         """
         try:
             collection_name = persist_directory
-
             # Factory auto-handles provider-specific config (ChromaDB local path vs S3 bucket/prefix)
             vector_store = self.vector_store_factory.create(
                 config={
                     "collection_name": collection_name
                 }
             )
-           
             # Extract texts and metadata
             texts = [doc["content"] for doc in documents]
             metadatas = [doc["metadata"] for doc in documents]
-    
             # Create embeddings asynchronously
             embeddings = await self.embedding_service.create_embeddings(texts)
-
             # Add vectors to vector store
             vector_ids = []
             for i, (text, metadata, embedding) in enumerate(zip(texts, metadatas, embeddings)):
                 try:
-                    # Prepare metadata (text already in document content, no need to duplicate)
+                    # Prepare metadata with text content for retrieval
                     full_metadata = {
                         **metadata,
+                        "text": text,  # Add code content to metadata for retrieval fallback
                         "chunk_index": i
                     }
-
                     # Sanitize metadata for ChromaDB compatibility
                     sanitized_metadata = self._sanitize_chromadb_metadata(full_metadata)
 
                     # Add vector to store
-                    vector_id = vector_store.add_vector(embedding, sanitized_metadata)
+                    vector_id = vector_store.add_vector(embedding, sanitized_metadata, document=text)
                     vector_ids.append(vector_id)
 
                 except Exception as e:

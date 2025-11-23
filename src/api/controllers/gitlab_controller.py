@@ -161,7 +161,7 @@ async def fetch_gitlab_repositories_admin(
 
 
 async def fetch_gitlab_branches_admin(
-    project_id: int = Query(..., description="GitLab project ID (numeric ID from GitLab API)"),
+    repository_external_id: int = Query(..., description="GitLab project ID (numeric ID from GitLab API)"),
     connector_id: int = Query(..., description="GitLab connector ID to use"),
     current_user: UserEntity = Depends(require_admin),
     fetch_gitlab_branches_use_case = Depends(get_fetch_gitlab_branches_use_case)
@@ -187,7 +187,7 @@ async def fetch_gitlab_branches_admin(
     """
     result = fetch_gitlab_branches_use_case.execute(
         connector_id=connector_id,
-        project_id=project_id
+        repository_external_id=repository_external_id
     )
 
     return GitLabBranchListResponse(

@@ -2,11 +2,19 @@
 Knowledge Base search tool - uses retriever directly (no RAGService).
 """
 
-from typing import Any
+from typing import Any, Dict, Tuple
 from shared.interfaces.services.ai_services.vector_store_service import IVectorStore
 from .base_tool import KASSBaseTool
 from pydantic import Field
 from core.logger import logger
+
+
+class QueryComplexity:
+    """Query complexity levels for adaptive retrieval."""
+    NARROW = "narrow"
+    MEDIUM = "medium"
+    BROAD = "broad"
+    VERY_BROAD = "very_broad"
 
 
 class KnowledgeBaseSearchTool(KASSBaseTool):
@@ -49,8 +57,11 @@ class KnowledgeBaseSearchTool(KASSBaseTool):
             str: Formatted result text
         """
         try:
-            # Embed the query message
-            query_embedding = await self.embedding_service.create_single_embedding(query)
+            # Embed the query message with query-optimized task type
+            query_embedding = await self.embedding_service.create_single_embedding(
+                query,
+                task_type="retrieval_query"
+            )
 
             # Call retriever
             contexts = self.retriever.query(query_embedding, top_k=top_k)
@@ -59,9 +70,9 @@ class KnowledgeBaseSearchTool(KASSBaseTool):
 
             for item in contexts:
                 formatted = {
-                    "id": item.get("id"),
+                    "id": item.get("context_id"),
                     "text": item.get("text", ""),
-                    "score": item.get("score"),
+                    "score": item.get("retrieval_score"),
                     "source": item.get("source"),
                     "metadata": item.get("metadata", {}),
                 }

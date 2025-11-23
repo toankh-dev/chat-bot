@@ -159,13 +159,13 @@ class FetchGitLabBranchesUseCase:
     def __init__(self, connector_service: ConnectorService):
         self.connector_service = connector_service
 
-    def execute(self, connector_id: int, project_id: int) -> Dict[str, Any]:
+    def execute(self, connector_id: int, repository_external_id: int) -> Dict[str, Any]:
         """
         Execute fetch GitLab branches use case.
 
         Args:
             connector_id: GitLab connector ID to use
-            project_id: GitLab project ID (numeric ID from GitLab API)
+            repository_external_id: GitLab project ID (numeric ID from GitLab API)
 
         Returns:
             Branch list with project information
@@ -196,7 +196,7 @@ class FetchGitLabBranchesUseCase:
             gitlab_service = self.connector_service.get_gitlab_service(gitlab_connector)
 
             # Get branches directly using project_id
-            branches = gitlab_service.get_branches(project_id)
+            branches = gitlab_service.get_branches(repository_external_id)
 
             return {
                 "branches": branches  # Returns only the list of branch names

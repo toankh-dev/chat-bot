@@ -7,17 +7,6 @@ class BaseVectorStore(IVectorStore):
     Abstract base class for vector store implementations.
     Provides common interface and shared functionality.
     """
-    
-    @abstractmethod
-    def add_vector(self, vector: List[float], metadata: dict) -> str:
-        """Add a vector with metadata and return its ID."""
-        pass
-
-    @abstractmethod
-    def query(self, vector: List[float], top_k: int = 5) -> List[Dict[str, Any]]:
-        """Query vectors and return structured results."""
-        pass
-    
     @abstractmethod
     def get_context_by_id(self, context_id: str) -> Dict[str, Any]:
         """Retrieve specific context by ID."""

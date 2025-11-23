@@ -204,7 +204,6 @@ class ChatService:
             Formatted prompt string
         """
         prompt_parts = []
-
         # Add system prompt
         if system_prompt:
             prompt_parts.append(f"System Instructions: {system_prompt}\n")
@@ -314,6 +313,7 @@ class ChatService:
                 "max_output_tokens": chatbot.max_tokens,
                 "temperature": chatbot.temperature,
                 "top_p": chatbot.top_p,
+                "system_prompt": chatbot.system_prompt,
             }
 
             # -------------------------------

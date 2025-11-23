@@ -443,7 +443,6 @@ class GitLabSyncService:
             # Accumulate documents for batch embedding
             all_documents = []
             file_results = []  # Track success/failure per file
-
             # Process each file with its fetched content
             for queue_item, content in zip(batch, file_contents):
                 try:
@@ -472,7 +471,6 @@ class GitLabSyncService:
                     chunks = self.code_chunking_service.chunk_code(
                         file_path=queue_item.file_path, content=content, metadata=metadata
                     )
-
                     # Create documents
                     documents = []
                     for chunk in chunks:
@@ -485,8 +483,6 @@ class GitLabSyncService:
                             "kb_source_id": str(kb_source_id),
                             "user_id": user_id,
                         }
-                        print(f"Created document with metadata: {doc_metadata}")
-                        print(f"content: {content}")
                         documents.append({"content": chunk.text, "metadata": doc_metadata})
 
                     # Accumulate for batch processing

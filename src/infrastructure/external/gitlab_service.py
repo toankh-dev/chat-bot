@@ -108,7 +108,7 @@ class GitLabService(IGitLabService):
         except Exception as e:
             raise ValueError(f"Failed to get project info: {str(e)}")
 
-    def get_branches(self, project_id: str) -> List[str]:
+    def get_branches(self, repository_external_id: str) -> List[str]:
         """
         Get all branch names of a GitLab project.
 
@@ -119,14 +119,14 @@ class GitLabService(IGitLabService):
             List of branch names
         """
         try:
-            project = self.gl.projects.get(project_id)
+            project = self.gl.projects.get(repository_external_id)
             branches = project.branches.list()
 
             # Return only branch names
             return [branch.name for branch in branches]
 
         except Exception as e:
-            raise ValueError(f"Failed to get branches for project {project_id}: {str(e)}")
+            raise ValueError(f"Failed to get branches for project {repository_external_id}: {str(e)}")
 
     def get_branch_head_commit(
         self,

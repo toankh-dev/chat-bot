@@ -24,7 +24,7 @@ sys.path.insert(0, str(project_root / "src"))
 import bcrypt
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
-from datetime import datetime
+from datetime import datetime, UTC
 
 from infrastructure.postgresql.models.user_model import UserModel
 from infrastructure.postgresql.models.group_model import Group
@@ -76,8 +76,8 @@ def seed_database():
                 """),
                 {
                     "name": model_name,
-                    "created_at": datetime.now(datetime.UTC),
-                    "updated_at": datetime.now(datetime.UTC),
+                    "created_at": datetime.now(UTC),
+                    "updated_at": datetime.now(UTC),
                 }
             )
             print(f"✅ AI Model created: {model_name}")
@@ -188,7 +188,7 @@ def seed_database():
             group_id=group.id,
             chatbot_id=chatbot.id,
             assigned_by=admin_user.id,
-            assigned_at=datetime.now(datetime.UTC)
+            assigned_at=datetime.now(UTC)
         ))
         session.flush()
         print("✅ Chatbot linked to group")
@@ -199,13 +199,13 @@ def seed_database():
             user_id=admin_user.id,
             chatbot_id=chatbot.id,
             assigned_by=admin_user.id,
-            assigned_at=datetime.now(datetime.UTC)
+            assigned_at=datetime.now(UTC)
         ))
         session.add(UserChatbotModel(
             user_id=regular_user.id,
             chatbot_id=chatbot.id,
             assigned_by=admin_user.id,
-            assigned_at=datetime.now(datetime.UTC)
+            assigned_at=datetime.now(UTC)
         ))
         session.flush()
         print("✅ Users granted access")
@@ -247,8 +247,8 @@ def seed_database():
             status="active",
             is_active=True,
             message_count=0,
-            started_at=datetime.now(datetime.UTC),
-            last_accessed_at=datetime.now(datetime.UTC)
+            started_at=datetime.now(UTC),
+            last_accessed_at=datetime.now(UTC)
         )
         session.add(conversation)
         session.flush()

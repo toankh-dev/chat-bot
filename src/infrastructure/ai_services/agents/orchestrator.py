@@ -6,7 +6,7 @@ from langgraph.graph import StateGraph, END
 from typing import TypedDict, Annotated, Sequence, Dict, Any, AsyncGenerator
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
-from .knowledge_base_agent import KnowledgeBaseAgent
+from .code_knowledge_agent import CodeKnowledgeAgent
 from core.logger import logger
 from core.config import settings
 import operator
@@ -36,15 +36,15 @@ class AgentOrchestrator:
 
     def __init__(
         self,
-        kb_agent: KnowledgeBaseAgent,
+        kb_agent: CodeKnowledgeAgent,
         runtime_config: dict,
     ):
         """
         Initialize agent orchestrator.
 
         Args:
-            kb_agent: Knowledge base specialist agent (handles embedded GitLab code + documents)
-            llm_model_name: LLM model for supervisor (optional)
+            kb_agent: Code knowledge specialist agent (handles code analysis + technical documentation)
+            runtime_config: Runtime configuration including model name
         """
         self.kb_agent = kb_agent
         self.llm_model_name = runtime_config.get("model_name")

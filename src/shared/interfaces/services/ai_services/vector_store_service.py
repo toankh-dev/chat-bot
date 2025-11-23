@@ -1,13 +1,13 @@
 from abc import ABC, abstractmethod
-from typing import List, Any
+from typing import List, Any, Dict
 
 class IVectorStore(ABC):
     @abstractmethod
-    def add_vector(self, vector: List[float], metadata: dict) -> str:
-        """Add a vector to the store and return its ID."""
+    def add_vector(self, vector: List[float], metadata: dict, document: str) -> str:
+        """Add a vector with metadata and return its ID."""
         pass
 
     @abstractmethod
-    def query(self, vector: List[float], top_k: int = 5) -> List[Any]:
-        """Query the store for similar vectors."""
+    def query(self, vector: List[float], top_k: int) -> List[Dict[str, Any]]:
+        """Query vectors and return structured results."""
         pass

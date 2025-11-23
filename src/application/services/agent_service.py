@@ -4,7 +4,7 @@ Application service for agent orchestration.
 
 from typing import AsyncGenerator, Dict, Any
 from infrastructure.ai_services.agents.orchestrator import AgentOrchestrator
-from infrastructure.ai_services.agents.knowledge_base_agent import KnowledgeBaseAgent
+from infrastructure.ai_services.agents.code_knowledge_agent import CodeKnowledgeAgent
 from core.logger import logger
 from core.config import settings
 
@@ -23,9 +23,9 @@ class AgentService:
         self.runtime_config = runtime_config or {}
 
         # ------------------------------------------------------------
-        # Initialize Knowledge Base Agent (NO RAGService)
+        # Initialize Code Knowledge Agent
         # ------------------------------------------------------------
-        self.kb_agent = KnowledgeBaseAgent(
+        self.kb_agent = CodeKnowledgeAgent(
             embedding_service=embedding_service,
             retriever=retriever,
             runtime_config=self.runtime_config,

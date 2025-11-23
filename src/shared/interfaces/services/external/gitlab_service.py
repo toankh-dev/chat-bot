@@ -38,7 +38,7 @@ class IGitLabService(ABC):
         pass
 
     @abstractmethod
-    def get_branches(self, project_id: str) -> List[str]:
+    def get_branches(self, repository_external_id: str) -> List[str]:
         """
         Get all branch names of a GitLab project.
 

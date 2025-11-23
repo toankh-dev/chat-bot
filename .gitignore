@@ -102,3 +102,4 @@ __pycache__/
 
 chromadb_data/
 redis_data/
+CLAUDE.md

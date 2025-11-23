@@ -25,19 +25,15 @@ class KASSBaseAgent:
         self.description = description
         self.tools = tools
 
-        self.llm_model_name = runtime_config.get("model_name")
-        self.max_iterations = runtime_config.get("max_iterations") or 5
-        self.temperature = runtime_config.get("temperature") or 0.7
-
-        logger.info(f"Initializing agent: {name} with {len(tools)} tools")
+        self.runtime_config = runtime_config or {}
 
         try:
             # Google GenAI LLM (new API)
             self.llm = ChatGoogleGenerativeAI(
                 streaming=True,
                 api_key=settings.GEMINI_API_KEY,
-                model=self.llm_model_name,
-                temperature=self.temperature,
+                model=self.runtime_config.get("model_name"),
+                temperature=runtime_config.get("temperature"),
             )
 
             # ReAct agent (LangGraph)
@@ -46,8 +42,6 @@ class KASSBaseAgent:
                 tools=self.tools,
                 system_prompt=self._create_system_message()
             )
-
-            logger.info(f"Agent {name} initialized successfully")
 
         except Exception as e:
             logger.error(f"Failed to initialize agent {name}: {e}", exc_info=True)

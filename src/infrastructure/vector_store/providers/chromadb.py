@@ -63,7 +63,7 @@ class ChromaDBVectorStore(BaseVectorStore):
             logger.error(f"Failed to initialize ChromaDB: {e}")
             raise
 
-    def add_vector(self, vector: List[float], metadata: dict) -> str:
+    def add_vector(self, vector: List[float], metadata: dict, document: str = None) -> str:
         """
         Add single vector with metadata to collection.
 
@@ -72,33 +72,37 @@ class ChromaDBVectorStore(BaseVectorStore):
             metadata: Metadata dict (MUST include: kb_source_id, branch, commit_sha)
         """
         vector_id = str(uuid.uuid4())
-        self.collection.add(
-            ids=[vector_id],
-            embeddings=[vector],
-            metadatas=[metadata]
-        )
+        params = {
+            "ids": [vector_id],
+            "embeddings": [vector],
+            "metadatas": [metadata]
+        }
+        if document:
+            params["documents"] = [document]
+    
+        self.collection.add(**params)
         return vector_id
+
 
     def query(self, vector: List[float], top_k: int = 5) -> List[Dict[str, Any]]:
         """Query vectors and return structured results matching interface."""
         results = self.collection.query(
             query_embeddings=[vector],
-            n_results=top_k
+            n_results=top_k,
+            include=["metadatas", "documents", "distances"]  # Add documents
         )
         
-        formatted_results = []
-        if results["ids"]:
-            for i, vector_id in enumerate(results["ids"][0]):
-                context = {
-                    "context_id": vector_id,
-                    "text": results["metadatas"][0][i].get("text", ""),
-                    "source": results["metadatas"][0][i].get("source", ""),
-                    "retrieval_score": 1 - results["distances"][0][i] if "distances" in results else 1.0,
-                    "metadata": results["metadatas"][0][i]
-                }
-                formatted_results.append(self.format_context_response(context))
-        
-        return formatted_results
+        contexts = []
+        for i, vector_id in enumerate(results["ids"][0]):
+            context = {
+                "context_id": vector_id,
+                "text": results["documents"][0][i] if "documents" in results else "",  # From documents
+                "source": results["metadatas"][0][i].get("source", ""),
+                "retrieval_score": 1 - results["distances"][0][i],
+                "metadata": results["metadatas"][0][i]
+            }
+            contexts.append(context)
+        return contexts
 
     def get_context_by_id(self, context_id: str) -> Dict[str, Any]:
         """Retrieve specific context by ID."""
