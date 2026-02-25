@@ -5,34 +5,37 @@ Handles user authentication and token management.
 """
 
 from typing import Optional
-from passlib.context import CryptContext
+import bcrypt
 from shared.interfaces.repositories.user_repository import UserRepository
-from infrastructure.auth.jwt_handler import JWTHandler
-from infrastructure.postgresql.models import User
+from shared.interfaces.services.auth.jwt_handler import IJWTHandler
+from domain.entities.user import UserEntity
+from domain.value_objects.email import Email
 from core.errors import AuthenticationError, ValidationError
-
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 class AuthService:
     """
     Service for authentication operations.
     """
 
-    def __init__(self, user_repository: UserRepository, jwt_handler: JWTHandler):
+    def __init__(self, user_repository: UserRepository, jwt_handler: IJWTHandler):
         self.user_repository = user_repository
         self.jwt_handler = jwt_handler
 
-    def verify_password(self, plain_password: str, hashed_password: str) -> bool:
+    def verify_password(self, plain_password: str, password_hash: str) -> bool:
         """Verify password against hash."""
-        return pwd_context.verify(plain_password, hashed_password)
+        return bcrypt.checkpw(
+            plain_password.encode('utf-8'),
+            password_hash.encode('utf-8')
+        )
 
     def hash_password(self, password: str) -> str:
         """Hash password."""
-        return pwd_context.hash(password)
+        return bcrypt.hashpw(
+            password.encode('utf-8'),
+            bcrypt.gensalt()
+        ).decode('utf-8')
 
-    async def authenticate_user(self, email: str, password: str) -> User:
+    async def authenticate_user(self, email: str, password: str) -> UserEntity:
         """
         Authenticate user with email and password.
 
@@ -41,7 +44,7 @@ class AuthService:
             password: Plain password
 
         Returns:
-            User: Authenticated user
+            UserModel: Authenticated user
 
         Raises:
             AuthenticationError: If authentication fails
@@ -53,12 +56,12 @@ class AuthService:
         if not self.verify_password(password, user.password_hash):
             raise AuthenticationError("Invalid email or password")
 
-        if user.status != "active":
-            raise AuthenticationError(f"User account is {user.status}")
+        if not user.is_active:
+            raise AuthenticationError("User account is not active")
 
         return user
 
-    async def register_user(self, email: str, password: str, name: str) -> User:
+    async def register_user(self, email: str, password: str, name: str) -> UserEntity:
         """
         Register new user.
 
@@ -68,7 +71,7 @@ class AuthService:
             name: User full name
 
         Returns:
-            User: Created user
+            UserModel: Created user
 
         Raises:
             ValidationError: If email already exists
@@ -77,19 +80,23 @@ class AuthService:
         if existing_user:
             raise ValidationError("Email already registered")
 
-        hashed_password = self.hash_password(password)
+        password_hash = self.hash_password(password)
 
-        user = User(
-            email=email,
-            password_hash=hashed_password,
-            name=name,
-            is_admin=False,
-            status="active"
+        # Build a domain User entity and persist via repository
+        # ID will be set by database auto-increment
+        user = UserEntity(
+            id=0,  # Temporary ID, will be set by database
+            email=Email(email),
+            username=email.split('@')[0],
+            full_name=name,
+            hashed_password=password_hash,
+            is_active=True,
+            is_superuser=False
         )
 
         return await self.user_repository.create(user)
 
-    def create_tokens(self, user: User) -> dict:
+    def create_tokens(self, user: UserEntity) -> dict:
         """
         Create access and refresh tokens for user.
 
@@ -101,7 +108,7 @@ class AuthService:
         """
         access_token = self.jwt_handler.create_access_token(
             subject=str(user.id),
-            additional_claims={"email": user.email, "is_admin": user.is_admin}
+            additional_claims={"email": str(user.email), "is_admin": user.is_admin}
         )
 
         refresh_token = self.jwt_handler.create_refresh_token(

@@ -8,7 +8,9 @@ from api.controllers.user_controller import (
     get_user,
     create_user,
     update_user,
-    delete_user
+    delete_user,
+    update_own_profile,
+    change_password
 )
 from schemas.user_schema import UserResponse
 
@@ -22,6 +24,25 @@ router.add_api_route(
     status_code=status.HTTP_200_OK,
     summary="Get current user profile",
     description="Get authenticated user's profile information"
+)
+
+router.add_api_route(
+    "/me",
+    update_own_profile,
+    methods=["PATCH"],
+    response_model=UserResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Update own profile",
+    description="Update authenticated user's profile information (name, email)"
+)
+
+router.add_api_route(
+    "/me/password",
+    change_password,
+    methods=["PUT"],
+    status_code=status.HTTP_200_OK,
+    summary="Change password",
+    description="Change authenticated user's password"
 )
 
 router.add_api_route(

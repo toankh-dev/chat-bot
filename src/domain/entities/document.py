@@ -1,10 +1,9 @@
-from dataclasses import dataclass
-from datetime import datetime
+from dataclasses import dataclass, field
+from datetime import datetime, UTC
 from typing import Optional
 from domain.value_objects.uuid_vo import UUID
-
 @dataclass
-class Document:
+class DocumentEntity:
     id: UUID
     user_id: str
     filename: str
@@ -16,7 +15,7 @@ class Document:
     processing_status: Optional[str] = None  # pending, syncing, completed, error
     knowledge_base_id: Optional[str] = None
     error_message: Optional[str] = None
-    uploaded_at: datetime = datetime.utcnow()
+    uploaded_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     processed_at: Optional[datetime] = None
     
     def mark_as_uploaded(self):
@@ -30,9 +29,13 @@ class Document:
     def mark_as_processed(self):
         self.upload_status = "processed"
         self.processing_status = "completed"
-        self.processed_at = datetime.utcnow()
+        self.processed_at = datetime.now(UTC)
     
     def mark_as_failed(self, error: str):
         self.upload_status = "failed"
         self.processing_status = "error"
         self.error_message = error
+
+        
+# Backwards compatibility alias
+Document = DocumentEntity

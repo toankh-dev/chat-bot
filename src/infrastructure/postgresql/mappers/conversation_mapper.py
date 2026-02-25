@@ -3,8 +3,8 @@ Conversation entity mapper.
 """
 
 from typing import Optional
-from domain.entities.conversation import Conversation as ConversationEntity
-from infrastructure.postgresql.models.conversation_model import Conversation as ConversationModel
+from domain.entities.conversation import ConversationEntity
+from infrastructure.postgresql.models.conversation_model import ConversationModel
 
 
 class ConversationMapper:

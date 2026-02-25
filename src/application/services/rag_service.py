@@ -1,6 +1,6 @@
 from shared.interfaces.services.ai_services.rag_service import IRAGService
 from shared.interfaces.services.ai_services.knowledge_base_service import IKnowledgeBaseService
-from infrastructure.ai_services.providers.base import BaseLLMService
+from shared.interfaces.services.ai_services.llm_service import ILLMService
 from typing import List, Dict, Any
 
 class RAGService(IRAGService):
@@ -8,11 +8,11 @@ class RAGService(IRAGService):
     RAG (Retrieval-Augmented Generation) Service.
     Combines knowledge base retrieval with LLM generation.
     """
-    
+
     def __init__(
         self,
         knowledge_base_service: IKnowledgeBaseService,
-        llm_provider: BaseLLMService,
+        llm_provider: ILLMService,
     ):
         self.knowledge_base_service = knowledge_base_service
         self.llm_provider = llm_provider

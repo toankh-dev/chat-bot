@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 @dataclass
-class EmbeddingIndex:
+class EmbeddingIndexEntity:
     id: Optional[int]
     document_id: int
     user_id: int
@@ -14,3 +14,6 @@ class EmbeddingIndex:
     vector_id: str
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
+
+# Backwards compatibility alias
+EmbeddingIndex = EmbeddingIndexEntity

@@ -1,11 +1,11 @@
 from abc import ABC, abstractmethod
 from typing import BinaryIO
-from domain.entities.document import Document
+from domain.entities.document import DocumentEntity
 
 class IDocumentUploadService(ABC):
     @abstractmethod
     async def upload_document(self, file_content: BinaryIO, filename: str, content_type: str, 
-                            user_id: str, domain: str) -> Document:
+                            user_id: str, domain: str) -> DocumentEntity:
         """Upload document and create record."""
         pass
     

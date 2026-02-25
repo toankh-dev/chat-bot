@@ -24,7 +24,11 @@ class JWTHandler:
         self.algorithm = settings.JWT_ALGORITHM
         self.access_token_expire_minutes = settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
         self.refresh_token_expire_days = settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS
-        self.pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+        self.pwd_context = CryptContext(
+            schemes=["bcrypt"],
+            deprecated="auto",
+            bcrypt__truncate_error=True
+        )
 
     def hash_password(self, password: str) -> str:
         """
@@ -38,18 +42,18 @@ class JWTHandler:
         """
         return self.pwd_context.hash(password)
 
-    def verify_password(self, plain_password: str, hashed_password: str) -> bool:
+    def verify_password(self, plain_password: str, password_hash: str) -> bool:
         """
         Verify a password against its hash.
 
         Args:
             plain_password: Plain text password
-            hashed_password: Hashed password
+            password_hash: Hashed password
 
         Returns:
             True if password matches, False otherwise
         """
-        return self.pwd_context.verify(plain_password, hashed_password)
+        return self.pwd_context.verify(plain_password, password_hash)
 
     def create_access_token(
         self,

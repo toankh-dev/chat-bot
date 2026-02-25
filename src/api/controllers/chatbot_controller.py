@@ -1,10 +1,11 @@
 """Chatbot management controller."""
 
-from fastapi import Depends, status
+from fastapi import Depends
 from typing import List
 from schemas.chatbot_schema import ChatbotResponse, ChatbotCreate, ChatbotUpdate
-from infrastructure.postgresql.models import User
+from domain.entities.user import UserEntity
 from api.middlewares.jwt_middleware import get_current_user, require_admin
+from shared.utils.user_id_helper import extract_user_id_int
 from usecases.chatbot_use_cases import (
     ListChatbotsUseCase,
     GetChatbotUseCase,
@@ -24,7 +25,7 @@ from core.dependencies import (
 async def list_chatbots(
     skip: int = 0,
     limit: int = 100,
-    current_user: User = Depends(get_current_user),
+    current_user: UserEntity = Depends(get_current_user),
     use_case: ListChatbotsUseCase = Depends(get_list_chatbots_use_case)
 ) -> List[ChatbotResponse]:
     """
@@ -44,7 +45,7 @@ async def list_chatbots(
 
 async def get_chatbot(
     chatbot_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: UserEntity = Depends(get_current_user),
     use_case: GetChatbotUseCase = Depends(get_chatbot_use_case)
 ) -> ChatbotResponse:
     """
@@ -63,7 +64,7 @@ async def get_chatbot(
 
 async def create_chatbot(
     chatbot_data: ChatbotCreate,
-    current_user: User = Depends(require_admin),
+    current_user: UserEntity = Depends(require_admin),
     use_case: CreateChatbotUseCase = Depends(get_create_chatbot_use_case)
 ) -> ChatbotResponse:
     """
@@ -77,13 +78,15 @@ async def create_chatbot(
     Returns:
         ChatbotResponse: Created chatbot data
     """
-    return await use_case.execute(chatbot_data, current_user.id)
+    # Extract integer user ID from UserEntity (temporary bridge until UserEntity uses integers)
+    creator_id = extract_user_id_int(current_user.id)
+    return await use_case.execute(chatbot_data, creator_id)
 
 
 async def update_chatbot(
     chatbot_id: int,
     chatbot_data: ChatbotUpdate,
-    current_user: User = Depends(require_admin),
+    current_user: UserEntity = Depends(require_admin),
     use_case: UpdateChatbotUseCase = Depends(get_update_chatbot_use_case)
 ) -> ChatbotResponse:
     """
@@ -98,12 +101,14 @@ async def update_chatbot(
     Returns:
         ChatbotResponse: Updated chatbot data
     """
-    return await use_case.execute(chatbot_id, chatbot_data)
+    # Extract integer user ID from UserEntity (temporary bridge until UserEntity uses integers)
+    admin_id = extract_user_id_int(current_user.id)
+    return await use_case.execute(chatbot_id, chatbot_data, admin_id)
 
 
 async def delete_chatbot(
     chatbot_id: int,
-    current_user: User = Depends(require_admin),
+    current_user: UserEntity = Depends(require_admin),
     use_case: DeleteChatbotUseCase = Depends(get_delete_chatbot_use_case)
 ) -> None:
     """

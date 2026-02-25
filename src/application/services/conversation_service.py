@@ -8,8 +8,9 @@ from typing import List, Optional
 from datetime import datetime
 from shared.interfaces.repositories.conversation_repository import ConversationRepository
 from shared.interfaces.repositories.message_repository import MessageRepository
-from domain.entities.conversation import Conversation
-from infrastructure.postgresql.models import Message
+from domain.entities.conversation import ConversationEntity
+from domain.entities.message import MessageEntity, MessageRole
+from domain.value_objects.uuid_vo import UUID
 from core.errors import NotFoundError, ValidationError, PermissionDeniedError
 
 
@@ -26,7 +27,7 @@ class ConversationService:
         self.conversation_repository = conversation_repository
         self.message_repository = message_repository
 
-    async def get_conversation_by_id(self, conversation_id: int, user_id: int) -> Conversation:
+    async def get_conversation_by_id(self, conversation_id: int, user_id: int) -> ConversationEntity:
         """
         Get conversation by ID with ownership check.
 
@@ -54,7 +55,7 @@ class ConversationService:
         self,
         conversation_id: int,
         user_id: int
-    ) -> Conversation:
+    ) -> ConversationEntity:
         """
         Get conversation by ID with all messages.
 
@@ -83,7 +84,7 @@ class ConversationService:
         user_id: int,
         skip: int = 0,
         limit: int = 100
-    ) -> List[Conversation]:
+    ) -> List[ConversationEntity]:
         """
         List conversations for specific user.
 
@@ -106,7 +107,7 @@ class ConversationService:
         user_id: int,
         chatbot_id: int,
         title: Optional[str] = None
-    ) -> Conversation:
+    ) -> ConversationEntity:
         """
         Create new conversation.
 
@@ -118,7 +119,10 @@ class ConversationService:
         Returns:
             Conversation: Created conversation
         """
-        conversation = Conversation(
+        from infrastructure.postgresql.models.conversation_model import ConversationModel
+        from infrastructure.postgresql.mappers.conversation_mapper import ConversationMapper
+
+        conversation_model = ConversationModel(
             user_id=user_id,
             chatbot_id=chatbot_id,
             title=title or "New Conversation",
@@ -127,7 +131,9 @@ class ConversationService:
             message_count=0
         )
 
-        return await self.conversation_repository.create(conversation)
+        created_model = await self.conversation_repository.create(conversation_model)
+        await self.conversation_repository.session.commit()
+        return ConversationMapper.to_entity(created_model)
 
     async def delete_conversation(self, conversation_id: int, user_id: int) -> bool:
         """
@@ -152,8 +158,9 @@ class ConversationService:
         conversation_id: int,
         user_id: int,
         content: str,
-        role: str = "user"
-    ) -> Message:
+        role: str = "user",
+        metadata: dict = None
+    ) -> MessageEntity:
         """
         Create new message in conversation.
 
@@ -162,9 +169,10 @@ class ConversationService:
             user_id: User ID to verify ownership
             content: Message content
             role: Message role (user, assistant, system, tool)
+            metadata: Optional metadata dictionary
 
         Returns:
-            Message: Created message
+            MessageModel: Created message
 
         Raises:
             NotFoundError: If conversation not found
@@ -173,13 +181,17 @@ class ConversationService:
         """
         conversation = await self.get_conversation_by_id(conversation_id, user_id)
 
-        if role not in ["user", "assistant", "system", "tool"]:
+        if role not in [r.value for r in MessageRole]:
             raise ValidationError(f"Invalid role: {role}")
 
-        message = Message(
-            conversation_id=conversation_id,
-            role=role,
-            content=content
+        # Build domain Message entity
+        message = MessageEntity(
+            id=UUID.generate(),
+            conversation_id=UUID.from_string(conversation_id),
+            session_id=UUID.generate(),
+            role=MessageRole(role),
+            content=content,
+            metadata=metadata or {}
         )
 
         created_message = await self.message_repository.create(message)
@@ -193,9 +205,9 @@ class ConversationService:
 
     async def get_conversation_messages(
         self,
-        conversation_id: int,
-        user_id: int
-    ) -> List[Message]:
+        conversation_id: str,
+        user_id: str
+    ) -> List[MessageEntity]:
         """
         Get all messages in a conversation.
 

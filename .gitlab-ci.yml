@@ -1,0 +1,44 @@
+stages:
+  - build
+  - deploy
+
+variables:
+  DOCKER_IMAGE_NAME: kass-backend
+  DOCKER_COMPOSE_FILE: docker-compose.prod.yml
+
+before_script:
+  - sudo chown -R gitlab-runner:gitlab-runner . || true
+  - sudo find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+
+workflow:
+  rules:
+    - if: $CI_COMMIT_BRANCH == "splus-develop"
+
+build:
+  stage: build
+  script:
+    - echo "Building Docker image..."
+    - docker build -f Dockerfile.prod -t $DOCKER_IMAGE_NAME:latest .
+    - docker build -f Dockerfile.prod -t $DOCKER_IMAGE_NAME:$CI_COMMIT_SHORT_SHA .
+  only:
+    - splus-develop
+
+deploy:
+  stage: deploy
+  script:
+    - echo "Deploying application..."
+    - docker compose -f $DOCKER_COMPOSE_FILE down || true
+    - docker compose -f $DOCKER_COMPOSE_FILE pull postgres redis chromadb || true
+    - docker compose -f $DOCKER_COMPOSE_FILE up -d --build
+    - echo "Waiting for services to be ready..."
+    - sleep 20
+    - docker compose -f $DOCKER_COMPOSE_FILE ps
+    - echo "Checking API health..."
+    - docker compose -f $DOCKER_COMPOSE_FILE logs api | tail -20
+    - docker image prune -f
+    - echo "Deployment completed successfully!"
+    - echo "Application is running at http://localhost:8000"
+  only:
+    - splus-develop
+  dependencies:
+    - build

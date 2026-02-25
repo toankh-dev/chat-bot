@@ -32,12 +32,13 @@ app = FastAPI(
 )
 
 # CORS Middleware
+# Allow all origins - Note: allow_credentials must be False when using allow_origins=["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["*"],  # Allow all URLs to access the API
+    allow_credentials=False,  # Must be False when allow_origins=["*"]
+    allow_methods=["*"],  # Allow all HTTP methods
+    allow_headers=["*"],  # Allow all headers
 )
 
 
@@ -89,13 +90,27 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         extra={"request_id": request.state.request_id}
     )
 
+    # Ensure all error details are JSON serializable
+    errors = exc.errors()
+    serializable_errors = []
+
+    for error in errors:
+        serializable_error = {}
+        for key, value in error.items():
+            if isinstance(value, Exception):
+                # Convert Exception objects to string
+                serializable_error[key] = str(value)
+            else:
+                serializable_error[key] = value
+        serializable_errors.append(serializable_error)
+
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
             "error": {
                 "code": "VALIDATION_ERROR",
                 "message": "Request validation failed",
-                "details": exc.errors()
+                "details": serializable_errors
             }
         }
     )
@@ -110,13 +125,21 @@ async def global_exception_handler(request: Request, exc: Exception):
         exc_info=True
     )
 
+    # Ensure error details are JSON serializable
+    error_details = {}
+    if settings.DEBUG:
+        try:
+            error_details = {"error": str(exc)}
+        except Exception:
+            error_details = {"error": "Unable to serialize error details"}
+
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
             "error": {
                 "code": "INTERNAL_ERROR",
                 "message": "An unexpected error occurred",
-                "details": {"error": str(exc)} if settings.DEBUG else {}
+                "details": error_details
             }
         }
     )
@@ -186,26 +209,36 @@ async def shutdown_event():
 
 
 # Import and include routers
+
+from api.routers.group_routes import router as group_router
 from api.routers.auth_routes import router as auth_router
 from api.routers.user_routes import router as user_router
 from api.routers.chatbot_routes import router as chatbot_router
 from api.routers.conversation_routes import router as conversation_router
 from api.routers.document_routes import router as document_router
-from api.routers.ai_routes import create_ai_routes
+from api.routers.gitlab_routes import router as gitlab_router
+from api.routers.connector_admin_routes import router as connector_admin_router
+from api.routers.ai_model_routes import router as ai_model_router
+from api.controllers.chat_controller import router as chat_router
 
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Authentication"])
+app.include_router(chat_router, prefix="/api/v1", tags=["Chat"])
 app.include_router(user_router, prefix="/api/v1/users", tags=["Users"])
+app.include_router(group_router, prefix="/api/v1/groups", tags=["Groups"])
 app.include_router(chatbot_router, prefix="/api/v1/chatbots", tags=["Chatbots"])
 app.include_router(conversation_router, prefix="/api/v1/conversations", tags=["Conversations"])
+app.include_router(document_router, prefix="/api/v1/documents", tags=["Documents"])
+app.include_router(gitlab_router, prefix="/api/v1/gitlab", tags=["GitLab Sync (Admin)"])
+app.include_router(connector_admin_router, prefix="/api/v1/connectors", tags=["Admin - Connector Management"])
 app.include_router(document_router, prefix="/api/v1", tags=["Documents"])
-app.include_router(create_ai_routes(), prefix="/api/v1", tags=["AI Services"])
+app.include_router(ai_model_router, prefix="/api/v1/ai-models", tags=["AI Models"])
 
 
 if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(
-        "main:app",  # Changed from "src.main:app"
+        "main:app",
         host="0.0.0.0",
         port=8000,
         reload=settings.DEBUG,

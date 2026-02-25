@@ -18,7 +18,7 @@ class FeedbackType(str, Enum):
 
 
 @dataclass
-class Feedback:
+class FeedbackEntity:
     """
     Feedback entity for user ratings on AI responses.
 
@@ -63,3 +63,6 @@ class Feedback:
             "metadata": self.metadata,
             "created_at": self.created_at.isoformat()
         }
+
+# Backwards compatibility alias
+Feedback = FeedbackEntity

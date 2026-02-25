@@ -3,13 +3,13 @@ Role domain entity for RBAC.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Set
 from ..value_objects.uuid_vo import UUID
 
 
 @dataclass
-class Role:
+class RoleEntity:
     """
     Role entity for role-based access control.
 
@@ -26,8 +26,8 @@ class Role:
     name: str
     description: str
     permissions: Set[str] = field(default_factory=set)
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     # Common permission constants
     PERM_USER_READ = "user:read"
@@ -57,12 +57,12 @@ class Role:
     def add_permission(self, permission: str) -> None:
         """Add a permission to the role."""
         self.permissions.add(permission)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     def remove_permission(self, permission: str) -> None:
         """Remove a permission from the role."""
         self.permissions.discard(permission)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     def has_permission(self, permission: str) -> bool:
         """Check if role has a specific permission."""
@@ -78,3 +78,6 @@ class Role:
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat()
         }
+
+# Backwards compatibility alias
+Role = RoleEntity

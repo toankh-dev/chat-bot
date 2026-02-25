@@ -1,9 +1,11 @@
 """Authentication controller."""
 
-from fastapi import Depends, status
-from schemas.auth_schema import LoginRequest, LoginResponse, RegisterRequest
+from fastapi import Depends
+from schemas.auth_schema import LoginRequest, LoginResponse, RegisterRequest, LogoutResponse
 from usecases.auth_use_cases import LoginUseCase, RegisterUseCase
 from core.dependencies import get_login_use_case, get_register_use_case
+from api.middlewares.jwt_middleware import get_current_user
+from domain.entities.user import UserEntity
 
 
 async def login(
@@ -38,3 +40,25 @@ async def register(
         LoginResponse: Access and refresh tokens for new user
     """
     return await use_case.execute(request)
+
+
+async def logout(
+    current_user: UserEntity = Depends(get_current_user)
+) -> LogoutResponse:
+    """
+    Logout current user.
+
+    In a stateless JWT system, logout is handled client-side by removing the token.
+    This endpoint confirms the logout action and can be extended with token blacklisting
+    if needed in the future.
+
+    Args:
+        current_user: Authenticated user
+
+    Returns:
+        LogoutResponse: Logout confirmation message
+    """
+    return LogoutResponse(
+        message="Successfully logged out",
+        user_id=current_user.id
+    )

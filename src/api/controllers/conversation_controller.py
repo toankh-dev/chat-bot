@@ -9,7 +9,7 @@ from schemas.conversation_schema import (
     MessageCreate,
     MessageResponse
 )
-from infrastructure.postgresql.models import User
+from domain.entities.user import UserEntity
 from api.middlewares.jwt_middleware import get_current_user
 from usecases.conversation_use_cases import (
     ListConversationsUseCase,
@@ -28,15 +28,17 @@ from core.dependencies import (
 
 
 async def list_conversations(
+    chatbot_id: int = None,
     skip: int = 0,
     limit: int = 100,
-    current_user: User = Depends(get_current_user),
+    current_user: UserEntity = Depends(get_current_user),
     use_case: ListConversationsUseCase = Depends(get_list_conversations_use_case)
 ) -> List[ConversationResponse]:
     """
     List user's conversations.
 
     Args:
+        chatbot_id: Optional filter by chatbot ID
         skip: Number of records to skip
         limit: Maximum number of records to return
         current_user: Authenticated user
@@ -45,12 +47,18 @@ async def list_conversations(
     Returns:
         List[ConversationResponse]: List of conversations
     """
-    return await use_case.execute(current_user.id, skip=skip, limit=limit)
+    conversations = await use_case.execute(current_user.id, skip=skip, limit=limit)
+
+    # Filter by chatbot_id if provided
+    if chatbot_id is not None:
+        conversations = [c for c in conversations if c.chatbot_id == chatbot_id]
+
+    return conversations
 
 
 async def get_conversation(
     conversation_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: UserEntity = Depends(get_current_user),
     use_case: GetConversationUseCase = Depends(get_conversation_use_case)
 ) -> ConversationWithMessages:
     """
@@ -69,7 +77,7 @@ async def get_conversation(
 
 async def create_conversation(
     conversation_data: ConversationCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: UserEntity = Depends(get_current_user),
     use_case: CreateConversationUseCase = Depends(get_create_conversation_use_case)
 ) -> ConversationResponse:
     """
@@ -89,7 +97,7 @@ async def create_conversation(
 async def create_message(
     conversation_id: int,
     message_data: MessageCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: UserEntity = Depends(get_current_user),
     use_case: CreateMessageUseCase = Depends(get_create_message_use_case)
 ) -> MessageResponse:
     """
@@ -109,7 +117,7 @@ async def create_message(
 
 async def delete_conversation(
     conversation_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: UserEntity = Depends(get_current_user),
     use_case: DeleteConversationUseCase = Depends(get_delete_conversation_use_case)
 ) -> None:
     """

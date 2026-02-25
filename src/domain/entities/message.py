@@ -26,7 +26,7 @@ class MessageStatus(str, Enum):
 
 
 @dataclass
-class Message:
+class MessageEntity:
     """
     Message entity representing a single message in a conversation.
 
@@ -97,3 +97,6 @@ class Message:
             "model_id": self.model_id,
             "timestamp": self.timestamp.isoformat()
         }
+
+# Backwards compatibility alias
+Message = MessageEntity

@@ -1,7 +1,12 @@
 from abc import ABC, abstractmethod
-from typing import BinaryIO
+from typing import BinaryIO, Optional
 
 class IFileStorageService(ABC):
+    @abstractmethod
+    async def get_file(self, file_key: str) -> bytes:
+        """Get file content from S3."""
+        pass
+
     @abstractmethod
     async def upload_file(self, file_content: BinaryIO, s3_key: str, content_type: str) -> str:
         """Upload file to S3 and return URL."""

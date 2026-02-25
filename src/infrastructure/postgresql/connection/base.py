@@ -10,22 +10,15 @@ from datetime import datetime
 # SQLAlchemy Base for all models
 Base = declarative_base()
 
-# Association Tables for Many-to-Many relationships
-user_roles_table = Table(
-    'user_roles',
-    Base.metadata,
-    Column('user_id', String, ForeignKey('users.id'), primary_key=True),
-    Column('role_id', String, ForeignKey('roles.id'), primary_key=True),
-    Column('assigned_at', DateTime, default=datetime.utcnow),
-    Column('assigned_by', String, ForeignKey('users.id'))
-)
+# Note: association tables that reference other models (e.g. roles, workspaces)
+# were removed from the base module because they create ForeignKey references
+# during module import time to tables that are not yet registered in
+# `Base.metadata` (or are not implemented in `src.infrastructure.postgresql.models`).
+#
+# If you need many-to-many association tables, define them in a models module
+# that is imported after the referenced ORM models exist (or define them
+# in the same module as their related models). This avoids NoReferencedTableError
+# during Alembic autogenerate.
 
-workspace_users_table = Table(
-    'workspace_users',
-    Base.metadata,
-    Column('workspace_id', String, ForeignKey('workspaces.id'), primary_key=True),
-    Column('user_id', String, ForeignKey('users.id'), primary_key=True),
-    Column('role', String, default='member'),  # owner, admin, member, viewer
-    Column('joined_at', DateTime, default=datetime.utcnow),
-    Column('invited_by', String, ForeignKey('users.id'))
-)
+# TODO: re-introduce association tables in a models file when `roles` and
+# `workspaces` DB models are implemented.

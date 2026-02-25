@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Optional, Any
 
 @dataclass
-class IngestionJob:
+class IngestionJobEntity:
     id: Optional[int]
     provider: str
     status: str = "pending"
@@ -15,3 +15,6 @@ class IngestionJob:
     finished_at: Optional[str] = None
     details: Optional[Any] = None
     error_message: Optional[str] = None
+
+# Backwards compatibility alias
+IngestionJob = IngestionJobEntity

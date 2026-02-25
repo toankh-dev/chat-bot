@@ -7,10 +7,10 @@ Defines the contract for chatbot data access operations.
 from abc import abstractmethod
 from typing import Optional, List
 from shared.interfaces.repositories.base_repository import BaseRepository
-from domain.entities.chatbot import Chatbot
+from domain.entities.chatbot import ChatbotEntity
 
 
-class ChatbotRepository(BaseRepository[Chatbot, str]):
+class ChatbotRepository(BaseRepository[ChatbotEntity, str]):
     """
     Chatbot repository interface.
 
@@ -18,7 +18,7 @@ class ChatbotRepository(BaseRepository[Chatbot, str]):
     """
 
     @abstractmethod
-    async def find_active_chatbots(self, skip: int = 0, limit: int = 100) -> List[Chatbot]:
+    async def find_active_chatbots(self, skip: int = 0, limit: int = 100) -> List[ChatbotEntity]:
         """
         Find all active chatbots with pagination.
 
@@ -32,7 +32,7 @@ class ChatbotRepository(BaseRepository[Chatbot, str]):
         pass
 
     @abstractmethod
-    async def find_by_workspace(self, workspace_id: str, skip: int = 0, limit: int = 100) -> List[Chatbot]:
+    async def find_by_workspace(self, workspace_id: str, skip: int = 0, limit: int = 100) -> List[ChatbotEntity]:
         """
         Find chatbots in a specific workspace.
 

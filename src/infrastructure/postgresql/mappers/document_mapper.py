@@ -2,8 +2,7 @@
 Document entity mapper.
 """
 
-from typing import Optional
-from domain.entities.document import Document as DocumentEntity
+from domain.entities.document import DocumentEntity
 from infrastructure.postgresql.models.document_model import DocumentModel
 
 
